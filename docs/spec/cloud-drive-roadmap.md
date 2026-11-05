@@ -42,7 +42,7 @@ Muse WebDAV 客户端 ────┘
 | 工作流 | 文档 | 状态 | 当前里程碑 | 下一个提交 |
 | --- | --- | --- | --- | --- |
 | 添加来源弹窗 | [add-video-source-dialog.md](add-video-source-dialog.md) | In progress | 本地/扫描已接入；扫描=目录监控；网盘卡片待 WebDAV | 下一步：WebDAV 浏览/添加后接线 |
-| WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | In progress | M2 客户端完成 | `Add cloud connection service and secret storage` |
+| WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | In progress | M3 连接服务完成 | `Support remote videos in the library` |
 | OpenList BitQiu 驱动 | [openlist-bitqiu-driver.md](openlist-bitqiu-driver.md) | Proposed / Spike | Phase 1 最小可读驱动 | `Add BitQiu driver`（OpenList fork） |
 
 > 状态只在本表和各文档的「进度记录」中更新；不要用代码注释代替进度记录。
@@ -88,3 +88,4 @@ Muse WebDAV 客户端 ────┘
 | 2026-11-05 | 语义收拢 | 扫描文件夹改为 `pickWatchDir` + `addWatchDir`，删除一次性 `ScanOnce` | `e25c96c` |
 | 2026-11-06 | WebDAV M1 | v24 schema、远程视频字段、仓储查询与过滤、迁移/仓储测试 | `6629ebc` |
 | 2026-11-06 | WebDAV M2 | 只读 WebDAV 客户端与 `httptest` 覆盖 | `74d4126` |
+| 2026-11-06 | WebDAV M3 | secret 抽取、连接 CRUD/删除保护/健康检查 | `efa5e34` |
