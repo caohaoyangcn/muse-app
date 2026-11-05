@@ -45,6 +45,69 @@
 | 登录遇到 `10401/10404` 重新登录 | 增加最大重试次数，避免接口异常时死循环 |
 | `moveResourceURL = "/resource/remove"` | 先保留原行为；真实账号验证移动，若不符按抓包修正 |
 
+### 1.4 OpenList 现成驱动快照（2026-11-05）
+
+在决定 fork 之前，先确认一件事：**除了比特球，OpenList 主线已经内置了大量现成网盘驱动**。如果用户只是要接其他网盘，直接使用 OpenList 主线即可，不需要为了 BitQiu 维护 fork。
+
+以下清单来自 `drivers/all.go` 与各驱动 `meta.go` 的 `Name` 字段，按「添加存储」页面显示名整理；`*Share` / `*Link` 通常只处理分享链接，能力可能只读。
+
+**国内常用网盘**
+
+| 网盘 | 驱动名 |
+| --- | --- |
+| 115 网盘 | `115 Cloud` / `115 Open` / `115 Share` |
+| 123 云盘 | `123Pan` / `123 Open` / `123PanShare` / `123PanLink` |
+| 百度网盘 / 相册 | `BaiduNetdisk` / `BaiduPhoto` |
+| 阿里云盘 | `Aliyundrive` / `AliyundriveOpen` / `AliyundriveShare` |
+| 钉钉文档 | `AliDoc` |
+| 夸克 / UC | `Quark` / `UC` / `QuarkOpen` / `QuarkTV` |
+| 迅雷云盘 | `Thunder` / `ThunderX` / `ThunderBrowser` |
+| 天翼云盘 | `189Cloud` / `189CloudPC` / `189CloudTV` |
+| 中国移动云盘 | `139Yun` |
+| 联通云盘 | `WoPan` |
+| 腾讯微云 | `WeiYun` |
+| 蓝奏云 | `Lanzou` / `ILanZou` |
+| 城通网盘 | `CtFile` |
+| 超星 | `ChaoXingGroupDrive` |
+| 豆包 | `Doubao` / `DoubaoNew` / `DoubaoShare` |
+| WPS | `WPS` |
+| Teambition | `Teambition` |
+| 联想 NAS 分享 | `LenovoNasShare` |
+| MoPan | `MoPan` |
+| 光雅盘 | `GuangYaPan` |
+
+**海外 / 国际网盘**
+
+- `GoogleDrive` / `GooglePhoto`
+- `Onedrive` / `OnedriveAPP` / `Onedrive Sharelink`
+- `Dropbox`
+- `Mega_nz`
+- `PikPak` / `PikPakShare`
+- `ProtonDrive`
+- `YandexDisk`
+- `MediaFire`
+- `Terabox`
+- `Degoo`
+- `FebBox`
+- `MediaTrack`
+- `HalalCloud` / `HalalCloudOpen`
+
+**对象存储、协议与自建服务（不是公有网盘）**
+
+- 对象存储：`S3`、`Azure Blob Storage`、`Bunny Storage`、`USS`（又拍云）
+- 协议：`WebDAV`、`FTP`、`SFTP`、`SMB`
+- 自建：`Local`、`Cloudreve` / `Cloudreve V4`、`KodBox`、`Seafile`、`Emby`、`OpenList` / `OpenListShare`、`AList V3`、`Teldrive`
+- 工具型：`Alias`、`Crypt`、`Chunk`、`Strm`、`URL Tree`、`Virtual`、`AutoIndex`、`GitHub API`、`GitHub Releases`、`CNB Releases`、`IPFS API`
+
+**对本计划的含义**
+
+- **BitQiu 仍然不在主线**：上述清单没有 `BitQiu`，`drivers/all.go` 也没有注册它；Muse 接比特球仍需要 OpenList fork。
+- **fork 只补 BitQiu 一个驱动**：不需要复制/重写其他网盘；合并上游时只保留 `drivers/bitqiu`、`drivers/all.go` 的一行注册和（如需要）构建/文档改动。
+- **可以先用其他网盘验证 Muse**：在 BitQiu 驱动完成前，可以用 OpenList 主线挂 115、123、阿里云盘、夸克、OneDrive、WebDAV 等，跑通 Muse 的浏览/添加/封面/播放链路。
+- **主线在持续增加驱动**：实现 fork 前先 rebase 到当时最新 main，并重新核对 `drivers/all.go`；不要以本快照作为永久列表。
+
+来源：[drivers 目录](https://github.com/OpenListTeam/OpenList/tree/main/drivers) · [drivers/all.go](https://github.com/OpenListTeam/OpenList/blob/main/drivers/all.go) · [README 功能列表](https://github.com/OpenListTeam/OpenList/blob/main/README.md) · [官方驱动文档](https://doc.oplist.org/guide/drivers)
+
 ## 2. 目标与非目标
 
 ### 目标
@@ -274,5 +337,5 @@ var config = driver.Config{
 
 | 日期 | 阶段 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- | --- |
-| 2026-11-05 | 调研 | Done | 确认 AList 私有 API、OpenList 无 BitQiu 驱动、接口差异 | `<pending>` |
+| 2026-11-05 | 调研 | Done | 确认 AList 私有 API、OpenList 无 BitQiu 驱动、接口差异；补充 OpenList 现成驱动清单（见 §1.4） | 本提交 |
 | 2026-11-05 | 计划 | Planned | 计划文档建立 | `<pending>` |

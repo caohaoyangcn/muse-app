@@ -24,6 +24,8 @@ OpenList，也不需要看这一页。
 
 ## 2. 准备 OpenList + 比特球
 
+> 不用比特球时，可以直接用 OpenList 主线挂其他网盘：115、123、百度、阿里云盘、夸克/UC、迅雷、天翼、移动、联通、Google Drive、OneDrive、Dropbox、PikPak 等都有现成驱动。完整清单见 [OpenList BitQiu 驱动 §1.4](spec/openlist-bitqiu-driver.md#14-openlist-现成驱动快照2026-11-05)。
+
 1. 从 OpenList fork 的发布页下载对应平台的 OpenList（需要包含 BitQiu 驱动的构建；见
    [OpenList fork 与 BitQiu 驱动](spec/openlist-bitqiu-driver.md)）。
 2. 启动 OpenList，在网页管理页登录并添加「比特球」存储，填写比特球账号。

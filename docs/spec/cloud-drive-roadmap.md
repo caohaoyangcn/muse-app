@@ -64,6 +64,7 @@ Muse WebDAV 客户端 ────┘
 - **Muse 只读 WebDAV**：不在 Muse 内改名/移动/删除/上传；管理动作跳 OpenList 网页。
 - **比特球经 OpenList 桥接**：Muse 不直连比特球私有 API，不保存比特球账号。
 - **OpenList 可选**：默认 Muse 包只含本地能力；OpenList 以独立 zip/独立进程分发。
+- **OpenList 现成网盘优先**：115、123、百度、阿里、夸克/UC、迅雷、天翼、移动、联通、Google Drive、OneDrive、Dropbox、PikPak 等主线已内置；只有比特球需要 fork。清单见 [OpenList BitQiu 驱动 §1.4](openlist-bitqiu-driver.md#14-openlist-现成驱动快照2026-11-05)。
 - **桌面播放先缓存**：v1 不做默认边下边播；代理主要用于缩略图/元数据。
 - **远程不参与本地指纹/查重/移动重连**：避免网络读全文件和误判。
 - **离线不删收藏**：网络/鉴权失败只标来源离线；只有确认 404 才标 missing，且仍保留记录。
@@ -86,6 +87,7 @@ Muse WebDAV 客户端 ────┘
 | 2026-11-05 | 计划建立 | 三份实施计划与路线图写入 `docs/spec/` | `9da1586` |
 | 2026-11-05 | 本地/扫描入口 | 初版 `watch.ScanOnce` + `AddSourceDialog` + Library 接入；后收拢为目录监控 | `0800c72` / `d40a9ac` |
 | 2026-11-05 | 语义收拢 | 扫描文件夹改为 `pickWatchDir` + `addWatchDir`，删除一次性 `ScanOnce` | `e25c96c` |
+| 2026-11-05 | OpenList 调研 | 记录主线现成驱动清单；确认 BitQiu 仍需 fork | 本提交 |
 | 2026-11-06 | WebDAV M1 | v24 schema、远程视频字段、仓储查询与过滤、迁移/仓储测试 | `6629ebc` |
 | 2026-11-06 | WebDAV M2 | 只读 WebDAV 客户端与 `httptest` 覆盖 | `74d4126` |
 | 2026-11-06 | WebDAV M3 | secret 抽取、连接 CRUD/删除保护/健康检查 | `efa5e34` |
