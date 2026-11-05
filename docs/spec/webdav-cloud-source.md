@@ -1,6 +1,6 @@
 # Muse WebDAV 云盘片源实施计划
 
-**状态：** In progress（M1 已完成）
+**状态：** In progress（M2 已完成）
 **范围：** Muse Go 后端 `backend/cloud`、v24 schema、WebDAV 只读访问、云端片源的添加/元数据/封面/播放/局域网串流、桌面端设置与浏览弹窗
 **非范围：** OpenList BitQiu 驱动本身（见 [OpenList fork 与 BitQiu 驱动](openlist-bitqiu-driver.md)）、Muse 内重命名/移动/删除/上传网盘文件、远程目录监控、远程内容哈希去重
 **依赖：** 真实比特球联调依赖 [OpenList BitQiu 驱动](openlist-bitqiu-driver.md)；本地可先用 `httptest` WebDAV 或任意 OpenList/AList 实例开发
@@ -283,11 +283,11 @@ OpenVideo(id)
 
 ### M2：WebDAV 客户端
 
-- [ ] PROPFIND 解析（中文/转义 href）。
-- [ ] Range GET / HEAD。
-- [ ] 路径越界拒绝。
-- [ ] 错误映射。
-- [ ] `httptest` 单测。
+- [x] PROPFIND 解析（中文/转义 href）。
+- [x] Range GET / HEAD。
+- [x] 路径越界拒绝。
+- [x] 错误映射。
+- [x] `httptest` 单测。
 
 ### M3：连接服务
 
@@ -410,4 +410,5 @@ OpenVideo(id)
 | 日期 | 里程碑 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- | --- |
 | 2026-11-05 | 计划 | Planned | 计划文档建立 | `9da1586` |
+| 2026-11-06 | M2 | Done | 只读 WebDAV 客户端：PROPFIND Depth 0/1（中文/转义/相对 href）、HEAD、Range 206/200、TLS 开关、根目录约束、401/403/404/5xx 错误映射；`httptest` 覆盖。 | `74d4126` |
 | 2026-11-06 | M1 | Done | v24：`cloud_connections`、`videos.source_id/remote_path`、部分唯一索引；模型与 `GetByRemote`；本地指纹/重连查询排除远程；迁移与仓储测试。`go test ./...`、`go vet ./...` 通过。 | `6629ebc` |
