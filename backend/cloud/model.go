@@ -55,3 +55,48 @@ type ReadCloser interface {
 	Read([]byte) (int, error)
 	Close() error
 }
+
+// ConnectionInput is the write model for the settings form. Password is
+// plaintext only in memory; an empty value keeps the stored password. The
+// explicit ClearPassword flag is how a user removes one, because an empty field
+// alone cannot distinguish "unchanged" from "delete".
+type ConnectionInput struct {
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	Kind          string `json:"kind"`
+	Endpoint      string `json:"endpoint"`
+	WebURL        string `json:"webUrl"`
+	Username      string `json:"username"`
+	Password      string `json:"password"`
+	ClearPassword bool   `json:"clearPassword"`
+	RootPath      string `json:"rootPath"`
+	VerifyTLS     bool   `json:"verifyTls"`
+}
+
+// ConnectionView is the read model. It never carries the password or its
+// ciphertext, only HasPassword; Online is the last observation (true until the
+// first probe, so no warning is invented at startup).
+type ConnectionView struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Kind        string `json:"kind"`
+	Endpoint    string `json:"endpoint"`
+	WebURL      string `json:"webUrl"`
+	Username    string `json:"username"`
+	RootPath    string `json:"rootPath"`
+	VerifyTLS   bool   `json:"verifyTls"`
+	HasPassword bool   `json:"hasPassword"`
+	Online      bool   `json:"online"`
+	LastError   string `json:"lastError"`
+	LastOKAt    int64  `json:"lastOkAt"`
+	VideoCount  int    `json:"videoCount"`
+}
+
+// TestResult is the settings screen's connection check. OK is false for an
+// expected failure (bad credentials, server down) and Error holds the Chinese
+// reason; a Go error is reserved for an unusable request.
+type TestResult struct {
+	OK        bool   `json:"ok"`
+	LatencyMs int64  `json:"latencyMs"`
+	Error     string `json:"error"`
+}

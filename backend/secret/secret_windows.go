@@ -1,6 +1,6 @@
 //go:build windows
 
-package settings
+package secret
 
 import (
 	"encoding/base64"
@@ -10,11 +10,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func ensureSecretStorage() error {
-	return nil
-}
+func ensureAvailable() error { return nil }
 
-func protectSecret(plaintext string) (string, error) {
+// Protect seals plaintext with the current Windows user's DPAPI key.
+func Protect(plaintext string) (string, error) {
 	input := []byte(plaintext)
 	defer clear(input)
 
@@ -37,7 +36,8 @@ func protectSecret(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(protected), nil
 }
 
-func unprotectSecret(encoded string) (string, error) {
+// Unprotect opens a value produced by Protect for the same Windows user.
+func Unprotect(encoded string) (string, error) {
 	protected, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return "", fmt.Errorf("invalid protected secret encoding: %w", err)

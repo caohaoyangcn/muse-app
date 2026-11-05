@@ -33,3 +33,11 @@ var (
 // It is not a missing file: the cached size is probably stale and a fresh Stat
 // is needed.
 var ErrRangeNotSatisfiable = errors.New("cloud range is not satisfiable")
+
+// ErrConnectionNotFound means the requested cloud_connections row is gone.
+var ErrConnectionNotFound = errors.New("cloud connection not found")
+
+// ErrPasswordStorageUnavailable means this platform cannot protect a password
+// at rest. Anonymous WebDAV remains usable; a password must not be stored in
+// plaintext as a fallback.
+var ErrPasswordStorageUnavailable = errors.New("安全保存密码在当前平台不可用")

@@ -8,12 +8,12 @@ package settings
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"muse-app/backend/netproxy"
+	"muse-app/backend/secret"
 	"muse-app/backend/windowstate"
 )
 
@@ -41,7 +41,10 @@ const (
 
 // ErrSecretStorageUnsupported indicates that this build cannot persist
 // secrets securely. There is intentionally no plaintext fallback.
-var ErrSecretStorageUnsupported = errors.New("cookie secret storage is unsupported on this platform")
+//
+// Deprecated: use secret.ErrUnsupported. Kept as an alias so existing settings
+// callers and tests keep one error identity.
+var ErrSecretStorageUnsupported = secret.ErrUnsupported
 
 // Store reads and writes settings. It is safe for concurrent use (SQLite is
 // opened with a single shared connection).
@@ -244,7 +247,7 @@ func (s *Store) ClearFC2Cookie() error {
 }
 
 func (s *Store) getSecretCookie(key, name string) (string, error) {
-	if err := ensureSecretStorage(); err != nil {
+	if err := secret.Available(); err != nil {
 		return "", err
 	}
 	raw, err := s.get(key)
@@ -254,7 +257,7 @@ func (s *Store) getSecretCookie(key, name string) (string, error) {
 	if raw == "" {
 		return "", nil
 	}
-	cookie, err := unprotectSecret(raw)
+	cookie, err := secret.Unprotect(raw)
 	if err != nil {
 		return "", fmt.Errorf("read %s Cookie: %w", name, err)
 	}
@@ -266,10 +269,10 @@ func (s *Store) setSecretCookie(key, name, cookie string, maxLength int) error {
 	if err != nil {
 		return err
 	}
-	if err := ensureSecretStorage(); err != nil {
+	if err := secret.Available(); err != nil {
 		return err
 	}
-	protected, err := protectSecret(cookie)
+	protected, err := secret.Protect(cookie)
 	if err != nil {
 		return fmt.Errorf("protect %s Cookie: %w", name, err)
 	}
@@ -277,7 +280,7 @@ func (s *Store) setSecretCookie(key, name, cookie string, maxLength int) error {
 }
 
 func (s *Store) hasSecretCookie(key string) (bool, error) {
-	if err := ensureSecretStorage(); err != nil {
+	if err := secret.Available(); err != nil {
 		return false, err
 	}
 	raw, err := s.get(key)
@@ -288,7 +291,7 @@ func (s *Store) hasSecretCookie(key string) (bool, error) {
 }
 
 func (s *Store) clearSecretCookie(key, name string) error {
-	if err := ensureSecretStorage(); err != nil {
+	if err := secret.Available(); err != nil {
 		return err
 	}
 	if _, err := s.db.Exec(`DELETE FROM settings WHERE key = ?`, key); err != nil {
