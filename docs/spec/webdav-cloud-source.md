@@ -1,6 +1,6 @@
 # Muse WebDAV 云盘片源实施计划
 
-**状态：** In progress（M3 已完成）
+**状态：** In progress（M4 已完成）
 **范围：** Muse Go 后端 `backend/cloud`、v24 schema、WebDAV 只读访问、云端片源的添加/元数据/封面/播放/局域网串流、桌面端设置与浏览弹窗
 **非范围：** OpenList BitQiu 驱动本身（见 [OpenList fork 与 BitQiu 驱动](openlist-bitqiu-driver.md)）、Muse 内重命名/移动/删除/上传网盘文件、远程目录监控、远程内容哈希去重
 **依赖：** 真实比特球联调依赖 [OpenList BitQiu 驱动](openlist-bitqiu-driver.md)；本地可先用 `httptest` WebDAV 或任意 OpenList/AList 实例开发
@@ -298,11 +298,11 @@ OpenVideo(id)
 
 ### M4：浏览与添加
 
-- [ ] `BrowseCloud` / `AddCloudVideos`。
-- [ ] `video.AddRemoteVideo`、去重、复活。
-- [ ] 读模型 `SourceName/SourceOffline` 附加。
-- [ ] API/Wails 绑定。
-- [ ] 前端网盘设置与浏览弹窗。
+- [x] `BrowseCloud` / `AddCloudVideos`。
+- [x] `video.AddRemoteVideo`、去重、复活。
+- [x] 读模型 `SourceName/SourceOffline` 附加。
+- [x] API/Wails 绑定。
+- [x] 前端网盘设置与浏览弹窗。
 
 ### M5：媒体代理与元数据
 
@@ -410,6 +410,7 @@ OpenVideo(id)
 | 日期 | 里程碑 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- | --- |
 | 2026-11-05 | 计划 | Planned | 计划文档建立 | `9da1586` |
+| 2026-11-06 | M4 | Done | 远程视频 `cloud://<id>/<sha1>` 合成路径、去重/复活；`BrowseCloud`/`AddCloudVideos` 与 Wails 绑定；`SourceName/SourceOffline` 读模型；设置「网盘（可选）」、`CloudBrowserDialog`、卡片/详情角标；headless Chromium 验证浏览/多选/设置表单。 | `edcb7a7` |
 | 2026-11-06 | M3 | Done | `backend/secret`（DPAPI / 非 Windows 拒绝）；连接 CRUD、密码保留/清空、删除保护、连接测试与 60 秒健康检查、`cloud:status`；服务层用 `httptest` 和 SQLite 覆盖。 | `efa5e34` |
 | 2026-11-06 | M2 | Done | 只读 WebDAV 客户端：PROPFIND Depth 0/1（中文/转义/相对 href）、HEAD、Range 206/200、TLS 开关、根目录约束、401/403/404/5xx 错误映射；`httptest` 覆盖。 | `74d4126` |
 | 2026-11-06 | M1 | Done | v24：`cloud_connections`、`videos.source_id/remote_path`、部分唯一索引；模型与 `GetByRemote`；本地指纹/重连查询排除远程；迁移与仓储测试。`go test ./...`、`go vet ./...` 通过。 | `6629ebc` |

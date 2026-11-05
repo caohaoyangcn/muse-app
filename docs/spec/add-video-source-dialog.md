@@ -1,10 +1,10 @@
 # 添加视频来源弹窗实施计划
 
-**状态：** In progress（本地文件 / 扫描文件夹已实现；网盘待接入）
+**状态：** In progress（三来源已接通；待 Windows 原生窗口检查）
 **范围：** 桌面端顶部「添加视频」入口、来源选择弹窗、扫描文件夹与目录监控的统一、网盘入口的交接
 **非范围：** 网盘/WebDAV 后端（见 [Muse WebDAV 云盘片源](webdav-cloud-source.md)）、OpenList BitQiu 驱动（见 [OpenList fork 与 BitQiu 驱动](openlist-bitqiu-driver.md)）、移动端
 **依赖：** 网盘卡片依赖 [Muse WebDAV 云盘片源](webdav-cloud-source.md) 的连接与浏览 API；本地/扫描两项已经独立可用
-**最后更新：** 2026-11-05
+**最后更新：** 2026-11-06
 
 ---
 
@@ -150,7 +150,7 @@ interface AddSourceDialogProps {
 - 新增 `addSourceOpen` 状态。
 - `handleAddLocal`：关闭弹窗 → `pickVideoFiles` → `addVideos` → `showAddSummary` / `showGroupSuggestions` / `invalidate`。
 - `handleAddFolder`：关闭弹窗 → `pickWatchDir` → `addWatchDir`；成功 toast「已加入目录监控，正在扫描…」；重复时提示已在监控中；结果由 `watch:scanned` 事件处理。
-- `handleAddCloud`：关闭弹窗 → 打开 `CloudBrowserDialog`（待 WebDAV 后端）。
+- `handleAddCloud`：关闭弹窗 → 打开 `CloudBrowserDialog`。
 - 全局拖拽 handler：如果 `addSourceOpen` 为真，先关闭弹窗再走原添加逻辑。
 - 空收藏库的 CTA 仍打开同一个来源弹窗，不再直接调用本地选择器。
 
@@ -189,22 +189,22 @@ interface AddSourceDialogProps {
 
 - [x] 新建 `AddSourceDialog.tsx`，实现本地/扫描卡片、键盘、焦点、footer。
 - [x] 接入 `Dialog` 原语，保持现有深色 token。
-- [ ] 网盘卡片：组件已预留 `onPickCloud` / `cloud` 与 loading/count/offline/error 文案，等网盘后端接入后启用。
+- [x] 网盘卡片：`onPickCloud` / `cloud` 已启用，显示连接数/在线数/加载/错误文案。
 - [x] 窄窗口检查。
 
 ### Phase 3：接入 Library
 
 - [x] `addSourceOpen` 状态与打开/关闭逻辑。
-- [x] 本地、扫描 handler；网盘 handler 等 Phase 4。
+- [x] 本地、扫描、网盘 handler。
 - [x] 拖拽时关闭弹窗并继续添加。
 - [x] 空库 CTA 复用同一入口。
 - [x] 扫描文件夹的异步结果交给现有 `watch:scanned` 事件，不新增前端扫描状态。
 
 ### Phase 4：网盘交接
 
-- [ ] `CloudBrowserDialog` 空状态加「去设置 → 网盘」。
-- [ ] 连接数读取在弹窗打开时触发，失败不阻塞。
-- [ ] 从来源弹窗进入网盘后，关闭来源弹窗，不叠加两层遮罩。
+- [x] `CloudBrowserDialog` 空状态加「去设置 → 网盘」。
+- [x] 连接数读取在弹窗打开时触发，失败不阻塞。
+- [x] 从来源弹窗进入网盘后，关闭来源弹窗，不叠加两层遮罩。
 
 ### Phase 5：文案、无障碍、引导
 
@@ -253,6 +253,7 @@ interface AddSourceDialogProps {
 | 2 | `Add add-source chooser dialog` | `AddSourceDialog.tsx`、Library 接入 | `d40a9ac` |
 | 3 | `Record add-source implementation progress` | 文档进度 | `4c63d61` |
 | 4 | `Unify scan folder with folder watch` | 删除一次性扫描，改用 `addWatchDir` | `e25c96c` |
+| 5 | `Support remote videos in the library` | WebDAV 浏览/添加 + 来源弹窗网盘交接 | `edcb7a7` |
 
 ## 8. 风险与取舍
 
@@ -269,12 +270,14 @@ interface AddSourceDialogProps {
 | 2026-11-05 | Planned | 计划文档建立 | `9da1586` |
 | 2026-11-05 | In progress | 一次性扫描 + 来源弹窗 + Library 接入 | `0800c72` / `d40a9ac` |
 | 2026-11-05 | Revised | 扫描文件夹改为添加目录监控，删除一次性扫描路径 | `e25c96c` |
+| 2026-11-06 | Phase 4 done | 网盘卡片启用；空状态可去设置；浏览/多选/添加接通 | `edcb7a7` |
 
 ## 10. 实现记录（2026-11-05）
 
 - 后端：保留 `collectCandidates` 作为 `scanRoot` 的提取；删除 `watch.ScanOnce`、`ScanOnceResult`、`api.ScanDirectoryOnce`、`App.ScanDirectoryOnce`、`App.PickScanDir` 及对应测试/绑定。
-- 前端：`AddSourceDialog` 只有本地/扫描两张卡片；扫描卡片不再有「扫描中」禁用态。网盘卡片代码仍预留，等 WebDAV 后端接入。
+- 前端：`AddSourceDialog` 三张卡片全部启用；扫描卡片不再有「扫描中」禁用态。网盘卡片显示连接数/在线数，未配置时进入空状态并可跳转设置。
 - 入口：顶部 `＋ 添加视频` 和空库 CTA 都打开来源弹窗；拖拽仍直接添加，并在弹窗打开时先关闭弹窗。
 - 扫描文件夹：`pickWatchDir` → `addWatchDir`；成功提示「已加入目录监控，正在扫描…」，结果由现有 `watch:scanned` 事件提示并刷新。
 - 已完成：引导文案、`PRODUCT.md` 能力清单、`go test` / `go vet` / 前端 `lint` + `build`、headless Chromium 布局/键盘检查；点击扫描文件夹确认调用 `PickWatchDir` + `AddWatchDir`，重复目录提示正确。
-- 尚未完成：网盘交接、Windows 原生窗口实机检查。
+- 2026-11-06 补充：网盘交接完成（`CloudBrowserDialog`、`handleAddCloud`、`cloud` 摘要）；三来源均可走通。
+- 尚未完成：Windows 原生窗口实机检查。
