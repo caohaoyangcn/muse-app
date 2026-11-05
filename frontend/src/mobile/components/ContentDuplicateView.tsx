@@ -97,10 +97,10 @@ export function ContentDuplicateView({
     setBusy(true);
     try {
       for (const v of removed) await removeVideo(v.id);
-      onToast(`已保留「${videoName(keep)}」，移除 ${removed.length} 个重复拷贝`);
+      onToast(`已保留「${videoName(keep)}」，移入回收站 ${removed.length} 个重复拷贝`);
       invalidate();
     } catch (e) {
-      onToast(e instanceof ApiError ? e.message : "移除失败", "error");
+      onToast(e instanceof ApiError ? e.message : "移入回收站失败", "error");
       reload();
     } finally {
       setBusy(false);
@@ -298,11 +298,11 @@ export function ContentDuplicateView({
 
       <ConfirmSheet
         busy={busy}
-        confirmLabel="保留并移除其他拷贝"
+        confirmLabel="保留此拷贝，其余移入回收站"
         danger
-        message={`将保留「${pendingKeep ? videoName(pendingKeep.keep) : ""}」，并从收藏中移除内容相同的其他 ${
+        message={`将保留「${pendingKeep ? videoName(pendingKeep.keep) : ""}」，并把内容相同的其他 ${
           pendingKeep ? pendingKeep.group.members.length - 1 : 0
-        } 个拷贝。\n\n只会删除收藏记录与缩略图，不会删除原视频文件；释放磁盘空间需要在电脑上删除多余文件。`}
+        } 个拷贝。\n\n原始视频文件不会被删除；移入回收站后可恢复。释放磁盘空间需要在电脑上删除多余文件。`}
         onClose={() => setPendingKeep(null)}
         onConfirm={() => void confirmKeep()}
         open={pendingKeep !== null}

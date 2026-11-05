@@ -45,18 +45,18 @@ export function VideoActionSheet({
         onClick={onLike}
       />
       <SheetAction label="编辑信息" onClick={onEdit} />
-      <SheetAction danger label="从收藏中移除" onClick={onRemove} />
+      <SheetAction danger label="移入回收站" onClick={onRemove} />
       {offline ? (
         <p className="px-3 py-2 text-xs text-[var(--muted)]">
-          磁盘 {video?.volumeRoot || ""} 未接入，插回移动硬盘后即可播放；移除只删除收藏记录与缩略图，不会删除原视频。
+          磁盘 {video?.volumeRoot || ""} 未接入，插回移动硬盘后即可播放；移入回收站后可恢复；源视频不会被删除。
         </p>
       ) : sourceOffline ? (
         <p className="px-3 py-2 text-xs text-[var(--muted)]">
-          网盘「{video?.sourceName || "连接"}」当前离线，恢复后即可播放；移除只删除收藏记录与缩略图，不会删除网盘文件。
+          网盘「{video?.sourceName || "连接"}」当前离线，恢复后即可播放；移入回收站后可恢复；网盘文件不会被删除。
         </p>
       ) : missing ? (
         <p className="px-3 py-2 text-xs text-[var(--muted)]">
-          文件缺失，无法播放；移除只删除收藏记录与缩略图，不会删除原视频。
+          文件缺失，无法播放；移入回收站后可恢复；源视频不会被删除。
         </p>
       ) : null}
     </BottomSheet>

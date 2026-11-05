@@ -12,6 +12,7 @@ import { EditInfoSheet } from "./components/EditInfoSheet";
 import { ExternalPlayerSheet } from "./components/ExternalPlayerSheet";
 import { LibraryView } from "./components/LibraryView";
 import { ScrapeTaskView } from "./components/ScrapeTaskView";
+import { TrashView } from "./components/TrashView";
 import { ConfirmSheet } from "./components/Sheet";
 import { Toasts, type Toast } from "./components/Toasts";
 import { VideoActionSheet } from "./components/VideoActionSheet";
@@ -352,11 +353,11 @@ export default function App() {
     setBusy(true);
     try {
       await removeVideo(removedID);
-      toast(`已移除「${videoName(removeTarget)}」`);
+      toast(`已将「${videoName(removeTarget)}」移入回收站`);
       forget();
     } catch (e) {
       forget();
-      toast(e instanceof ApiError ? e.message : "移除失败", "error");
+      toast(e instanceof ApiError ? e.message : "移入回收站失败", "error");
     } finally {
       setBusy(false);
     }
@@ -455,6 +456,8 @@ export default function App() {
           onOpenVideo={openVideo}
           onToast={toast}
         />
+      ) : activeTab === "trash" ? (
+        <TrashView onToast={toast} />
       ) : (
         <ScrapeTaskView onOpenVideo={openVideo} />
       )}
@@ -470,6 +473,7 @@ export default function App() {
               ["actors", "演员"],
               ["scrape", "刮削"],
               ["duplicates", "查重"],
+              ["trash", "回收站"],
             ] as [Tab, string][]
           ).map(([id, label]) => (
             <button
@@ -544,13 +548,13 @@ export default function App() {
 
       <ConfirmSheet
         busy={busy}
-        confirmLabel="移除收藏"
+        confirmLabel="移入回收站"
         danger
-        message="只会删除收藏记录与缩略图，不会删除原视频文件。"
+        message="源视频文件不会被删除；移入后可在回收站恢复。"
         onClose={() => setRemoveTarget(null)}
         onConfirm={() => void confirmRemove()}
         open={removeTarget !== null}
-        title={`移除「${removeTarget ? videoName(removeTarget) : ""}」？`}
+        title={`移入回收站「${removeTarget ? videoName(removeTarget) : ""}」？`}
       />
 
       {playerVideo ? (

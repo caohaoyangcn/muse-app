@@ -146,14 +146,14 @@ export default function ContentDuplicatePanel({
       }
       onNotify(
         removed.length === 1
-          ? `已保留「${keep.fileName}」，移除 1 个重复拷贝`
-          : `已保留「${keep.fileName}」，移除 ${removed.length} 个重复拷贝`,
+          ? `已保留「${keep.fileName}」，移入回收站 1 个重复拷贝`
+          : `已保留「${keep.fileName}」，移入回收站 ${removed.length} 个重复拷贝`,
         "success",
       );
       onResolved(removed.map((v) => v.id));
       reload();
     } catch (e) {
-      onNotify(`移除重复拷贝失败：${String(e)}`, "error");
+      onNotify(`移入回收站失败：${String(e)}`, "error");
       reload();
     } finally {
       setBusy(false);
@@ -291,7 +291,7 @@ export default function ContentDuplicatePanel({
               </header>
               {group.members.some((member) => member.volumeOffline) && (
                 <div className="border-b border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
-                  ⚠ 有拷贝所在的磁盘未接入；插回后再整理，避免移除还能找回的收藏。
+                  ⚠ 有拷贝所在的磁盘未接入；插回后再整理，避免把还能找回的收藏移入回收站。
                 </div>
               )}
               {group.needsReverify && (
@@ -532,7 +532,7 @@ function MemberCard({
           variant="primary"
           className="w-full"
           disabled={busy}
-          title="保留这个拷贝，并把内容相同的其他拷贝从收藏中移除（不会删除文件）"
+          title="保留这个拷贝，并把内容相同的其他拷贝移入回收站（不会删除文件）"
           onClick={onKeep}
         >
           保留此份
@@ -560,7 +560,7 @@ function KeepCopyDialog({
         <DialogHeader>
           <DialogTitle>保留这个拷贝？</DialogTitle>
           <DialogDescription>
-            将保留「{keep.fileName}」，并从收藏中移除内容相同的其他 {others.length} 个拷贝：
+            将保留「{keep.fileName}」，并把内容相同的其他 {others.length} 个拷贝移入回收站：
           </DialogDescription>
         </DialogHeader>
         <ul className="max-h-[220px] overflow-y-auto text-xs text-[var(--muted)]">
@@ -569,11 +569,11 @@ function KeepCopyDialog({
           ))}
         </ul>
         <div className="text-xs text-[var(--muted)]">
-          原始视频文件不会被删除。要真正释放磁盘空间，请在「打开所在文件夹」后用资源管理器删除多余的那份文件。
+          原始视频文件不会被删除，移入回收站后仍可恢复。要真正释放磁盘空间，请在「打开所在文件夹」后用资源管理器删除多余的那份文件。
         </div>
         <DialogFooter>
           <Button onClick={onCancel}>取消</Button>
-          <Button variant="danger" onClick={onConfirm}>保留并移除其他拷贝</Button>
+          <Button variant="danger" onClick={onConfirm}>保留此拷贝，其余移入回收站</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

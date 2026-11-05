@@ -332,6 +332,17 @@ export default function Sidebar({
           <span>⧉</span>
           <span>查重</span>
         </div>
+        <div
+          className={cn(
+            "flex cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)]",
+            filter.kind === "trash" && "bg-[var(--panel-2)] text-[var(--text)]",
+          )}
+          onClick={() => onSelect({ kind: "trash" })}
+          title="已移出收藏的影片：可恢复，或彻底删除；超期自动清理"
+        >
+          <span>🗑</span>
+          <span>回收站</span>
+        </div>
       </SidebarNav>
     </SidebarRoot>
   );

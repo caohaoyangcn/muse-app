@@ -13,6 +13,7 @@ import type {
   JavDuplicateGroup,
   JavTask,
   JavTaskOverview,
+  TrashSnapshot,
   Video,
 } from "../types";
 
@@ -139,8 +140,29 @@ export function clearVideoLikes(id: number): Promise<Video> {
   return jsonRequest<Video>(`${API}/videos/${id}/likes`, "DELETE");
 }
 
+/** 把收藏移入回收站（软删除）；源文件不会被删除。 */
 export function removeVideo(id: number): Promise<void> {
   return request<void>(`${API}/videos/${id}`, { method: "DELETE" });
+}
+
+/** 回收站条目与当前保留天数。 */
+export function listTrash(): Promise<TrashSnapshot> {
+  return request<TrashSnapshot>(`${API}/trash`);
+}
+
+/** 从回收站恢复一条收藏。 */
+export function restoreVideo(id: number): Promise<void> {
+  return request<void>(`${API}/trash/${id}/restore`, { method: "POST" });
+}
+
+/** 彻底删除一条回收站收藏；只清除 Muse 的记录与生成图片/缓存。 */
+export function deleteVideoPermanently(id: number): Promise<void> {
+  return request<void>(`${API}/trash/${id}`, { method: "DELETE" });
+}
+
+/** 清空回收站，返回彻底删除的条目数。 */
+export function emptyTrash(): Promise<number> {
+  return jsonRequest<{ count: number }>(`${API}/trash`, "DELETE").then((r) => r.count);
 }
 
 /** 保留重复分组的全部版本（等价于忽略重复提示）。 */

@@ -24,7 +24,7 @@ const ITEMS: { action: MenuAction; label: string; danger?: boolean }[] = [
   { action: "openFolder", label: "打开所在文件夹" },
   { action: "copyPath", label: "复制路径" },
   { action: "edit", label: "编辑信息…" },
-  { action: "remove", label: "从收藏中移除", danger: true },
+  { action: "remove", label: "移入回收站", danger: true },
 ];
 
 /**

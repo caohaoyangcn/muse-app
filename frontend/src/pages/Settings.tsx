@@ -16,6 +16,10 @@ import {
   clearFC2Cookie,
   getScrapeProxy,
   setScrapeProxy,
+  getTrashRetentionDays,
+  setTrashRetentionDays,
+  listTrash,
+  purgeExpiredTrash,
   scrapeVideosJav,
   listCloudConnections,
   saveCloudConnection,
@@ -40,9 +44,10 @@ import { Input } from "../components/ui/input";
 import { cn } from "../lib/utils";
 import { ArrowRight, Cloud, Keyboard } from "lucide-react";
 
-type SectionKey = "guide" | "server" | "watch" | "cloud" | "proxy" | "javbus" | "fc2";
+type SectionKey = "guide" | "server" | "watch" | "trash" | "cloud" | "proxy" | "javbus" | "fc2";
 
 const DEFAULT_PORT = 8899;
+const DEFAULT_TRASH_RETENTION_DAYS = 14;
 
 // The submenu, in reading order. The first entry is where a new user should
 // land: a one-page orientation plus a replay of the tour.
@@ -50,6 +55,7 @@ const NAV: { key: SectionKey; label: string }[] = [
   { key: "guide", label: "新手引导" },
   { key: "server", label: "服务器" },
   { key: "watch", label: "目录监控" },
+  { key: "trash", label: "回收站" },
   { key: "cloud", label: "网盘（可选）" },
   { key: "proxy", label: "网络代理" },
   { key: "javbus", label: "JavBus" },
@@ -116,6 +122,7 @@ export default function Settings({
           {active === "guide" && <GuideSection onStartTour={onStartTour} />}
           {active === "server" && <ServerSection />}
           {active === "watch" && <WatchSection />}
+          {active === "trash" && <TrashSection />}
           {active === "cloud" && <CloudSection />}
           {active === "proxy" && <ProxySection />}
           {active === "javbus" && <JavBusSection />}
@@ -277,6 +284,140 @@ function ServerSection() {
             <p className="mt-2.5 text-[13px] text-[var(--muted)]">默认端口为 8899。</p>
           )}
           {saved && <p className="mt-2.5 text-[13px] text-[#7ad9a2]">已保存 ✓</p>}
+          {error && <p className="mt-2.5 text-[13px] text-[var(--danger)]">{error}</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TrashSection() {
+  const [days, setDays] = useState("");
+  const [count, setCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [purging, setPurging] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [purged, setPurged] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [retention, trash] = await Promise.all([getTrashRetentionDays(), listTrash()]);
+      setDays(String(retention));
+      setCount(trash.videos.length);
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const save = async () => {
+    const value = Number.parseInt(days.trim(), 10);
+    if (!Number.isInteger(value) || value < 1 || value > 365) {
+      setError("保留天数必须在 1-365 之间");
+      return;
+    }
+    setError(null);
+    setSaved(false);
+    setPurged(null);
+    setSaving(true);
+    try {
+      await setTrashRetentionDays(value);
+      setDays(String(await getTrashRetentionDays()));
+      setSaved(true);
+      // A shorter retention may have made entries immediately due; the backend
+      // purges in the background, so re-read the bin after a moment.
+      window.setTimeout(() => void load(), 400);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const purge = async () => {
+    setError(null);
+    setPurged(null);
+    setPurging(true);
+    try {
+      const n = await purgeExpiredTrash();
+      setPurged(n);
+      await load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPurging(false);
+    }
+  };
+
+  return (
+    <section className="max-w-[640px]">
+      <h2 className="mb-1.5 text-base font-semibold">回收站</h2>
+      <p className="mb-5 max-w-[560px] leading-relaxed text-[var(--muted)]">
+        从收藏中移除的影片会先进入回收站，而不是立刻销毁记录。回收站保留收藏的标题、点赞、分组和刮削资料；
+        超过保留期后，应用会在启动时或后台定时检查中自动彻底清理。清理只删除 Muse 的记录、生成的缩略图/封面与网盘缓存，
+        <strong className="text-[var(--text)]">原始视频文件永远不会被删除</strong>。
+      </p>
+
+      {loading ? (
+        <div className="flex min-h-[200px] items-center justify-center text-[var(--muted)]">加载中…</div>
+      ) : (
+        <div className="max-w-[460px]">
+          <div className="mb-3 text-[13px] text-[var(--muted)]">当前回收站：{count} 项</div>
+          <label className="mb-2 block font-medium" htmlFor="trash-retention">
+            保留天数
+          </label>
+          <div className="flex items-center gap-2.5">
+            <Input
+              id="trash-retention"
+              className="w-[150px]"
+              type="number"
+              min={1}
+              max={365}
+              inputMode="numeric"
+              value={days}
+              onChange={(e) => {
+                setDays(e.target.value);
+                setSaved(false);
+                setPurged(null);
+              }}
+              placeholder={`例：${DEFAULT_TRASH_RETENTION_DAYS}`}
+            />
+            <Button variant="primary" onClick={() => void save()} disabled={saving}>
+              {saving ? "保存中…" : "保存"}
+            </Button>
+            <Button
+              onClick={() => {
+                setDays(String(DEFAULT_TRASH_RETENTION_DAYS));
+                setSaved(false);
+                setPurged(null);
+              }}
+            >
+              恢复默认
+            </Button>
+          </div>
+          <p className="mt-2.5 text-[13px] text-[var(--muted)]">
+            默认保留 {DEFAULT_TRASH_RETENTION_DAYS} 天，可设置 1-365 天。缩短保留期会立即清理已经超期的条目。
+          </p>
+          {saved && <p className="mt-2.5 text-[13px] text-[#7ad9a2]">已保存 ✓</p>}
+
+          <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-5">
+            <Button onClick={() => void purge()} disabled={purging}>
+              {purging ? "清理中…" : "立即清理超期条目"}
+            </Button>
+            {purged != null && (
+              <span className="text-[13px] text-[var(--muted)]">
+                {purged > 0 ? `已清理 ${purged} 项` : "没有超期条目"}
+              </span>
+            )}
+          </div>
           {error && <p className="mt-2.5 text-[13px] text-[var(--danger)]">{error}</p>}
         </div>
       )}

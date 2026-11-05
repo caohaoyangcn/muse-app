@@ -13,7 +13,10 @@ import {
   CopyPath,
   CreateGroup,
   DeleteGroup,
+  DeleteVideoPermanently,
+  EmptyTrash as EmptyTrashBinding,
   EnsureVideoIn4KGroup,
+  GetTrashRetentionDays,
   GetServerPort,
   GetScrapeProxy,
   GetTourSeen,
@@ -32,8 +35,10 @@ import {
   ResetVideoCover,
   SetVideoScrapedCoverAllowed,
   RefreshStatus,
+  PurgeExpiredTrash as PurgeExpiredTrashBinding,
   RemoveVideo,
   RemoveWatchDir,
+  RestoreVideo,
   RenameGroup,
   ReorderGroups,
   RescanWatchDirs,
@@ -56,6 +61,7 @@ import {
   VideoJavTask,
   ListJavTaskOverviews,
   ListActors,
+  ListTrash as ListTrashBinding,
   ActorProfile as FetchActorProfile,
   ActorFillStatus as FetchActorFillStatus,
   StartActorFill,
@@ -75,6 +81,7 @@ import {
   ScrapeVideoJav,
   ScrapeVideosJav,
   SetVideoJavOverride,
+  SetTrashRetentionDays,
   ClearJavBusCookie,
   GetJavBusCookieStatus,
   SetJavBusCookie,
@@ -107,6 +114,7 @@ import type {
   ContentScanStatus,
   FileScanStatus,
   VolumeChange,
+  TrashSnapshot,
 } from "../types";
 
 /**
@@ -119,7 +127,34 @@ export const searchVideos = (keyword: string): Promise<Video[]> => SearchVideos(
 
 export const addVideos = (paths: string[]): Promise<AddVideoResult[]> => AddVideos(paths);
 
+/**
+ * 把收藏移入回收站（软删除）。记录、缩略图/封面、分组归属与刮削资料都会保留，
+ * 可在回收站恢复；源视频文件永远不会被删除。
+ */
 export const removeVideo = (id: number): Promise<void> => RemoveVideo(id);
+
+/** 回收站条目与当前保留天数。 */
+export const listTrash = (): Promise<TrashSnapshot> => ListTrashBinding();
+
+/** 从回收站恢复一条收藏（同 id、同分组、同资料）。 */
+export const restoreVideo = (id: number): Promise<void> => RestoreVideo(id);
+
+/** 彻底删除一条回收站收藏：只清数据库记录与生成的图片/缓存，不碰源视频。 */
+export const deleteVideoPermanently = (id: number): Promise<void> =>
+  DeleteVideoPermanently(id);
+
+/** 清空回收站，返回彻底删除的条目数。 */
+export const emptyTrash = (): Promise<number> => EmptyTrashBinding();
+
+/** 立即清理超过保留期的条目，返回清理数量。 */
+export const purgeExpiredTrash = (): Promise<number> => PurgeExpiredTrashBinding();
+
+/** 当前保留天数（默认 14）。 */
+export const getTrashRetentionDays = (): Promise<number> => GetTrashRetentionDays();
+
+/** 保存保留天数；缩短后会立即清理已超期条目。 */
+export const setTrashRetentionDays = (days: number): Promise<void> =>
+  SetTrashRetentionDays(days);
 
 // ---- Video info editing (编辑影片信息) ----
 

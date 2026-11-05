@@ -86,8 +86,16 @@ export function DeleteGroup(arg1) {
   return window['go']['main']['App']['DeleteGroup'](arg1);
 }
 
+export function DeleteVideoPermanently(arg1) {
+  return window['go']['main']['App']['DeleteVideoPermanently'](arg1);
+}
+
 export function Emit(arg1, arg2) {
   return window['go']['main']['App']['Emit'](arg1, arg2);
+}
+
+export function EmptyTrash() {
+  return window['go']['main']['App']['EmptyTrash']();
 }
 
 export function EnsureVideoIn4KGroup(arg1) {
@@ -120,6 +128,10 @@ export function GetServerPort() {
 
 export function GetTourSeen() {
   return window['go']['main']['App']['GetTourSeen']();
+}
+
+export function GetTrashRetentionDays() {
+  return window['go']['main']['App']['GetTrashRetentionDays']();
 }
 
 export function IgnoreContentDuplicate(arg1) {
@@ -158,6 +170,10 @@ export function ListJavTaskOverviews() {
   return window['go']['main']['App']['ListJavTaskOverviews']();
 }
 
+export function ListTrash() {
+  return window['go']['main']['App']['ListTrash']();
+}
+
 export function ListVideos() {
   return window['go']['main']['App']['ListVideos']();
 }
@@ -190,6 +206,10 @@ export function PickWatchDir() {
   return window['go']['main']['App']['PickWatchDir']();
 }
 
+export function PurgeExpiredTrash() {
+  return window['go']['main']['App']['PurgeExpiredTrash']();
+}
+
 export function RefreshStatus(arg1) {
   return window['go']['main']['App']['RefreshStatus'](arg1);
 }
@@ -220,6 +240,10 @@ export function RescanWatchDirs() {
 
 export function ResetVideoCover(arg1) {
   return window['go']['main']['App']['ResetVideoCover'](arg1);
+}
+
+export function RestoreVideo(arg1) {
+  return window['go']['main']['App']['RestoreVideo'](arg1);
 }
 
 export function ReverifyContentDuplicate(arg1) {
@@ -292,6 +316,10 @@ export function SetSettings(arg1) {
 
 export function SetTourSeen() {
   return window['go']['main']['App']['SetTourSeen']();
+}
+
+export function SetTrashRetentionDays(arg1) {
+  return window['go']['main']['App']['SetTrashRetentionDays'](arg1);
 }
 
 export function SetVideoCover(arg1, arg2) {

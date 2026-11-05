@@ -113,7 +113,7 @@ function TabButton({
  * Versions carry the same right-click menu as library cards. The panel cannot
  * delete files — by design — but "打开所在文件夹" / "复制路径" let the user remove
  * a duplicate in the file manager themselves; once the file is gone the folder
- * watcher has nothing to re-import, so the decision sticks. "从收藏中移除" then
+ * watcher has nothing to re-import, so the decision sticks. "移入回收站" then
  * drops the leftover record without leaving the panel.
  */
 function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: DuplicatePanelProps) {
@@ -182,14 +182,14 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
       }
       onNotify(
         removed.length === 1
-          ? `已保留「${keep.fileName}」，移除 1 个重复版本`
-          : `已保留「${keep.fileName}」，移除 ${removed.length} 个重复版本`,
+          ? `已保留「${keep.fileName}」，移入回收站 1 个重复版本`
+          : `已保留「${keep.fileName}」，移入回收站 ${removed.length} 个重复版本`,
         "success",
       );
       onResolved(removed.map((v) => v.id));
       reload();
     } catch (e) {
-      onNotify(`移除重复版本失败：${String(e)}`, "error");
+      onNotify(`移入回收站失败：${String(e)}`, "error");
       reload();
     } finally {
       setBusy(false);
@@ -384,7 +384,7 @@ function VersionCard({
           variant="primary"
           className="w-full"
           disabled={busy}
-          title="保留这个版本，并把同一作品的其他版本从收藏中移除（不会删除文件）"
+          title="保留这个版本，并把同一作品的其他版本移入回收站（不会删除文件）"
           onClick={onKeep}
         >
           保留此版本
@@ -412,7 +412,7 @@ function KeepVersionDialog({
         <DialogHeader>
           <DialogTitle>保留这个版本？</DialogTitle>
           <DialogDescription>
-            将保留「{keep.fileName}」，并从收藏中移除同一作品的其他 {others.length} 个版本：
+            将保留「{keep.fileName}」，并把同一作品的其他 {others.length} 个版本移入回收站：
           </DialogDescription>
         </DialogHeader>
         <ul className="max-h-[220px] overflow-y-auto text-xs text-[var(--muted)]">
@@ -420,10 +420,10 @@ function KeepVersionDialog({
             <li key={v.id} className="truncate" title={v.path}>· {v.fileName}</li>
           ))}
         </ul>
-        <div className="text-xs text-[var(--muted)]">原始视频文件不会被删除。</div>
+        <div className="text-xs text-[var(--muted)]">原始视频文件不会被删除，移入回收站后仍可恢复。</div>
         <DialogFooter>
           <Button onClick={onCancel}>取消</Button>
-          <Button variant="danger" onClick={onConfirm}>保留并移除其他版本</Button>
+          <Button variant="danger" onClick={onConfirm}>保留此版本，其余移入回收站</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

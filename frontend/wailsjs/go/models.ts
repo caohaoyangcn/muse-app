@@ -26,6 +26,38 @@ export namespace api {
 	
 	    }
 	}
+	export class TrashSnapshot {
+	    videos: video.Video[];
+	    retentionDays: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TrashSnapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.videos = this.convertValues(source["videos"], video.Video);
+	        this.retentionDays = source["retentionDays"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class VideoGroupSuggestion {
 	    path: string;
 	    fileName: string;
@@ -663,6 +695,9 @@ export namespace video {
 	    remotePath: string;
 	    sourceName: string;
 	    sourceOffline: boolean;
+	    deletedAt: number;
+	    deleteReason: string;
+	    trashGroupNames: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Video(source);
@@ -703,6 +738,9 @@ export namespace video {
 	        this.remotePath = source["remotePath"];
 	        this.sourceName = source["sourceName"];
 	        this.sourceOffline = source["sourceOffline"];
+	        this.deletedAt = source["deletedAt"];
+	        this.deleteReason = source["deleteReason"];
+	        this.trashGroupNames = source["trashGroupNames"];
 	    }
 	}
 	export class ContentDuplicateMember {

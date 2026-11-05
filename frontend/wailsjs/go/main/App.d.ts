@@ -7,8 +7,8 @@ import {cloud} from '../models';
 import {group} from '../models';
 import {context} from '../models';
 import {main} from '../models';
-import {server} from '../models';
 import {api} from '../models';
+import {server} from '../models';
 import {settings} from '../models';
 
 export function ActorFillStatus():Promise<jav.ActorFillStatus>;
@@ -53,7 +53,11 @@ export function DeleteCloudConnection(arg1:number):Promise<void>;
 
 export function DeleteGroup(arg1:number):Promise<void>;
 
+export function DeleteVideoPermanently(arg1:number):Promise<void>;
+
 export function Emit(arg1:string,arg2:Array<any>):Promise<void>;
+
+export function EmptyTrash():Promise<number>;
 
 export function EnsureVideoIn4KGroup(arg1:number):Promise<void>;
 
@@ -70,6 +74,8 @@ export function GetScrapeProxy():Promise<string>;
 export function GetServerPort():Promise<number>;
 
 export function GetTourSeen():Promise<boolean>;
+
+export function GetTrashRetentionDays():Promise<number>;
 
 export function IgnoreContentDuplicate(arg1:string):Promise<void>;
 
@@ -89,6 +95,8 @@ export function ListJavDuplicates(arg1:boolean):Promise<Array<jav.DuplicateGroup
 
 export function ListJavTaskOverviews():Promise<Array<jav.TaskOverview>>;
 
+export function ListTrash():Promise<api.TrashSnapshot>;
+
 export function ListVideos():Promise<Array<video.Video>>;
 
 export function ListWatchDirs():Promise<Array<watch.WatchedDir>>;
@@ -105,6 +113,8 @@ export function PickVideoFiles():Promise<Array<string>>;
 
 export function PickWatchDir():Promise<string>;
 
+export function PurgeExpiredTrash():Promise<number>;
+
 export function RefreshStatus(arg1:number):Promise<video.Video>;
 
 export function RefreshVolumes():Promise<Array<video.VolumeChange>>;
@@ -120,6 +130,8 @@ export function ReorderGroups(arg1:Array<number>):Promise<void>;
 export function RescanWatchDirs():Promise<void>;
 
 export function ResetVideoCover(arg1:number):Promise<video.Video>;
+
+export function RestoreVideo(arg1:number):Promise<void>;
 
 export function ReverifyContentDuplicate(arg1:string):Promise<void>;
 
@@ -156,6 +168,8 @@ export function SetService(arg1:video.Service):Promise<void>;
 export function SetSettings(arg1:settings.Store):Promise<void>;
 
 export function SetTourSeen():Promise<void>;
+
+export function SetTrashRetentionDays(arg1:number):Promise<void>;
 
 export function SetVideoCover(arg1:number,arg2:number):Promise<video.Video>;
 

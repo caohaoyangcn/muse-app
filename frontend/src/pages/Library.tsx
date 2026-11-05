@@ -24,6 +24,7 @@ import ScrapeTaskView, { type ScrapeTaskStatus } from "../components/ScrapeTaskV
 import SortBar from "../components/SortBar";
 import ViewControls from "../components/ViewControls";
 import TabContextMenu, { type TabMenuAction } from "../components/TabContextMenu";
+import TrashView from "../components/TrashView";
 import Toasts, { type ToastItem } from "../components/Toasts";
 import VideoGrid from "../components/VideoGrid";
 import VideoList from "../components/VideoList";
@@ -207,7 +208,10 @@ export default function Library({
   }, []);
 
   const panelView =
-    filter.kind === "scrapeTasks" || filter.kind === "actors" || filter.kind === "duplicates";
+    filter.kind === "scrapeTasks" ||
+    filter.kind === "actors" ||
+    filter.kind === "duplicates" ||
+    filter.kind === "trash";
 
   // The grid list is the shell's own live query. A panel view loads its own
   // data, so this one is skipped — except while a video tab is open, because
@@ -748,17 +752,17 @@ export default function Library({
         if (data.removed) {
           pushToast({
             kind: "info",
-            message: `已自动清理 ${data.removed} 个文件缺失的收藏`,
-            details: [...where, "只删除收藏记录与缩略图，源文件未被删除"],
+            message: `已自动将 ${data.removed} 个文件缺失的收藏移入回收站`,
+            details: [...where, "可在回收站恢复；源文件未被删除"],
           });
         }
         if (data.skipped) {
           pushToast({
             kind: "error",
-            message: `有 ${data.skipped} 个文件缺失的收藏未自动清理`,
+            message: `有 ${data.skipped} 个文件缺失的收藏未自动移入回收站`,
             details: [
               ...where,
-              "该磁盘上的收藏全部找不到文件，已保留记录以防磁盘未正确接入；请确认后手动移除",
+              "该磁盘上的收藏全部找不到文件，已保留记录以防磁盘未正确接入；请确认后手动移入回收站",
             ],
           });
         }
@@ -1216,7 +1220,7 @@ export default function Library({
     try {
       await removeVideo(target.id);
       closeDetail(target.id);
-      pushToast({ kind: "info", message: `已移除“${videoDisplayName(target)}”` });
+      pushToast({ kind: "info", message: `已将“${videoDisplayName(target)}”移入回收站` });
       // The removed video may have belonged to groups, and its card has to
       // leave the grid, the sidebar counts and any open panel.
       invalidate();
@@ -1238,7 +1242,7 @@ export default function Library({
     try {
       await removeVideo(target.id);
       closeDetail(target.id);
-      pushToast({ kind: "info", message: `已移除“${videoDisplayName(target)}”` });
+      pushToast({ kind: "info", message: `已将“${videoDisplayName(target)}”移入回收站` });
       invalidate();
     } catch (e) {
       // Same as confirmRemove: never leave behind a stale card that can only
@@ -1407,6 +1411,10 @@ export default function Library({
   // library), so the header search is hidden for it in the same way.
   const duplicateView = activeTab === "library" && filter.kind === "duplicates";
 
+  // 回收站 owns its own toolbar, so the library search box would be a second,
+  // inert field above it.
+  const trashView = activeTab === "library" && filter.kind === "trash";
+
   // What <main> currently shows. The content error boundary uses it to recover
   // when the user navigates somewhere else, so a broken panel cannot trap them
   // on a dead screen.
@@ -1475,7 +1483,7 @@ export default function Library({
         </Button>
         <div className="flex-1" />
         <ServerBar />
-        {!actorView && !duplicateView && (
+        {!actorView && !duplicateView && !trashView && (
           <SearchBar
             value={keyword}
             onChange={setKeyword}
@@ -1593,6 +1601,11 @@ export default function Library({
               }}
               onResolved={handleDuplicatesResolved}
               onNotify={(message, kind) => pushToast({ kind, message })}
+            />
+          ) : filter.kind === "trash" ? (
+            <TrashView
+              onNotify={pushToast}
+              onOpenSettings={onOpenSettings}
             />
           ) : (
             <>
@@ -1750,9 +1763,9 @@ export default function Library({
 
       {removeTarget && (
         <ConfirmDialog
-          title="从收藏中移除"
-          message={`确定将“${videoDisplayName(removeTarget)}”从收藏中移除吗？\n\n原始视频文件不会被删除。`}
-          confirmLabel="移除"
+          title="移入回收站"
+          message={`确定将“${videoDisplayName(removeTarget)}”移入回收站吗？\n\n可随时从回收站恢复；原始视频文件不会被删除。`}
+          confirmLabel="移入回收站"
           cancelLabel="取消"
           danger
           onConfirm={() => void confirmRemove()}
@@ -1763,8 +1776,8 @@ export default function Library({
       {missingOpen && (
         <ConfirmDialog
           title="文件缺失"
-          message={`找不到文件：\n${missingOpen.path}\n\n要将其从收藏中移除吗？`}
-          confirmLabel="移除收藏"
+          message={`找不到文件：\n${missingOpen.path}\n\n要将其移入回收站吗？`}
+          confirmLabel="移入回收站"
           cancelLabel="保留"
           danger
           onConfirm={() => void confirmRemoveMissing()}

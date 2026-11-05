@@ -4,6 +4,8 @@ import { api, cloud, group, jav, server, video, watch } from "../wailsjs/go/mode
 
 export type Video = video.Video;
 export type AddVideoResult = video.AddVideoResult;
+/** 回收站快照：条目 + 当前保留天数（由后端统一给出，避免客户端各算一套）。 */
+export type TrashSnapshot = api.TrashSnapshot;
 export type Group = group.Group;
 export type ServerStartInfo = server.StartInfo;
 export type GroupSuggestion = api.GroupSuggestion;
@@ -66,7 +68,8 @@ export type ViewFilter =
   | { kind: "group"; id: number }
   | { kind: "scrapeTasks"; status: "queued" | "succeeded" | "failed" }
   | { kind: "actors" }
-  | { kind: "duplicates" };
+  | { kind: "duplicates" }
+  | { kind: "trash" };
 
 // Custom MIME type used to carry a video id during HTML5 drag & drop from a
 // video card to a sidebar group. Distinct from "text/plain" (which the sidebar

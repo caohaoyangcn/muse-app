@@ -103,12 +103,12 @@ function JavDuplicatePanel({
     setBusy(true);
     try {
       for (const v of removed) await removeVideo(v.id);
-      onToast(`已保留「${videoName(keep)}」，移除 ${removed.length} 个重复版本`);
+      onToast(`已保留「${videoName(keep)}」，移入回收站 ${removed.length} 个重复版本`);
       // The removal changes the favorites behind every screen; this panel's own
       // list follows the invalidation like the others.
       invalidate();
     } catch (e) {
-      onToast(e instanceof ApiError ? e.message : "移除失败", "error");
+      onToast(e instanceof ApiError ? e.message : "移入回收站失败", "error");
       reload();
     } finally {
       setBusy(false);
@@ -235,11 +235,11 @@ function JavDuplicatePanel({
 
       <ConfirmSheet
         busy={busy}
-        confirmLabel="保留并移除其他版本"
+        confirmLabel="保留此版本，其余移入回收站"
         danger
-        message={`将保留「${pendingKeep ? videoName(pendingKeep.keep) : ""}」，并从收藏中移除同一作品的其他 ${
+        message={`将保留「${pendingKeep ? videoName(pendingKeep.keep) : ""}」，并把同一作品的其他 ${
           pendingKeep ? pendingKeep.group.videos.length - 1 : 0
-        } 个版本。\n\n只会删除收藏记录与缩略图，不会删除原视频文件。`}
+        } 个版本。\n\n原始视频文件不会被删除；移入回收站后可恢复。`}
         onClose={() => setPendingKeep(null)}
         onConfirm={() => void confirmKeep()}
         open={pendingKeep !== null}

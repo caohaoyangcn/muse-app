@@ -15,7 +15,7 @@
 // strings (CJK, punctuation, even "/") and a "/" would be split by the browser
 // before this module could decode the segment.
 
-export type Tab = "library" | "actors" | "scrape" | "duplicates";
+export type Tab = "library" | "actors" | "scrape" | "duplicates" | "trash";
 
 export type Route =
   | { kind: "tab"; tab: Tab }
@@ -27,6 +27,7 @@ const TAB_PATHS: Record<Tab, string> = {
   actors: "/actors",
   scrape: "/scrape",
   duplicates: "/duplicates",
+  trash: "/trash",
 };
 
 /**
@@ -48,6 +49,8 @@ export function parseRoute(pathname: string, search = ""): Route {
         return { kind: "tab", tab: "scrape" };
       case "duplicates":
         return { kind: "tab", tab: "duplicates" };
+      case "trash":
+        return { kind: "tab", tab: "trash" };
       case "actor": {
         const name = (new URLSearchParams(search).get("name") ?? "").trim();
         return name ? { kind: "actor", name } : { kind: "tab", tab: "actors" };
