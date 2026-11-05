@@ -287,7 +287,7 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 | 日期 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- |
 | 2026-11-05 | Planned | 计划文档建立 | `9da1586` |
-| 2026-11-05 | In progress | 一次性目录扫描、来源弹窗、Library 接入完成；网盘卡片等 WebDAV 后端后启用 | `<pending>` |
+| 2026-11-05 | In progress | 一次性目录扫描、来源弹窗、Library 接入完成；网盘卡片等 WebDAV 后端后启用 | `0800c72` / `d40a9ac` |
 
 ## 10. 实现记录（2026-11-05）
 
@@ -295,4 +295,5 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 - 前端：`AddSourceDialog` 当前只渲染本地/扫描两张卡片。网盘卡片代码已预留（`onPickCloud` / `cloud`），但 WebDAV 后端尚未实现，因此不渲染，避免出现点不开的死入口。等 `webdav-cloud-source.md` 的 M4/M7 完成后再接第三张卡片。
 - 入口：顶部 `＋ 添加视频` 和空库 CTA 都打开来源弹窗；拖拽仍直接添加，并在弹窗打开时先关闭弹窗。
 - 已完成：引导文案、`PRODUCT.md` 能力清单、`go test` / `go vet` / 前端 `lint` + `build`。
-- 尚未完成：网盘交接、窄窗口手测、真实窗口视觉检查。
+- 已验证：headless Chromium 1280×800 与 700×600 下弹窗居中、宽度 520px 不溢出；键盘 1/2/3、Esc、焦点默认本地卡片、扫描中禁用扫描卡片、扫描完成后 toast 均通过。
+- 尚未完成：网盘交接、Windows 原生窗口实机检查。
