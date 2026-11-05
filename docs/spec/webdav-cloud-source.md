@@ -333,6 +333,7 @@ OpenVideo(id)
 
 - [x] `server.handleStreamVideo` 远程分支改为 409（不再代理）。
 - [x] 手机端远程播放打开 OpenList。
+- [x] 手机「归档与回收站」分 tab，复用 `/api/archive` 与 `/api/trash`。
 - [x] 离线状态文案。
 
 ### M9：文档与端到端
@@ -416,7 +417,7 @@ OpenVideo(id)
 | 日期 | 里程碑 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- | --- |
 | 2026-11-05 | 计划 | Planned | 计划文档建立 | `9da1586` |
-| 2026-11-06 | 产品修正 | 移除视频下载缓存和 LAN 远程串流，播放改为打开 OpenList；停用来源归档到回收站（`archived`，长期保留、可清空）；跨层同番号算「已备份」、同层仍查重。 | `3172b46` |
+| 2026-11-06 | 产品修正 | 手机端归档 tab 与 `/api/archive`；移除视频下载缓存和 LAN 远程串流，播放改为打开 OpenList；停用来源归档到回收站（`archived`，长期保留、可清空）；跨层同番号算「已备份」、同层仍查重。 | `3172b46` |
 | 2026-11-06 | M9 | Done（外部联调待做） | `docs/cloud-drive-setup.md`；本地 WebDAV 集成测试（ffmpeg/ffprobe/封面）；`golangci-lint` 2.5.0 0 issues；`go test ./...`、`go test -tags integration ./backend/cloud`、Windows 交叉编译、`wails build` 通过；README/PRODUCT 更新。 | `1492a37` / `2e030d6` |
 | 2026-11-06 | M8 | Superseded | 初版 LAN 远程 Range 转发；2026-11-06 产品修正后远程 `/stream/video` 返回 409，手机改为打开 OpenList；本地串流不变。 | `a58bb3b` |
 | 2026-11-06 | M7 | Done | 文件检测/卷协调/批量重连/指纹查询全部排除 `source_id>0`；文件检测增加 `Remote` 计数；远程 `RefreshStatus` 404 标 missing、网络/鉴权失败不改状态；离线来源读模型和启动回填跳过均有测试。 | `7973434` |
