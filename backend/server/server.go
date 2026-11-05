@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"muse-app/backend/api"
-	"muse-app/backend/cloud"
 	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/platform"
@@ -30,7 +29,6 @@ import (
 // goes through the shared api.Library façade the desktop app uses too.
 type Server struct {
 	lib     *api.Library
-	cloud   *cloud.Service
 	dataDir string
 	log     *slog.Logger
 
@@ -57,10 +55,6 @@ type StartInfo struct {
 func New(lib *api.Library, dataDir string, log *slog.Logger) *Server {
 	return &Server{lib: lib, dataDir: dataDir, log: log, listen: net.Listen, firewall: platform.EnsureInboundRuleContext}
 }
-
-// SetCloudService wires remote streaming. It is optional: a local-only server
-// leaves it nil and simply has no remote rows.
-func (s *Server) SetCloudService(svc *cloud.Service) { s.cloud = svc }
 
 // Start binds the HTTP server on 0.0.0.0:port so devices on the same network
 // can reach it. It returns the effective access URLs once the listener is up.
@@ -787,15 +781,9 @@ func (s *Server) handleStreamVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if v.IsRemote() {
-		if v.SourceOffline {
-			httpError(w, http.StatusServiceUnavailable, "网盘未连接")
-			return
-		}
-		if s.cloud == nil {
-			httpError(w, http.StatusServiceUnavailable, "网盘服务未启用")
-			return
-		}
-		s.cloud.ServeVideo(w, r, v.SourceID, v.RemotePath, v.FileName)
+		// Playback belongs to OpenList; the LAN server never proxies cloud
+		// video bytes through Muse.
+		httpError(w, http.StatusConflict, "请在 OpenList 中播放该网盘视频")
 		return
 	}
 

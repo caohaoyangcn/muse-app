@@ -296,6 +296,17 @@ export default function App() {
   const requestPlay = useCallback(
     (video: Video) => {
       setPlayerNotice(undefined);
+      // Remote playback belongs to OpenList. Open its file page instead of
+      // handing a Muse stream URL to a native player.
+      if (video.sourceId > 0) {
+        const url = video.cloudUrl;
+        if (!url) {
+          toast("没有可用的 OpenList 地址", "error");
+          return;
+        }
+        window.location.href = url;
+        return;
+      }
       if (!isIOSDevice()) {
         setPlayerNotice("当前仅支持 iPhone/iPad 自动跳转外部播放器，可复制播放地址后手动打开。");
         setPlayerVideo(video);
@@ -307,7 +318,7 @@ export default function App() {
       }
       launchPlayer(video, preferredPlayer);
     },
-    [launchPlayer, preferredPlayer],
+    [launchPlayer, preferredPlayer, toast],
   );
 
   const choosePlayer = useCallback(
@@ -323,7 +334,11 @@ export default function App() {
 
   const copyPlaybackURL = useCallback(async () => {
     if (!playerVideo) return;
-    const copied = await copyText(externalStreamURL(playerVideo.id));
+    const copied = await copyText(
+      playerVideo.sourceId > 0 && playerVideo.cloudUrl
+        ? playerVideo.cloudUrl
+        : externalStreamURL(playerVideo.id),
+    );
     toast(copied ? "已复制播放地址" : "复制失败，请手动复制", copied ? "info" : "error");
   }, [playerVideo, toast]);
 

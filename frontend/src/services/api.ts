@@ -3,11 +3,10 @@ import {
   AddVideos,
   AddWatchDir,
   AddCloudVideos,
+  ArchiveCloudConnection,
+  EnableCloudConnection,
   BrowseCloud,
-  CancelCloudDownload,
-  ClearCloudCache,
   ClearVideoLikes,
-  CloudCacheInfo as CloudCacheInfoBinding,
   CloudStorageAvailable,
   DeleteCloudConnection,
   CopyPath,
@@ -21,6 +20,9 @@ import {
   GetScrapeProxy,
   GetTourSeen,
   ListCloudConnections,
+  ListArchived,
+  ClearArchivedVideos,
+  ClearArchivedSource,
   OpenCloudPage,
   SaveCloudConnection,
   TestCloudConnection,
@@ -104,7 +106,6 @@ import type {
   JavTaskOverview,
   JavBusCookieStatus,
   FC2CookieStatus,
-  CloudCacheInfo,
   CloudConnection,
   CloudConnectionInput,
   CloudEntry,
@@ -139,12 +140,30 @@ export const listTrash = (): Promise<TrashSnapshot> => ListTrashBinding();
 /** 从回收站恢复一条收藏（同 id、同分组、同资料）。 */
 export const restoreVideo = (id: number): Promise<void> => RestoreVideo(id);
 
-/** 彻底删除一条回收站收藏：只清数据库记录与生成的图片/缓存，不碰源视频。 */
+/** 彻底删除一条回收站收藏：只清数据库记录与生成的图片，不碰源视频。 */
 export const deleteVideoPermanently = (id: number): Promise<void> =>
   DeleteVideoPermanently(id);
 
 /** 清空回收站，返回彻底删除的条目数。 */
 export const emptyTrash = (): Promise<number> => EmptyTrashBinding();
+
+/** 停用网盘来源并归档其活动收藏，返回归档数量。 */
+export const archiveCloudConnection = (id: number): Promise<number> =>
+  ArchiveCloudConnection(id);
+
+/** 重新启用网盘来源；不会自动恢复归档条目。 */
+export const enableCloudConnection = (id: number): Promise<void> =>
+  EnableCloudConnection(id);
+
+/** 长期保留的网盘归档（回收站的 archived 原因）。 */
+export const listArchived = (): Promise<Video[]> => ListArchived();
+
+/** 清空全部归档；源网盘文件不会被删除。 */
+export const clearArchivedVideos = (): Promise<number> => ClearArchivedVideos();
+
+/** 清空某个来源的归档；源网盘文件不会被删除。 */
+export const clearArchivedSource = (sourceId: number): Promise<number> =>
+  ClearArchivedSource(sourceId);
 
 /** 立即清理超过保留期的条目，返回清理数量。 */
 export const purgeExpiredTrash = (): Promise<number> => PurgeExpiredTrashBinding();
@@ -389,13 +408,3 @@ export const cloudStorageAvailable = (): Promise<boolean> => CloudStorageAvailab
 
 /** 远程收藏的管理页（OpenList）。Muse 只打开网页，不在内部做写操作。 */
 export const openCloudPage = (videoId: number): Promise<void> => OpenCloudPage(videoId);
-
-/** 网盘下载缓存占用。 */
-export const cloudCacheInfo = (): Promise<CloudCacheInfo> => CloudCacheInfoBinding();
-
-/** 清空下载缓存（不会删除网盘源文件）。返回释放的字节数。 */
-export const clearCloudCache = (): Promise<number> => ClearCloudCache();
-
-/** 取消正在进行的缓存下载；已下载的部分会保留以便续传。 */
-export const cancelCloudDownload = (videoId: number): Promise<void> =>
-  CancelCloudDownload(videoId);

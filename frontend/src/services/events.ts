@@ -26,6 +26,7 @@ const EVENTS = [
   "group:changed",
   "watch:scanned", // a folder-watch pass imported or relinked files
   "cloud:status", // a WebDAV source became reachable or went offline
+  "cloud:source:archived", // a source was retired and its favorites moved to the archive
 ];
 
 /** Subscribes every backend event to the live-data revision. */

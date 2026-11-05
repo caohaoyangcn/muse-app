@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { Video } from "../types";
 import MetadataPopup from "./MetadataPopup";
+import BackupBadge from "./BackupBadge";
 import RestoredBadge from "./RestoredBadge";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
@@ -136,6 +137,7 @@ ${video.remotePath}`}
         <div className="flex min-w-0 items-center gap-1.5">
           <div className="truncate font-medium">{videoDisplayName(video)}</div>
           {video.mosaicRestored && <RestoredBadge />}
+          {video.backedUp && <BackupBadge />}
         </div>
         <div className="mt-0.5 text-xs text-[var(--muted)]">
           {missing ? (

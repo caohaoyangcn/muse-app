@@ -64,6 +64,27 @@ func (r *memVideoRepo) GetByRemote(sourceID int64, remotePath string) (*video.Vi
 	}
 	return nil, video.ErrNotFound
 }
+func (r *memVideoRepo) ArchiveBySource(sourceID int64, sourceName string, at int64) (int, error) {
+	n := 0
+	for i := range r.all {
+		if r.all[i].SourceID == sourceID && r.all[i].DeletedAt == 0 {
+			r.all[i].DeletedAt = at
+			r.all[i].DeleteReason = video.TrashReasonArchived
+			r.all[i].ArchiveSourceName = sourceName
+			n++
+		}
+	}
+	return n, nil
+}
+func (r *memVideoRepo) ListArchived() ([]video.Video, error) {
+	out := make([]video.Video, 0)
+	for i := range r.all {
+		if r.all[i].DeletedAt > 0 && r.all[i].DeleteReason == video.TrashReasonArchived {
+			out = append(out, r.all[i])
+		}
+	}
+	return out, nil
+}
 func (r *memVideoRepo) List() ([]video.Video, error) {
 	out := make([]video.Video, 0, len(r.all))
 	for _, v := range r.all {

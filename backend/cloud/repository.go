@@ -16,6 +16,7 @@ type Repository interface {
 	UpdateConnection(*Connection) error
 	DeleteConnection(id int64) error
 	CountRemoteVideos(sourceID int64) (int, error)
+	SetConnectionEnabled(id int64, enabled bool, at int64) error
 	MarkConnectionOK(id int64, at int64) error
 	MarkConnectionError(id int64, message string) error
 }
@@ -30,17 +31,18 @@ func NewSQLiteRepository(db *sql.DB) Repository {
 }
 
 const connectionColumns = `id, name, kind, endpoint, web_url, username, password_enc, root_path,
-	verify_tls, created_at, updated_at, COALESCE(last_ok_at, 0), last_error`
+	verify_tls, enabled, COALESCE(disabled_at, 0), created_at, updated_at, COALESCE(last_ok_at, 0), last_error`
 
 func scanConnection(scan func(...any) error) (*Connection, error) {
 	var c Connection
-	var verifyTLS int
+	var verifyTLS, enabled int
 	err := scan(&c.ID, &c.Name, &c.Kind, &c.Endpoint, &c.WebURL, &c.Username, &c.PasswordEnc,
-		&c.RootPath, &verifyTLS, &c.CreatedAt, &c.UpdatedAt, &c.LastOKAt, &c.LastError)
+		&c.RootPath, &verifyTLS, &enabled, &c.DisabledAt, &c.CreatedAt, &c.UpdatedAt, &c.LastOKAt, &c.LastError)
 	if err != nil {
 		return nil, err
 	}
 	c.VerifyTLS = verifyTLS != 0
+	c.Enabled = enabled != 0
 	return &c, nil
 }
 
@@ -76,9 +78,10 @@ func (r *sqliteRepository) GetConnection(id int64) (*Connection, error) {
 func (r *sqliteRepository) CreateConnection(c *Connection) error {
 	res, err := r.db.Exec(`
 		INSERT INTO cloud_connections
-			(name, kind, endpoint, web_url, username, password_enc, root_path, verify_tls, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Name, c.Kind, c.Endpoint, c.WebURL, c.Username, c.PasswordEnc, c.RootPath, boolInt(c.VerifyTLS), c.CreatedAt, c.UpdatedAt)
+			(name, kind, endpoint, web_url, username, password_enc, root_path, verify_tls, enabled, disabled_at, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.Kind, c.Endpoint, c.WebURL, c.Username, c.PasswordEnc, c.RootPath, boolInt(c.VerifyTLS),
+		boolInt(c.Enabled), nullInt(c.DisabledAt), c.CreatedAt, c.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("insert cloud connection: %w", err)
 	}
@@ -94,10 +97,11 @@ func (r *sqliteRepository) UpdateConnection(c *Connection) error {
 	res, err := r.db.Exec(`
 		UPDATE cloud_connections
 		SET name = ?, kind = ?, endpoint = ?, web_url = ?, username = ?, password_enc = ?,
-		    root_path = ?, verify_tls = ?, updated_at = ?, last_ok_at = NULL, last_error = ''
+		    root_path = ?, verify_tls = ?, enabled = ?, disabled_at = ?, updated_at = ?,
+		    last_ok_at = NULL, last_error = ''
 		WHERE id = ?`,
 		c.Name, c.Kind, c.Endpoint, c.WebURL, c.Username, c.PasswordEnc,
-		c.RootPath, boolInt(c.VerifyTLS), c.UpdatedAt, c.ID)
+		c.RootPath, boolInt(c.VerifyTLS), boolInt(c.Enabled), nullInt(c.DisabledAt), c.UpdatedAt, c.ID)
 	if err != nil {
 		return fmt.Errorf("update cloud connection: %w", err)
 	}
@@ -128,15 +132,28 @@ func (r *sqliteRepository) DeleteConnection(id int64) error {
 	return nil
 }
 
-// CountRemoteVideos is the delete guard: deleting a connection while favorites
-// still point at it would leave rows whose source is gone.
+// CountRemoteVideos counts active favorites. Archived rows live in the recycle
+// bin and no longer block deleting a retired connection.
 func (r *sqliteRepository) CountRemoteVideos(sourceID int64) (int, error) {
 	var n int
-	err := r.db.QueryRow(`SELECT COUNT(*) FROM videos WHERE source_id = ?`, sourceID).Scan(&n)
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM videos WHERE source_id = ? AND deleted_at IS NULL`, sourceID).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count cloud favorites: %w", err)
 	}
 	return n, nil
+}
+
+func (r *sqliteRepository) SetConnectionEnabled(id int64, enabled bool, at int64) error {
+	var disabled any
+	if !enabled {
+		disabled = at
+	}
+	_, err := r.db.Exec(`UPDATE cloud_connections SET enabled = ?, disabled_at = ?, updated_at = ? WHERE id = ?`,
+		boolInt(enabled), disabled, at, id)
+	if err != nil {
+		return fmt.Errorf("set cloud connection enabled: %w", err)
+	}
+	return nil
 }
 
 func (r *sqliteRepository) MarkConnectionOK(id int64, at int64) error {
@@ -153,6 +170,13 @@ func (r *sqliteRepository) MarkConnectionError(id int64, message string) error {
 		return fmt.Errorf("mark cloud connection unhealthy: %w", err)
 	}
 	return nil
+}
+
+func nullInt(v int64) any {
+	if v == 0 {
+		return nil
+	}
+	return v
 }
 
 func boolInt(v bool) int {

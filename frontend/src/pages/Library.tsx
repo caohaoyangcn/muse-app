@@ -3,7 +3,6 @@ import { EventsOn, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime";
 import ActorFilmsView from "../components/ActorFilmsView";
 import AddSourceDialog from "../components/AddSourceDialog";
 import CloudBrowserDialog from "../components/CloudBrowserDialog";
-import CloudDownloadBar from "../components/CloudDownloadBar";
 import ActorIndexView from "../components/ActorIndexView";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ContextMenu, { type MenuAction } from "../components/ContextMenu";
@@ -34,7 +33,6 @@ import {
   addVideoToGroup,
   addVideos,
   addWatchDir,
-  cancelCloudDownload,
   copyPath,
   createGroup,
   deleteGroup,
@@ -66,7 +64,6 @@ import type {
   Group,
   SortDir,
   SortKey,
-  CloudDownloadProgress,
   Video,
   ViewFilter,
   ViewMode,
@@ -163,7 +160,6 @@ export default function Library({
   const [suggestFiles, setSuggestFiles] = useState<SuggestFile[] | null>(null);
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [cloudBrowserOpen, setCloudBrowserOpen] = useState(false);
-  const [cloudDownload, setCloudDownload] = useState<CloudDownloadProgress | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   // Grid ordering: field + direction, applied in the frontend over whatever
   // list the active view/search produced. Defaults match the backend order
@@ -235,24 +231,6 @@ export default function Library({
   // backend never touches the network here), so it is cheap enough to keep
   // mounted and refresh after cloud:status invalidations.
   const cloudQuery = useLiveQuery(listCloudConnections, "cloud-connections");
-
-  // Cache progress is a payload event, so it lives with the view that draws it
-  // (not in services/events.ts). A completed/error card hides itself after a
-  // moment; the download itself keeps running in the backend until it finishes
-  // or is cancelled.
-  useEffect(() => {
-    const off = EventsOn("cloud:download", (progress?: CloudDownloadProgress) => {
-      if (!progress) return;
-      setCloudDownload(progress);
-      if (progress.status !== "downloading") {
-        const ttl = progress.status === "error" ? 7000 : 3000;
-        window.setTimeout(() => {
-          setCloudDownload((current) => (current === progress ? null : current));
-        }, ttl);
-      }
-    });
-    return () => off();
-  }, []);
 
   const videos = library.data ?? NO_VIDEOS;
   const groups = groupsQuery.data ?? NO_GROUPS;
@@ -1710,8 +1688,8 @@ export default function Library({
         onPickFolder={() => void handleAddFolder()}
         onPickCloud={handleAddCloud}
         cloud={{
-          count: cloudQuery.data?.length ?? 0,
-          onlineCount: cloudQuery.data?.filter((c) => c.online).length ?? 0,
+          count: cloudQuery.data?.filter((c) => c.enabled).length ?? 0,
+          onlineCount: cloudQuery.data?.filter((c) => c.enabled && c.online).length ?? 0,
           loading: cloudQuery.loading,
           error: cloudQuery.error,
         }}
@@ -1827,16 +1805,6 @@ export default function Library({
           files={suggestFiles}
           onApplyGroups={handleApplySuggestedGroups}
           onClose={() => setSuggestFiles(null)}
-        />
-      )}
-
-      {cloudDownload && (
-        <CloudDownloadBar
-          progress={cloudDownload}
-          onCancel={() => {
-            void cancelCloudDownload(cloudDownload.videoId);
-          }}
-          onDismiss={() => setCloudDownload(null)}
         />
       )}
 

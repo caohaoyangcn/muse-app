@@ -10,6 +10,7 @@ import {
 } from "../utils/format";
 import { cn } from "../lib/utils";
 import { videoDisplayName } from "../utils/videoName";
+import BackupBadge from "./BackupBadge";
 import RestoredBadge from "./RestoredBadge";
 
 const GAP = 8;
@@ -76,6 +77,7 @@ export default function MetadataPopup({
       <div className="mb-2 flex min-w-0 items-center gap-1.5">
         <div className="min-w-0 break-all font-semibold">{videoDisplayName(video)}</div>
         {video.mosaicRestored && <RestoredBadge />}
+        {video.backedUp && <BackupBadge />}
       </div>
       <dl className="m-0">
         {rows.map(([k, v]) => (

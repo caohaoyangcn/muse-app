@@ -30,16 +30,20 @@ export function AddWatchDir(arg1) {
   return window['go']['main']['App']['AddWatchDir'](arg1);
 }
 
+export function ArchiveCloudConnection(arg1) {
+  return window['go']['main']['App']['ArchiveCloudConnection'](arg1);
+}
+
 export function BrowseCloud(arg1, arg2) {
   return window['go']['main']['App']['BrowseCloud'](arg1, arg2);
 }
 
-export function CancelCloudDownload(arg1) {
-  return window['go']['main']['App']['CancelCloudDownload'](arg1);
+export function ClearArchivedSource(arg1) {
+  return window['go']['main']['App']['ClearArchivedSource'](arg1);
 }
 
-export function ClearCloudCache() {
-  return window['go']['main']['App']['ClearCloudCache']();
+export function ClearArchivedVideos() {
+  return window['go']['main']['App']['ClearArchivedVideos']();
 }
 
 export function ClearFC2Cookie() {
@@ -52,10 +56,6 @@ export function ClearJavBusCookie() {
 
 export function ClearVideoLikes(arg1) {
   return window['go']['main']['App']['ClearVideoLikes'](arg1);
-}
-
-export function CloudCacheInfo() {
-  return window['go']['main']['App']['CloudCacheInfo']();
 }
 
 export function CloudStorageAvailable() {
@@ -96,6 +96,10 @@ export function Emit(arg1, arg2) {
 
 export function EmptyTrash() {
   return window['go']['main']['App']['EmptyTrash']();
+}
+
+export function EnableCloudConnection(arg1) {
+  return window['go']['main']['App']['EnableCloudConnection'](arg1);
 }
 
 export function EnsureVideoIn4KGroup(arg1) {
@@ -148,6 +152,10 @@ export function LikeVideo(arg1) {
 
 export function ListActors() {
   return window['go']['main']['App']['ListActors']();
+}
+
+export function ListArchived() {
+  return window['go']['main']['App']['ListArchived']();
 }
 
 export function ListCloudConnections() {

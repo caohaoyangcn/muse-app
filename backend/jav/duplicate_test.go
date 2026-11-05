@@ -210,3 +210,92 @@ func TestListDuplicatesWithoutJavServiceData(t *testing.T) {
 		t.Fatalf("groups = %#v, want none", groups)
 	}
 }
+
+func TestCrossTierCopiesAreBackupsNotDuplicates(t *testing.T) {
+	s, vr := newDuplicateFixture(t, [][2]string{
+		{"abc-123.mp4", "ABC-123"},
+	})
+	seedScrapedVideo(t, s, vr, "abc-123 cloud.mp4", "ABC-123", 7)
+	seedScrapedVideo(t, s, vr, "abc-124.mp4", "ABC-124", 0)
+	seedScrapedVideo(t, s, vr, "abc-124 cloud.mp4", "ABC-124", 7)
+
+	groups, err := s.ListDuplicates(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 0 {
+		t.Fatalf("cross-tier 1+1 must not be a duplicate: %#v", groups)
+	}
+	backups, err := s.BackedUpKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !backups["ABC-123"] || !backups["ABC-124"] {
+		t.Errorf("backed-up keys = %#v, want both works", backups)
+	}
+}
+
+func TestSameTierCopiesStillWarnAndStayBackedUp(t *testing.T) {
+	s, vr := newDuplicateFixture(t, [][2]string{
+		{"abc-123.mp4", "ABC-123"},
+		{"abc-123 hd.mp4", "ABC-123"},
+	})
+	seedScrapedVideo(t, s, vr, "abc-123 cloud.mp4", "ABC-123", 7)
+
+	groups, err := s.ListDuplicates(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 1 || groups[0].Tier != DuplicateTierLocal || len(groups[0].Videos) != 2 {
+		t.Fatalf("local duplicate group = %#v", groups)
+	}
+	backups, err := s.BackedUpKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !backups["ABC-123"] {
+		t.Errorf("backed-up keys = %#v, want ABC-123", backups)
+	}
+
+	seedScrapedVideo(t, s, vr, "abc-123 cloud 2.mp4", "ABC-123", 7)
+	groups, err = s.ListDuplicates(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("2 local + 2 cloud should yield two tier groups: %#v", groups)
+	}
+	tiers := map[string]int{}
+	for _, group := range groups {
+		tiers[group.Tier] += len(group.Videos)
+	}
+	if tiers[DuplicateTierLocal] != 2 || tiers[DuplicateTierCloud] != 2 {
+		t.Errorf("tier counts = %#v", tiers)
+	}
+}
+
+func seedScrapedVideo(t *testing.T, s *Service, vr video.VideoRepository, name, code string, sourceID int64) {
+	t.Helper()
+	v := &video.Video{
+		Path:       "cloud://" + code + "/" + name,
+		FileName:   name,
+		FileSize:   100,
+		Status:     video.StatusAvailable,
+		CreatedAt:  int64(len(name) + 100),
+		UpdatedAt:  1,
+		SourceID:   sourceID,
+		RemotePath: "/" + name,
+	}
+	if sourceID == 0 {
+		v.Path = filepath.Join(t.TempDir(), name)
+	}
+	if err := vr.Create(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.repo.PrepareTask(v.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.repo.SaveSuccess(v.ID, Metadata{Code: code}, "filename", 1); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -16,17 +16,6 @@ export type CloudConnection = cloud.ConnectionView;
 export type CloudConnectionInput = cloud.ConnectionInput;
 export type CloudEntry = cloud.Entry;
 export type CloudTestResult = cloud.TestResult;
-/** 网盘下载缓存的占用情况。 */
-export type CloudCacheInfo = cloud.CacheInfo;
-/** cloud:download 进度事件（下载/完成/失败/取消）。 */
-export type CloudDownloadProgress = {
-  videoId: number;
-  fileName: string;
-  downloaded: number;
-  total: number;
-  status: "downloading" | "done" | "error" | "cancelled";
-  error: string;
-};
 export type JavDetail = jav.Detail;
 export type JavTask = jav.Task;
 export type ActorSummary = jav.ActorSummary;

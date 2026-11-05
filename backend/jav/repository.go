@@ -489,7 +489,7 @@ func (r *SQLiteRepository) ListDuplicateCandidates() ([]DuplicateCandidate, erro
 			v.frame_rate, v.bit_rate, v.video_codec, v.audio_codec, v.thumbnail_path,
 			v.created_at, v.updated_at, v.last_opened_at, v.status, v.title, v.notes,
 			v.custom_cover_at, v.like_count, v.cover_source, v.scraped_cover_path,
-			v.allow_scraped_cover, TRIM(j.code)
+			v.allow_scraped_cover, v.source_id, TRIM(j.code)
 		FROM video_jav j
 		JOIN videos v ON v.id = j.video_id
 		WHERE v.deleted_at IS NULL AND TRIM(j.code) <> '' AND j.override_mode <> 'skip'
@@ -521,7 +521,8 @@ func scanDuplicateCandidate(scan func(dest ...any) error) (DuplicateCandidate, e
 		&c.Video.ID, &c.Video.Path, &c.Video.FileName, &c.Video.FileSize, &durationMs, &width, &height,
 		&frameRate, &bitrate, &videoCodec, &audioCodec, &thumbnailPath,
 		&c.Video.CreatedAt, &c.Video.UpdatedAt, &lastOpened, &c.Video.Status, &title, &notes,
-		&customCoverAt, &c.Video.LikeCount, &coverSource, &scrapedCoverPath, &allowScrapedCover, &c.Code,
+		&customCoverAt, &c.Video.LikeCount, &coverSource, &scrapedCoverPath, &allowScrapedCover,
+		&c.Video.SourceID, &c.Code,
 	); err != nil {
 		return c, err
 	}

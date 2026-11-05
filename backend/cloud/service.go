@@ -100,6 +100,8 @@ func (s *Service) viewFor(c *Connection) (ConnectionView, error) {
 		Username:    c.Username,
 		RootPath:    c.RootPath,
 		VerifyTLS:   c.VerifyTLS,
+		Enabled:     c.Enabled,
+		DisabledAt:  c.DisabledAt,
 		HasPassword: c.PasswordEnc != "",
 		Online:      true,
 		LastError:   c.LastError,
@@ -187,12 +189,15 @@ func (s *Service) SaveConnection(input ConnectionInput) (*ConnectionView, error)
 		PasswordEnc: passwordEnc,
 		RootPath:    rootPath,
 		VerifyTLS:   input.VerifyTLS,
+		Enabled:     true,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
 	if existing != nil {
 		c.ID = existing.ID
 		c.CreatedAt = existing.CreatedAt
+		c.Enabled = existing.Enabled
+		c.DisabledAt = existing.DisabledAt
 		if err := s.repo.UpdateConnection(c); err != nil {
 			return nil, err
 		}
@@ -211,7 +216,30 @@ func (s *Service) SaveConnection(input ConnectionInput) (*ConnectionView, error)
 	return &view, nil
 }
 
-// DeleteConnection removes a connection only when no favorite points at it.
+// DisableConnection retires a source. It only flips the lifecycle flag; the
+// API layer archives the source's active favorites in the same user action.
+func (s *Service) DisableConnection(id int64) error {
+	if _, err := s.repo.GetConnection(id); err != nil {
+		return err
+	}
+	if err := s.repo.SetConnectionEnabled(id, false, time.Now().UnixMilli()); err != nil {
+		return err
+	}
+	s.forgetStatus(id)
+	return nil
+}
+
+// EnableConnection makes a retired source active again. It deliberately does
+// not touch archived favorites: the user must restore them explicitly.
+func (s *Service) EnableConnection(id int64) error {
+	if _, err := s.repo.GetConnection(id); err != nil {
+		return err
+	}
+	return s.repo.SetConnectionEnabled(id, true, time.Now().UnixMilli())
+}
+
+// DeleteConnection removes a connection only when no active favorite points at
+// it. Archived rows are left behind as history.
 func (s *Service) DeleteConnection(id int64) error {
 	count, err := s.repo.CountRemoteVideos(id)
 	if err != nil {
@@ -343,7 +371,7 @@ func (s *Service) Stat(id int64, path string) (*Entry, error) {
 	return s.StatContext(context.Background(), id, path)
 }
 
-// StatContext is Stat with a caller-owned context (media proxy/cache checks).
+// StatContext is Stat with a caller-owned context (media proxy checks).
 func (s *Service) StatContext(ctx context.Context, id int64, path string) (*Entry, error) {
 	client, conn, err := s.client(id)
 	if err != nil {
@@ -380,6 +408,9 @@ func (s *Service) client(id int64) (*Client, *Connection, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	if !conn.Enabled {
+		return nil, conn, ErrConnectionDisabled
+	}
 	password := ""
 	if conn.PasswordEnc != "" {
 		password, err = s.unprotect(conn.PasswordEnc)
@@ -394,7 +425,7 @@ func (s *Service) client(id int64) (*Client, *Connection, error) {
 	return client, conn, nil
 }
 
-// Client exposes the read-only client for the media proxy/cache layer.
+// Client exposes the read-only client for the metadata proxy.
 func (s *Service) Client(id int64) (*Client, error) {
 	client, _, err := s.client(id)
 	return client, err
@@ -433,6 +464,9 @@ func (s *Service) checkAll() {
 		return
 	}
 	for i := range connections {
+		if !connections[i].Enabled {
+			continue
+		}
 		s.checkOne(&connections[i])
 	}
 }
@@ -548,10 +582,8 @@ func userMessage(err error) string {
 		return "远程文件已变化，请重新读取"
 	case errors.Is(err, ErrConnectionNotFound):
 		return "网盘连接不存在"
-	case errors.Is(err, ErrCacheTooSmall):
-		return "该文件超过网盘缓存上限，请先清理缓存或手动播放"
-	case errors.Is(err, ErrDownloadInProgress):
-		return "该视频正在下载"
+	case errors.Is(err, ErrConnectionDisabled):
+		return "该网盘已停用"
 	default:
 		return err.Error()
 	}
@@ -567,8 +599,10 @@ func (s *Service) SourceStates() (map[int64]SourceState, error) {
 	out := make(map[int64]SourceState, len(connections))
 	for i := range connections {
 		out[connections[i].ID] = SourceState{
-			Name:   connections[i].Name,
-			Online: s.Online(connections[i].ID),
+			Name:    connections[i].Name,
+			Online:  s.Online(connections[i].ID),
+			Enabled: connections[i].Enabled,
+			WebURL:  s.managementURL(&connections[i]),
 		}
 	}
 	return out, nil
@@ -603,12 +637,16 @@ func (s *Service) ManagementURL(id int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return s.managementURL(conn), nil
+}
+
+func (s *Service) managementURL(conn *Connection) string {
 	if web := strings.TrimSpace(conn.WebURL); web != "" {
-		return web, nil
+		return web
 	}
 	u, err := url.Parse(strings.TrimSpace(conn.Endpoint))
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return "", ErrInvalidEndpoint
+		return ""
 	}
 	p := strings.TrimRight(u.Path, "/")
 	if strings.HasSuffix(strings.ToLower(p), "/dav") {
@@ -622,5 +660,18 @@ func (s *Service) ManagementURL(id int64) (string, error) {
 	u.RawQuery = ""
 	u.Fragment = ""
 	u.User = nil
-	return strings.TrimRight(u.String(), "/"), nil
+	return strings.TrimRight(u.String(), "/")
+}
+
+// FileURL returns the OpenList page for one file on a connection.
+func (s *Service) FileURL(id int64, remotePath string) (string, error) {
+	conn, err := s.repo.GetConnection(id)
+	if err != nil {
+		return "", err
+	}
+	base := s.managementURL(conn)
+	if base == "" {
+		return "", ErrInvalidEndpoint
+	}
+	return FileURL(base, remotePath)
 }

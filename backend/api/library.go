@@ -54,7 +54,6 @@ type Library struct {
 	watch  *watch.Service
 	jav    *jav.Service
 	cloud  *cloud.Service
-	cache  *cloud.Cache
 	log    *slog.Logger
 	// trashRetention reads the configured retention in days. nil falls back to
 	// DefaultTrashRetentionDays.
@@ -71,14 +70,12 @@ func New(videos *video.Service, groups *group.Service, log *slog.Logger) *Librar
 		now: func() int64 { return time.Now().UnixMilli() },
 	}
 	// Automatic cleanup of a favorite whose file is gone while its volume is
-	// attached also has to drop the downloaded cache and record why it moved.
-	// Wire the façade's one soft-delete path here, so every caller — desktop,
-	// LAN server, tests — gets the same orchestration instead of a bare flag
-	// update.
+	// attached enters the recycle bin with the missing reason. Wire the façade's
+	// one soft-delete path here, so every caller — desktop, LAN server, tests —
+	// gets the same orchestration instead of a bare flag update.
 	if videos != nil {
 		// Automatic cleanup of a missing file enters the recycle bin with the
-		// "missing" reason; the façade wrapper also drops the downloaded cache
-		// copy, which the video layer does not own.
+		// "missing" reason.
 		videos.SetMissingRemover(func(id int64) error {
 			return l.trashVideo(id, video.TrashReasonMissing)
 		})
@@ -91,9 +88,6 @@ func (l *Library) SetJavService(svc *jav.Service) { l.jav = svc }
 
 // SetCloudService wires optional WebDAV sources into the façade.
 func (l *Library) SetCloudService(svc *cloud.Service) { l.cloud = svc }
-
-// SetCloudCache wires the downloaded-copy cache (play, delete, clear).
-func (l *Library) SetCloudCache(cache *cloud.Cache) { l.cache = cache }
 
 // scrapedCodes loads the authoritative 番号 per favorite for the video read
 // model. It is deliberately best effort: a scrape result that cannot be read
@@ -133,13 +127,30 @@ func (l *Library) restoredVideoIDs() map[int64]struct{} {
 // applyReadModel fills the fields a Video carries only for reading: the
 // authoritative 番号 from the scrape result and the 马赛克破解 tag from group
 // membership. Both maps are loaded once per batch by the caller.
-func applyReadModel(v *video.Video, codes map[int64]string, restored map[int64]struct{}, sources map[int64]cloud.SourceState) {
+func applyReadModel(v *video.Video, codes map[int64]string, restored map[int64]struct{}, sources map[int64]cloud.SourceState, backups map[string]bool) {
 	v.JavCode = codes[v.ID]
 	_, v.MosaicRestored = restored[v.ID]
+	if v.DeletedAt == 0 && v.JavCode != "" {
+		v.BackedUp = backups[jav.DuplicateKey(v.JavCode, jav.PartForFile(v.FileName, v.JavCode))]
+	}
 	if v.SourceID > 0 {
 		if source, ok := sources[v.SourceID]; ok {
 			v.SourceName = source.Name
 			v.SourceOffline = !source.Online
+			v.SourceEnabled = source.Enabled
+			if source.WebURL != "" && v.DeletedAt == 0 && source.Enabled {
+				if fileURL, err := cloud.FileURL(source.WebURL, v.RemotePath); err == nil {
+					v.CloudURL = fileURL
+				}
+			}
+		} else if v.ArchiveSourceName != "" {
+			v.SourceName = v.ArchiveSourceName
+		}
+		if v.DeletedAt > 0 {
+			// Archived/trashed rows are historical: do not advertise a live
+			// source or a playback URL.
+			v.SourceOffline = false
+			v.CloudURL = ""
 		}
 	}
 }
@@ -147,6 +158,18 @@ func applyReadModel(v *video.Video, codes map[int64]string, restored map[int64]s
 // cloudSources loads the connection names/health the read model needs. It is
 // best effort like the scrape read: a source that cannot be listed must not
 // fail the library, it only leaves the badge/name empty.
+func (l *Library) backedUpKeys() map[string]bool {
+	if l.jav == nil {
+		return nil
+	}
+	keys, err := l.jav.BackedUpKeys()
+	if err != nil {
+		l.log.Warn("load backed-up work keys failed", "err", err)
+		return nil
+	}
+	return keys
+}
+
 func (l *Library) cloudSources() map[int64]cloud.SourceState {
 	if l.cloud == nil {
 		return nil
@@ -166,9 +189,9 @@ func (l *Library) attachReadModel(videos []video.Video) {
 	if len(videos) == 0 {
 		return
 	}
-	codes, restored, sources := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources()
+	codes, restored, sources, backups := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources(), l.backedUpKeys()
 	for i := range videos {
-		applyReadModel(&videos[i], codes, restored, sources)
+		applyReadModel(&videos[i], codes, restored, sources, backups)
 	}
 }
 
@@ -177,7 +200,7 @@ func (l *Library) attachReadModelOne(v *video.Video) {
 	if v == nil {
 		return
 	}
-	applyReadModel(v, l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources())
+	applyReadModel(v, l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources(), l.backedUpKeys())
 }
 
 // ---- Reads (shared read model for both transports) ----
@@ -311,8 +334,7 @@ func (l *Library) AddVideos(paths []string) []video.AddVideoResult {
 
 // RemoveVideo moves a favorite to the recycle bin. It keeps the record, its
 // generated images, group memberships and scraped metadata, so a restore is a
-// flag change; only the downloaded cloud copy is dropped (it is a generated
-// asset and can be fetched again).
+// flag change.
 //
 // A record that is already gone removes cleanly rather than erroring: both
 // clients report the outcome by reloading, so a list that went stale — a
@@ -325,33 +347,38 @@ func (l *Library) RemoveVideo(id int64) error {
 // trashVideo is the one soft-delete orchestration. The reason only explains why
 // the favorite left the library; both paths keep the same record.
 func (l *Library) trashVideo(id int64, reason string) error {
-	if err := l.videos.Trash(id, reason); err != nil {
-		return err
-	}
-	if l.cache != nil {
-		// The cached copy is a generated asset of this favorite; the WebDAV
-		// source file is untouched.
-		l.cache.Remove(id)
-	}
-	return nil
+	return l.videos.Trash(id, reason)
 }
 
 // RestoreVideo brings a trashed favorite back into the library. The record keeps
 // its id, groups, likes and scraped metadata; the video layer re-establishes its
 // file status from the disk.
 func (l *Library) RestoreVideo(id int64) error {
+	v, err := l.videos.GetAny(id)
+	if err != nil {
+		return err
+	}
+	if v.DeleteReason == video.TrashReasonArchived && v.IsRemote() {
+		if l.cloud == nil {
+			return fmt.Errorf("网盘服务未初始化")
+		}
+		conn, err := l.cloud.Connection(v.SourceID)
+		if err != nil {
+			return fmt.Errorf("原网盘连接已删除，无法恢复这条归档")
+		}
+		if !conn.Enabled {
+			return fmt.Errorf("请先在设置中启用该网盘，再恢复这条归档")
+		}
+	}
 	return l.videos.Restore(id)
 }
 
 // DeleteVideoPermanently is the only path that removes the database row and
 // everything generated for it. It never touches the source video or the WebDAV
-// file; the downloaded cloud copy is a generated asset and is removed too.
+// file.
 func (l *Library) DeleteVideoPermanently(id int64) error {
 	if err := l.videos.Remove(id); err != nil {
 		return err
-	}
-	if l.cache != nil {
-		l.cache.Remove(id)
 	}
 	if err := l.groups.ClearVideoMembers(id); err != nil {
 		l.log.Warn("clear video group members failed", "id", id, "err", err)
@@ -540,9 +567,9 @@ func (l *Library) ListJavTaskOverviews() ([]jav.TaskOverview, error) {
 	if err != nil {
 		return nil, err
 	}
-	codes, restored, sources := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources()
+	codes, restored, sources, backups := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources(), l.backedUpKeys()
 	for i := range overviews {
-		applyReadModel(&overviews[i].Video, codes, restored, sources)
+		applyReadModel(&overviews[i].Video, codes, restored, sources, backups)
 	}
 	return overviews, nil
 }
@@ -592,10 +619,10 @@ func (l *Library) attachDuplicateReadModel(groups []jav.DuplicateGroup) {
 	if len(groups) == 0 {
 		return
 	}
-	codes, restored, sources := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources()
+	codes, restored, sources, backups := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources(), l.backedUpKeys()
 	for i := range groups {
 		for j := range groups[i].Videos {
-			applyReadModel(&groups[i].Videos[j], codes, restored, sources)
+			applyReadModel(&groups[i].Videos[j], codes, restored, sources, backups)
 		}
 	}
 }
@@ -637,10 +664,10 @@ func (l *Library) ListContentDuplicates(includeIgnored bool) ([]video.ContentDup
 		return nil, err
 	}
 	if len(groups) > 0 {
-		codes, restored, sources := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources()
+		codes, restored, sources, backups := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources(), l.backedUpKeys()
 		for i := range groups {
 			for j := range groups[i].Members {
-				applyReadModel(&groups[i].Members[j].Video, codes, restored, sources)
+				applyReadModel(&groups[i].Members[j].Video, codes, restored, sources, backups)
 			}
 		}
 	}
@@ -995,7 +1022,8 @@ func (l *Library) AddCloudVideos(sourceID int64, paths []string) []video.AddVide
 	return results
 }
 
-// CloudPageURL returns the OpenList management page for a remote favorite.
+// CloudPageURL returns the OpenList file page for a remote favorite. Opening it
+// hands playback to OpenList; Muse never streams or stores the video.
 func (l *Library) CloudPageURL(videoID int64) (string, error) {
 	if l.cloud == nil {
 		return "", fmt.Errorf("网盘服务未初始化")
@@ -1007,32 +1035,103 @@ func (l *Library) CloudPageURL(videoID int64) (string, error) {
 	if !v.IsRemote() {
 		return "", fmt.Errorf("该视频不在网盘上")
 	}
-	return l.cloud.ManagementURL(v.SourceID)
+	return l.cloud.FileURL(v.SourceID, v.RemotePath)
 }
 
-// CloudCacheInfo reports downloaded-copy usage and the configured limit.
-func (l *Library) CloudCacheInfo() cloud.CacheInfo {
-	if l.cache == nil {
-		return cloud.CacheInfo{}
+// ArchiveCloudConnection retires one cloud source and moves its active
+// favorites into the recycle bin with reason archived. It is deliberately not
+// reversible in bulk: enabling the source again leaves the archive untouched.
+func (l *Library) ArchiveCloudConnection(id int64) (int, error) {
+	if l.cloud == nil {
+		return 0, fmt.Errorf("网盘服务未初始化")
 	}
-	return l.cache.Info()
-}
-
-// ClearCloudCache removes every downloaded copy. It never touches a WebDAV
-// source file.
-func (l *Library) ClearCloudCache() (int64, error) {
-	if l.cache == nil {
+	view, err := l.cloud.Connection(id)
+	if err != nil {
+		return 0, err
+	}
+	if !view.Enabled {
 		return 0, nil
 	}
-	return l.cache.Clear()
+	if err := l.cloud.DisableConnection(id); err != nil {
+		return 0, err
+	}
+	n, err := l.videos.ArchiveBySource(id, view.Name)
+	if err != nil {
+		// Do not leave a disabled source with active favorites if the archive
+		// update failed; the user's intent is atomic.
+		_ = l.cloud.EnableConnection(id)
+		return 0, err
+	}
+	return n, nil
 }
 
-// CancelCloudDownload stops one in-flight cache download, keeping its partial
-// file for a later resume.
-func (l *Library) CancelCloudDownload(videoID int64) {
-	if l.cache != nil {
-		l.cache.Cancel(videoID)
+// EnableCloudConnection makes a retired source usable again. Archived favorites
+// stay archived; the user must restore them manually.
+func (l *Library) EnableCloudConnection(id int64) error {
+	if l.cloud == nil {
+		return fmt.Errorf("网盘服务未初始化")
 	}
+	return l.cloud.EnableConnection(id)
+}
+
+// ListArchived returns the long-lived archived part of the recycle bin.
+func (l *Library) ListArchived() ([]video.Video, error) {
+	videos, err := l.videos.ListArchived()
+	if err != nil {
+		return nil, err
+	}
+	l.attachReadModel(videos)
+	// The trash UI shows original group names as context.
+	ids := make([]int64, 0, len(videos))
+	for i := range videos {
+		videos[i].TrashGroupNames = []string{}
+		ids = append(ids, videos[i].ID)
+	}
+	if l.groups != nil && len(ids) > 0 {
+		if names, err := l.groups.GroupNamesForVideos(ids); err == nil {
+			for i := range videos {
+				videos[i].TrashGroupNames = names[videos[i].ID]
+			}
+		}
+	}
+	return videos, nil
+}
+
+// ClearArchivedVideos permanently deletes every archived row. This is the
+// explicit "clear archive" action; normal trash retention never touches it.
+func (l *Library) ClearArchivedVideos() (int, error) {
+	videos, err := l.videos.ListArchived()
+	if err != nil {
+		return 0, err
+	}
+	return l.deleteArchived(videos)
+}
+
+// ClearArchivedSource permanently deletes the archive of one source.
+func (l *Library) ClearArchivedSource(sourceID int64) (int, error) {
+	videos, err := l.videos.ListArchived()
+	if err != nil {
+		return 0, err
+	}
+	filtered := videos[:0]
+	for _, v := range videos {
+		if v.SourceID == sourceID {
+			filtered = append(filtered, v)
+		}
+	}
+	return l.deleteArchived(filtered)
+}
+
+func (l *Library) deleteArchived(videos []video.Video) (int, error) {
+	deleted := 0
+	for _, v := range videos {
+		if err := l.DeleteVideoPermanently(v.ID); err != nil {
+			l.log.Warn("clear archive: delete failed", "id", v.ID, "err", err)
+			continue
+		}
+		deleted++
+	}
+	return deleted, nil
 }
 
 // ---- Group suggestions (auto-detected after adding videos) ----

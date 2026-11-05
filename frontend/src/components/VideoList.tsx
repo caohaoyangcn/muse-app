@@ -1,5 +1,6 @@
 import type { CardSize, Video } from "../types";
 import { useVirtualRows } from "../hooks/useVirtualRows";
+import BackupBadge from "./BackupBadge";
 import RestoredBadge from "./RestoredBadge";
 import { scaleBetween } from "../utils/cardSize";
 import { DESKTOP_CARD_SIZE } from "../utils/viewPrefs";
@@ -154,6 +155,7 @@ export default function VideoList({
                     {videoDisplayName(v)}
                   </div>
                   {v.mosaicRestored && <RestoredBadge />}
+                  {v.backedUp && <BackupBadge />}
                   {remote && (
                     <span
                       className={cn(

@@ -43,6 +43,26 @@ func withinRoot(root, p string) bool {
 	return p == root || strings.HasPrefix(p, strings.TrimSuffix(root, "/")+"/")
 }
 
+// FileURL builds the OpenList web page URL for one remote path: the configured
+// web root plus the percent-encoded path. It is what "play" opens; playback
+// belongs to OpenList, not Muse.
+func FileURL(webURL, remotePath string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(webURL))
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return "", ErrInvalidEndpoint
+	}
+	p, err := normalizePath(remotePath)
+	if err != nil {
+		return "", err
+	}
+	u.Path = joinURLPath(u.Path, p)
+	u.RawPath = ""
+	u.RawQuery = ""
+	u.Fragment = ""
+	u.User = nil
+	return u.String(), nil
+}
+
 // joinURLPath appends an endpoint-relative logical path to the endpoint URL's
 // own path. The result is decoded; url.URL.String re-escapes each segment,
 // which is what makes Chinese and spaces safe on the wire.

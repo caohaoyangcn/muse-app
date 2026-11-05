@@ -16,6 +16,7 @@ import {
   videoResolution,
 } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
+import BackupBadge from "./BackupBadge";
 import RestoredBadge from "./RestoredBadge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -201,6 +202,7 @@ export default function VideoDetailPanel({
         <div className="flex min-w-0 items-center gap-2">
           <h2 className="min-w-0 break-words text-xl font-semibold">{videoDisplayName(video)}</h2>
           {video.mosaicRestored && <RestoredBadge className="text-xs" />}
+          {video.backedUp && <BackupBadge className="text-xs" />}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {onPlay && (
@@ -216,7 +218,7 @@ export default function VideoDetailPanel({
                     : video.status === "missing"
                       ? "文件缺失，无法播放"
                       : remote
-                        ? "缓存到本地后播放"
+                        ? "在 OpenList 中打开播放"
                         : "用系统默认播放器播放"
               }
             >

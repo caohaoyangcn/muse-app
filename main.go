@@ -118,7 +118,7 @@ func main() {
 	thumbDir := filepath.Join(dataDir, "thumbnails")
 	javCoverDir := filepath.Join(dataDir, "covers", "jav")
 	actorAvatarDir := filepath.Join(dataDir, "avatars")
-	for _, dir := range []string{dataDir, thumbDir, javCoverDir, actorAvatarDir, filepath.Join(dataDir, "cloud-cache"), filepath.Join(dataDir, "logs")} {
+	for _, dir := range []string{dataDir, thumbDir, javCoverDir, actorAvatarDir, filepath.Join(dataDir, "logs")} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			log.Error("create data dir failed", "dir", dir, "err", err)
 			fatalExit(dataDir)
@@ -159,8 +159,6 @@ func main() {
 	app.SetLibrary(lib)
 	cloudSvc := cloud.NewService(cloud.NewSQLiteRepository(db), app.Emit, log)
 	lib.SetCloudService(cloudSvc)
-	cloudCache := cloud.NewCache(filepath.Join(dataDir, "cloud-cache"), cloud.DefaultCacheLimit, app.Emit, log)
-	lib.SetCloudCache(cloudCache)
 	// The loopback media proxy is what lets ffprobe/ffmpeg read a remote
 	// favorite without WebDAV credentials appearing on a command line. It only
 	// binds 127.0.0.1 and is addressed by a per-process random token.
@@ -196,25 +194,16 @@ func main() {
 		}
 		return url, nil
 	})
-	// Remote play downloads first, then hands the local copy to the system
-	// player. The WebDAV source is only read; cache eviction/removal never
-	// touches it.
+	// Playback is delegated to OpenList: opening the file page there keeps Muse
+	// free of video content and lets OpenList own credentials, transcoding and
+	// player behavior.
 	videoSvc.SetRemoteSupport(
-		func(ctx context.Context, v *video.Video) error {
-			if !cloudSvc.Online(v.SourceID) {
-				return fmt.Errorf("网盘未连接")
-			}
-			path, err := cloudCache.Ensure(ctx, cloud.CacheSpec{
-				VideoID:    v.ID,
-				SourceID:   v.SourceID,
-				RemotePath: v.RemotePath,
-				FileName:   v.FileName,
-				Size:       v.FileSize,
-			}, cloudSvc.StatContext, cloudSvc.OpenRange)
+		func(_ context.Context, v *video.Video) error {
+			url, err := cloudSvc.FileURL(v.SourceID, v.RemotePath)
 			if err != nil {
-				return fmt.Errorf("%s", cloud.UserMessage(err))
+				return fmt.Errorf("无法生成 OpenList 打开地址: %w", err)
 			}
-			return platform.OpenWithDefaultApp(path)
+			return platform.OpenURL(url)
 		},
 		func(ctx context.Context, v *video.Video) (bool, error) {
 			return cloudSvc.Exists(ctx, v.SourceID, v.RemotePath)
@@ -223,17 +212,12 @@ func main() {
 		func(v *video.Video) bool { return cloudSvc.Online(v.SourceID) },
 	)
 	videoSvc.SetRemotePage(func(v *video.Video) error {
-		url, err := cloudSvc.ManagementURL(v.SourceID)
+		url, err := cloudSvc.FileURL(v.SourceID, v.RemotePath)
 		if err != nil {
 			return err
 		}
 		return platform.OpenURL(url)
 	})
-	go func() {
-		if err := cloudCache.EnforceLimit(); err != nil {
-			log.Warn("cloud cache cleanup failed", "err", err)
-		}
-	}()
 	settingsStore := settings.New(db)
 	app.SetSettings(settingsStore)
 	// The recycle bin's retention is a user preference. The sweep reads it on
@@ -295,7 +279,6 @@ func main() {
 	// is only a warning: the desktop library must keep working and the toggle
 	// remains available for a retry.
 	lanServer := server.New(app.lib, dataDir, log)
-	lanServer.SetCloudService(cloudSvc)
 	app.SetServer(lanServer)
 	if info, err := app.StartServer(0); err != nil {
 		log.Warn("web server auto-start failed", "err", err)

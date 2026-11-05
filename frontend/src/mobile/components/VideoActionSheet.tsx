@@ -31,13 +31,14 @@ export function VideoActionSheet({
   onClose: () => void;
 }) {
   const offline = video?.volumeOffline === true;
-  const sourceOffline = (video?.sourceId ?? 0) > 0 && video?.sourceOffline === true;
+  const remote = (video?.sourceId ?? 0) > 0;
+  const sourceOffline = remote && video?.sourceOffline === true;
   const missing = video?.status === "missing" && !offline && !sourceOffline;
   const unavailable = missing || offline || sourceOffline;
   return (
     <BottomSheet onClose={onClose} open={open && !!video} title={video ? videoName(video) : undefined}>
       <SheetAction disabled={unavailable} label="播放" onClick={onPlay} />
-      <SheetAction disabled={unavailable} label="播放器选项" onClick={onChoosePlayer} />
+      <SheetAction disabled={unavailable || remote} label="播放器选项" onClick={onChoosePlayer} />
       <SheetAction label="查看详情" onClick={onDetails} />
       <SheetAction
         label="点赞"

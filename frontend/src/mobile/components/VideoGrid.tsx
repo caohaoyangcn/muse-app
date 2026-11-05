@@ -2,6 +2,7 @@ import type { CardSize, Video } from "../../types";
 import { formatDuration } from "../../utils/format";
 import { scaleBetween } from "../../utils/cardSize";
 import { useVirtualRows } from "../../hooks/useVirtualRows";
+import BackupBadge from "../../components/BackupBadge";
 import RestoredBadge from "../../components/RestoredBadge";
 import { coverURL } from "../api";
 import { MOBILE_CARD_SIZE } from "../prefs";
@@ -133,6 +134,8 @@ export function VideoGrid({
               <div className="flex min-w-0 items-center gap-1.5">
                 <div className="truncate text-[13px] font-medium">{videoName(v)}</div>
                 {v.mosaicRestored && <RestoredBadge />}
+              {v.backedUp && <BackupBadge />}
+                {v.backedUp && <BackupBadge />}
               </div>
               <div className="truncate text-xs text-[var(--muted)]">
                 {v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v)}
@@ -195,6 +198,8 @@ export function VideoList({
               <div className="flex min-w-0 items-center gap-1.5">
                 <div className="truncate text-[14px] font-medium">{videoName(v)}</div>
                 {v.mosaicRestored && <RestoredBadge />}
+              {v.backedUp && <BackupBadge />}
+                {v.backedUp && <BackupBadge />}
               </div>
               <div className="truncate text-xs text-[var(--muted)]">
                 {v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v)}

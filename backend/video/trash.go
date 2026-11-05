@@ -95,6 +95,42 @@ func (s *Service) Restore(id int64) error {
 	return nil
 }
 
+// ArchiveBySource moves every active favorite of a cloud source into the
+// recycle bin with reason archived. It is idempotent and returns how many rows
+// were archived this time.
+func (s *Service) ArchiveBySource(sourceID int64, sourceName string) (int, error) {
+	if sourceID <= 0 {
+		return 0, ErrInvalidRemotePath
+	}
+	at := nowMillis()
+	n, err := s.repo.ArchiveBySource(sourceID, sourceName, at)
+	if err != nil {
+		return 0, err
+	}
+	if n > 0 {
+		s.log.Info("cloud source archived", "source", sourceID, "name", sourceName, "count", n)
+		if s.emit != nil {
+			s.emit("cloud:source:archived", map[string]any{
+				"sourceId": sourceID,
+				"name":     sourceName,
+				"count":    n,
+			})
+		}
+	}
+	return n, nil
+}
+
+// ListArchived returns archived favorites, newest archive first. It is the
+// long-lived part of the recycle bin; normal trash uses ListTrash.
+func (s *Service) ListArchived() ([]Video, error) {
+	return s.repo.ListArchived()
+}
+
+// GetAny returns a row regardless of its recycle-bin state.
+func (s *Service) GetAny(id int64) (*Video, error) {
+	return s.repo.GetAny(id)
+}
+
 // ListTrash returns every trashed favorite, newest removal first. It is a pure
 // database read: a drive being unplugged is not a reason to hide the trash, and
 // the view must not wait on a disk.

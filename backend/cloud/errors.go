@@ -30,12 +30,16 @@ var (
 )
 
 // ErrRangeNotSatisfiable means the server rejected a byte range (HTTP 416).
-// It is not a missing file: the cached size is probably stale and a fresh Stat
-// is needed.
+// It is not a missing file: the caller's range is stale and a fresh Stat is
+// needed.
 var ErrRangeNotSatisfiable = errors.New("cloud range is not satisfiable")
 
 // ErrConnectionNotFound means the requested cloud_connections row is gone.
 var ErrConnectionNotFound = errors.New("cloud connection not found")
+
+// ErrConnectionDisabled means the source was retired. Its archived favorites
+// stay readable in the recycle bin, but no live network operation may use it.
+var ErrConnectionDisabled = errors.New("cloud connection is disabled")
 
 // ErrPasswordStorageUnavailable means this platform cannot protect a password
 // at rest. Anonymous WebDAV remains usable; a password must not be stored in

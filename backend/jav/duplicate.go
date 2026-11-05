@@ -20,6 +20,9 @@ type DuplicateGroup struct {
 	Code string `json:"code"`
 	// Part is the 上下集 marker of the file names ("" for an ordinary work).
 	Part string `json:"part"`
+	// Tier separates local duplicates from cloud duplicates. Cross-tier copies
+	// are backups, not a duplicate warning.
+	Tier string `json:"tier"`
 	// Ignored is true when the user already chose "keep both" for exactly this
 	// set of copies. A newly added copy changes the set and clears the flag.
 	Ignored bool `json:"ignored"`
@@ -41,6 +44,21 @@ type IgnoredDuplicate struct {
 type DuplicateCandidate struct {
 	Code  string
 	Video video.Video
+}
+
+const (
+	DuplicateTierLocal = "local"
+	DuplicateTierCloud = "cloud"
+)
+
+// DuplicateGroupKey adds the storage tier to the work key. Local keeps the old
+// key shape so existing dismissals still apply; cloud gets its own namespace.
+func DuplicateGroupKey(code, part, tier string) string {
+	key := DuplicateKey(code, part)
+	if tier == DuplicateTierCloud {
+		return DuplicateTierCloud + ":" + key
+	}
+	return key
 }
 
 // DuplicateKey builds the grouping key from a 番号 and its part marker.

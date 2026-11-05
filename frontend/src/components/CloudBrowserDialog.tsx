@@ -56,9 +56,13 @@ export default function CloudBrowserDialog({
   const [error, setError] = useState<string | null>(null);
   const requestSeq = useRef(0);
 
+  const enabledConnections = useMemo(
+    () => connections?.filter((item) => item.enabled) ?? null,
+    [connections],
+  );
   const connection = useMemo(
-    () => connections?.find((item) => item.id === connectionID) ?? null,
-    [connections, connectionID],
+    () => enabledConnections?.find((item) => item.id === connectionID) ?? null,
+    [enabledConnections, connectionID],
   );
 
   const loadConnections = useCallback(async () => {
@@ -67,9 +71,10 @@ export default function CloudBrowserDialog({
     try {
       const list = await listCloudConnections();
       setConnections(list);
+      const usable = list.filter((item) => item.enabled);
       setConnectionID((current) => {
-        if (current != null && list.some((item) => item.id === current)) return current;
-        return list[0]?.id ?? null;
+        if (current != null && usable.some((item) => item.id === current)) return current;
+        return usable[0]?.id ?? null;
       });
     } catch (e) {
       setError(String(e));
@@ -180,14 +185,18 @@ export default function CloudBrowserDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {connections !== null && connections.length === 0 ? (
+        {connections !== null && (enabledConnections?.length ?? 0) === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
             <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--panel)] text-[var(--muted)]">
               <Cloud className="h-5 w-5" aria-hidden />
             </span>
-            <div className="text-sm font-medium">还没有配置网盘</div>
+            <div className="text-sm font-medium">
+              {connections.length === 0 ? "还没有配置网盘" : "没有启用的网盘"}
+            </div>
             <p className="mt-1 max-w-[360px] text-xs leading-relaxed text-[var(--muted)]">
-              先在设置里添加一个 WebDAV 连接。比特球请先通过 OpenList 挂载，再填 OpenList 的 WebDAV 地址。
+              {connections.length === 0
+                ? "先在设置里添加一个 WebDAV 连接。比特球请先通过 OpenList 挂载，再填 OpenList 的 WebDAV 地址。"
+                : "已停用的网盘只能查看归档，不能继续浏览或添加。到设置里重新启用后再回来。"}
             </p>
             <Button
               className="mt-4"
@@ -213,7 +222,7 @@ export default function CloudBrowserDialog({
                 onChange={(event) => setConnectionID(Number(event.target.value))}
                 disabled={loadingConnections || adding}
               >
-                {(connections ?? []).map((item) => (
+                {(enabledConnections ?? []).map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
                     {item.online ? "" : "（离线）"}

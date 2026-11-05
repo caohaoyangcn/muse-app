@@ -12,8 +12,9 @@ const (
 // gone on an attached volume. Both keep the record restorable for the retention
 // period (see docs/spec/trash.md).
 const (
-	TrashReasonUser    = "user"
-	TrashReasonMissing = "missing"
+	TrashReasonUser     = "user"
+	TrashReasonMissing  = "missing"
+	TrashReasonArchived = "archived"
 )
 
 // Video is a single favorite. It only references the file on disk;
@@ -103,15 +104,30 @@ type Video struct {
 	// SourceOffline is a read-model projection: the connection failed its most
 	// recent health probe. It is never persisted on the video row.
 	SourceOffline bool `json:"sourceOffline"`
+	// SourceEnabled is a read-model projection: the cloud connection is still
+	// active. Archived rows whose source was deleted report false.
+	SourceEnabled bool `json:"sourceEnabled"`
+	// BackedUp is a read-model projection: the same work (番号 + part) has an
+	// active available copy on both a local disk and a cloud source. It is a
+	// work-level backup marker, not a byte-identical claim.
+	BackedUp bool `json:"backedUp"`
+	// CloudURL is the OpenList file page for a remote favorite. Playback is
+	// delegated to OpenList, so the desktop and mobile clients only need this
+	// URL; it is empty for local videos and when no web root is configured.
+	CloudURL string `json:"cloudUrl"`
 
 	// DeletedAt is the unix-milli moment the favorite was moved to the recycle
 	// bin; 0 means it is active. A trashed row keeps its id, path and every
 	// relation, so restoring it is a flag change rather than a rebuild.
 	DeletedAt int64 `json:"deletedAt"`
-	// DeleteReason is TrashReasonUser or TrashReasonMissing for a trashed row,
-	// empty while active. It only explains the move; it never changes what the
-	// row owns.
+	// DeleteReason is TrashReasonUser, TrashReasonMissing or TrashReasonArchived
+	// for a trashed/archived row, empty while active. It only explains the move;
+	// it never changes what the row owns.
 	DeleteReason string `json:"deleteReason"`
+	// ArchiveSourceName is the source-name snapshot written when a cloud source
+	// is disabled. It keeps the archive readable after the connection row is
+	// deleted.
+	ArchiveSourceName string `json:"archiveSourceName"`
 	// TrashGroupNames is a read-model projection filled only by the recycle-bin
 	// read: the groups the favorite belonged to when it was moved to the trash.
 	// Memberships are deliberately retained, so a restore shows the same groups

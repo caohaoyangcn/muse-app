@@ -292,3 +292,26 @@ func TestClientHeadAndRangeNotSatisfiable(t *testing.T) {
 		t.Errorf("range err = %v, want ErrRangeNotSatisfiable", err)
 	}
 }
+
+func TestFileURLBuildsOpenListPage(t *testing.T) {
+	got, err := FileURL("http://127.0.0.1:5244", "/电影/a b.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "http://127.0.0.1:5244/%E7%94%B5%E5%BD%B1/a%20b.mp4" {
+		t.Errorf("file URL = %q", got)
+	}
+	got, err = FileURL("https://host/openlist/", "/媒体/a.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "https://host/openlist/%E5%AA%92%E4%BD%93/a.mp4" {
+		t.Errorf("base-path file URL = %q", got)
+	}
+	if _, err := FileURL("ftp://host", "/a.mp4"); !errors.Is(err, ErrInvalidEndpoint) {
+		t.Errorf("bad base err = %v", err)
+	}
+	if _, err := FileURL("https://host", "../a.mp4"); !errors.Is(err, ErrInvalidPath) {
+		t.Errorf("bad path err = %v", err)
+	}
+}

@@ -265,7 +265,7 @@ func (a *App) AddVideos(paths []string) []video.AddVideoResult {
 
 // RemoveVideo moves the favorite to the recycle bin. The record, its generated
 // images, group memberships and scraped metadata are retained so it can be
-// restored; only downloaded cloud cache is dropped.
+// restored.
 func (a *App) RemoveVideo(id int64) error {
 	return a.lib.RemoveVideo(id)
 }
@@ -691,6 +691,32 @@ func (a *App) SaveCloudConnection(input cloud.ConnectionInput) (*cloud.Connectio
 	return a.lib.SaveCloudConnection(input)
 }
 
+// ArchiveCloudConnection disables a source and moves its active favorites into
+// the long-lived archive part of the recycle bin.
+func (a *App) ArchiveCloudConnection(id int64) (int, error) {
+	return a.lib.ArchiveCloudConnection(id)
+}
+
+// EnableCloudConnection re-enables a source without restoring its archive.
+func (a *App) EnableCloudConnection(id int64) error {
+	return a.lib.EnableCloudConnection(id)
+}
+
+// ListArchived returns archived recycle-bin entries.
+func (a *App) ListArchived() ([]video.Video, error) {
+	return a.lib.ListArchived()
+}
+
+// ClearArchivedVideos permanently deletes every archived entry.
+func (a *App) ClearArchivedVideos() (int, error) {
+	return a.lib.ClearArchivedVideos()
+}
+
+// ClearArchivedSource permanently deletes one source's archived entries.
+func (a *App) ClearArchivedSource(sourceID int64) (int, error) {
+	return a.lib.ClearArchivedSource(sourceID)
+}
+
 // DeleteCloudConnection removes a source, refusing while favorites still use it.
 func (a *App) DeleteCloudConnection(id int64) error {
 	return a.lib.DeleteCloudConnection(id)
@@ -724,15 +750,6 @@ func (a *App) OpenCloudPage(videoID int64) error {
 	}
 	return platform.OpenURL(url)
 }
-
-// CloudCacheInfo reports downloaded-copy usage for Settings → 网盘.
-func (a *App) CloudCacheInfo() cloud.CacheInfo { return a.lib.CloudCacheInfo() }
-
-// ClearCloudCache removes every downloaded copy (never a WebDAV source file).
-func (a *App) ClearCloudCache() (int64, error) { return a.lib.ClearCloudCache() }
-
-// CancelCloudDownload stops one in-flight cache download.
-func (a *App) CancelCloudDownload(videoID int64) { a.lib.CancelCloudDownload(videoID) }
 
 // ---- Guided tour (新手引导) ----
 

@@ -338,10 +338,10 @@ export default function Sidebar({
             filter.kind === "trash" && "bg-[var(--panel-2)] text-[var(--text)]",
           )}
           onClick={() => onSelect({ kind: "trash" })}
-          title="已移出收藏的影片：可恢复，或彻底删除；超期自动清理"
+          title="归档的网盘收藏与已移出收藏的影片：可恢复或彻底删除"
         >
           <span>🗑</span>
-          <span>回收站</span>
+          <span>归档与回收站</span>
         </div>
       </SidebarNav>
     </SidebarRoot>

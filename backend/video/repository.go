@@ -35,9 +35,15 @@ type VideoRepository interface {
 	Restore(id int64, at int64) error
 	// ListTrashed returns the recycle bin, newest removal first.
 	ListTrashed() ([]Video, error)
+	// ListArchived returns the long-lived archived rows (reason archived).
+	ListArchived() ([]Video, error)
 	// Delete is the permanent delete used after the retention period or when
 	// the user empties the trash.
 	Delete(id int64) error
+	// ArchiveBySource hides every active favorite of one cloud source in the
+	// recycle bin with reason archived. It is one transaction so a disable
+	// cannot leave half a source active.
+	ArchiveBySource(sourceID int64, sourceName string, at int64) (int, error)
 	UpdateStatus(id int64, status string) error
 	UpdateMetadata(id int64, durationMs int64, width, height int, frameRate float64, bitrate int64, videoCodec, audioCodec string) error
 	UpdateThumbnail(id int64, thumbnailPath string) error
@@ -115,7 +121,7 @@ func NewSQLiteRepository(db *sql.DB) VideoRepository {
 	return &sqliteRepository{db: db}
 }
 
-const videoColumns = "id, path, file_name, file_size, duration_ms, width, height, frame_rate, bit_rate, video_codec, audio_codec, thumbnail_path, created_at, updated_at, last_opened_at, status, title, notes, custom_cover_at, like_count, cover_source, scraped_cover_path, allow_scraped_cover, content_hash, hash_version, hash_size, hash_mtime, hash_at, hash_error, full_hash, full_hash_at, source_id, remote_path, deleted_at, delete_reason"
+const videoColumns = "id, path, file_name, file_size, duration_ms, width, height, frame_rate, bit_rate, video_codec, audio_codec, thumbnail_path, created_at, updated_at, last_opened_at, status, title, notes, custom_cover_at, like_count, cover_source, scraped_cover_path, allow_scraped_cover, content_hash, hash_version, hash_size, hash_mtime, hash_at, hash_error, full_hash, full_hash_at, source_id, remote_path, deleted_at, delete_reason, archive_source_name"
 
 func scanVideo(scan func(dest ...any) error) (*Video, error) {
 	var v Video
@@ -124,12 +130,12 @@ func scanVideo(scan func(dest ...any) error) (*Video, error) {
 	var deletedAt sql.NullInt64
 	var frameRate sql.NullFloat64
 	var videoCodec, audioCodec, thumbnailPath, title, notes, coverSource, scrapedCoverPath sql.NullString
-	var contentHash, hashError, fullHash, remotePath, deleteReason sql.NullString
+	var contentHash, hashError, fullHash, remotePath, deleteReason, archiveSource sql.NullString
 	err := scan(&v.ID, &v.Path, &v.FileName, &v.FileSize, &durationMs, &width, &height,
 		&frameRate, &bitrate, &videoCodec, &audioCodec, &thumbnailPath, &v.CreatedAt, &v.UpdatedAt, &lastOpened, &v.Status,
 		&title, &notes, &customCoverAt, &v.LikeCount, &coverSource, &scrapedCoverPath, &allowScrapedCover,
 		&contentHash, &hashVersion, &hashSize, &hashMtime, &hashAt, &hashError, &fullHash, &fullHashAt,
-		&v.SourceID, &remotePath, &deletedAt, &deleteReason)
+		&v.SourceID, &remotePath, &deletedAt, &deleteReason, &archiveSource)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +158,7 @@ func scanVideo(scan func(dest ...any) error) (*Video, error) {
 	v.RemotePath = remotePath.String
 	v.DeletedAt = deletedAt.Int64
 	v.DeleteReason = deleteReason.String
+	v.ArchiveSourceName = archiveSource.String
 	v.HashVersion = int(hashVersion.Int64)
 	v.HashState = FingerprintState{
 		Size:       hashSize.Int64,
@@ -268,6 +275,25 @@ func (r *sqliteRepository) query(sqlText string, args ...any) ([]Video, error) {
 	return videos, rows.Err()
 }
 
+// ArchiveBySource moves every active favorite of a source into the recycle bin
+// with the archived reason. The conditional update makes it idempotent: rows
+// already trashed keep their original reason and timestamp.
+func (r *sqliteRepository) ArchiveBySource(sourceID int64, sourceName string, at int64) (int, error) {
+	res, err := r.db.Exec(`
+		UPDATE videos
+		SET deleted_at = ?, delete_reason = ?, archive_source_name = ?, updated_at = ?
+		WHERE source_id = ? AND deleted_at IS NULL`,
+		at, TrashReasonArchived, sourceName, at, sourceID)
+	if err != nil {
+		return 0, fmt.Errorf("archive cloud source: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
 // Trash soft-deletes an active favorite. The condition keeps the operation
 // idempotent: a row already in the trash keeps its original removal moment and
 // reason, so the retention clock cannot be reset by a stale client.
@@ -297,7 +323,11 @@ func (r *sqliteRepository) Restore(id int64, at int64) error {
 // ListTrashed reads the recycle bin. The newest removal comes first because
 // that is the one a user who just changed their mind is looking for.
 func (r *sqliteRepository) ListTrashed() ([]Video, error) {
-	return r.query(`SELECT ` + videoColumns + ` FROM videos WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC`)
+	return r.query(`SELECT `+videoColumns+` FROM videos WHERE deleted_at IS NOT NULL AND delete_reason <> ? ORDER BY deleted_at DESC, id DESC`, TrashReasonArchived)
+}
+
+func (r *sqliteRepository) ListArchived() ([]Video, error) {
+	return r.query(`SELECT `+videoColumns+` FROM videos WHERE deleted_at IS NOT NULL AND delete_reason = ? ORDER BY deleted_at DESC, id DESC`, TrashReasonArchived)
 }
 
 func (r *sqliteRepository) Delete(id int64) error {

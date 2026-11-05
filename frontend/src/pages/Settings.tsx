@@ -22,22 +22,21 @@ import {
   purgeExpiredTrash,
   scrapeVideosJav,
   listCloudConnections,
+  archiveCloudConnection,
+  enableCloudConnection,
   saveCloudConnection,
   deleteCloudConnection,
   testCloudConnection,
   cloudStorageAvailable,
-  cloudCacheInfo,
-  clearCloudCache,
 } from "../services/api";
 import type {
-  CloudCacheInfo,
   CloudConnection,
   CloudConnectionInput,
   CloudTestResult,
   WatchedDir,
 } from "../types";
-import { formatFileSize } from "../utils/format";
 import { BrowserOpenURL } from "../../wailsjs/runtime";
+import { invalidate } from "../services/live";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -362,7 +361,7 @@ function TrashSection() {
       <h2 className="mb-1.5 text-base font-semibold">回收站</h2>
       <p className="mb-5 max-w-[560px] leading-relaxed text-[var(--muted)]">
         从收藏中移除的影片会先进入回收站，而不是立刻销毁记录。回收站保留收藏的标题、点赞、分组和刮削资料；
-        超过保留期后，应用会在启动时或后台定时检查中自动彻底清理。清理只删除 Muse 的记录、生成的缩略图/封面与网盘缓存，
+        超过保留期后，应用会在启动时或后台定时检查中自动彻底清理。清理只删除 Muse 的记录与生成的缩略图/封面，
         <strong className="text-[var(--text)]">原始视频文件永远不会被删除</strong>。
       </p>
 
@@ -1007,10 +1006,6 @@ function draftFrom(c: CloudConnection): ConnectionDraft {
 function CloudSection() {
   const [connections, setConnections] = useState<CloudConnection[]>([]);
   const [storageAvailable, setStorageAvailable] = useState(true);
-  const [cacheInfo, setCacheInfo] = useState<CloudCacheInfo | null>(null);
-  const [cacheClearing, setCacheClearing] = useState(false);
-  const [cacheConfirm, setCacheConfirm] = useState(false);
-  const [cacheMessage, setCacheMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<ConnectionDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -1019,18 +1014,16 @@ function CloudSection() {
   const [rowTesting, setRowTesting] = useState<number | null>(null);
   const [rowResults, setRowResults] = useState<Record<number, CloudTestResult>>({});
   const [deleteTarget, setDeleteTarget] = useState<CloudConnection | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<CloudConnection | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [list, storage, cache] = await Promise.all([
-        listCloudConnections(),
-        cloudStorageAvailable(),
-        cloudCacheInfo(),
-      ]);
+      const [list, storage] = await Promise.all([listCloudConnections(), cloudStorageAvailable()]);
       setConnections(list);
       setStorageAvailable(storage);
-      setCacheInfo(cache);
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -1118,18 +1111,34 @@ function CloudSection() {
     }
   };
 
-  const clearCache = async () => {
-    setCacheConfirm(false);
-    setCacheClearing(true);
-    setCacheMessage(null);
+  const archive = async () => {
+    if (!archiveTarget) return;
+    const target = archiveTarget;
+    setArchiveTarget(null);
+    setArchiving(true);
     try {
-      const freed = await clearCloudCache();
-      setCacheMessage(`已清理 ${formatCacheSize(freed)}`);
-      setCacheInfo(await cloudCacheInfo());
+      const count = await archiveCloudConnection(target.id);
+      invalidate();
+      await load();
+      setError(null);
+      setActionMessage(
+        count > 0 ? `已停用「${target.name}」，归档 ${count} 个收藏` : `已停用「${target.name}」`,
+      );
     } catch (e) {
       setError(String(e));
     } finally {
-      setCacheClearing(false);
+      setArchiving(false);
+    }
+  };
+
+  const enable = async (connection: CloudConnection) => {
+    try {
+      await enableCloudConnection(connection.id);
+      invalidate();
+      await load();
+      setActionMessage("已启用；归档不会自动恢复到片库");
+    } catch (e) {
+      setError(String(e));
     }
   };
 
@@ -1316,16 +1325,29 @@ function CloudSection() {
                       <span
                         className={cn(
                           "h-2 w-2 shrink-0 rounded-full",
-                          connection.online ? "bg-[#7ad9a2]" : "bg-[#e0b64f]",
+                          !connection.enabled
+                            ? "bg-[var(--muted)]"
+                            : connection.online
+                              ? "bg-[#7ad9a2]"
+                              : "bg-[#e0b64f]",
                         )}
                         aria-hidden
                       />
                       <span className="text-sm font-medium">{connection.name}</span>
-                      <span className={cn("text-[11px]", connection.online ? "text-[#7ad9a2]" : "text-[#e0b64f]")}>
-                        {connection.online ? "在线" : "离线"}
+                      <span
+                        className={cn(
+                          "text-[11px]",
+                          !connection.enabled
+                            ? "text-[var(--muted)]"
+                            : connection.online
+                              ? "text-[#7ad9a2]"
+                              : "text-[#e0b64f]",
+                        )}
+                      >
+                        {!connection.enabled ? "已停用 · 已归档" : connection.online ? "在线" : "离线"}
                       </span>
                       <span className="text-[11px] text-[var(--muted)]">
-                        {connection.videoCount} 个收藏
+                        {connection.enabled ? `${connection.videoCount} 个收藏` : "归档保留中"}
                       </span>
                       <div className="ml-auto flex flex-wrap items-center gap-1.5">
                         {webURL && (
@@ -1333,8 +1355,24 @@ function CloudSection() {
                             打开管理页
                           </Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => void testExisting(connection)} disabled={rowTesting != null}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void testExisting(connection)}
+                          disabled={rowTesting != null || !connection.enabled}
+                        >
                           {rowTesting === connection.id ? "测试中…" : "测试"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            if (connection.enabled) setArchiveTarget(connection);
+                            else void enable(connection);
+                          }}
+                          disabled={archiving}
+                        >
+                          {connection.enabled ? "停用并归档" : "启用"}
                         </Button>
                         <Button
                           size="sm"
@@ -1375,43 +1413,21 @@ function CloudSection() {
             OpenList 是可选组件，不随 Muse 安装包分发。Muse 只连接它提供的 WebDAV 地址；挂载、改名、移动等管理操作请在 OpenList 网页完成。
           </p>
 
-          <div className="mt-5 border-t border-[var(--border)] pt-4">
-            <h3 className="text-sm font-semibold">本地缓存</h3>
-            <p className="mt-1 max-w-[620px] text-[13px] leading-relaxed text-[var(--muted)]">
-              远程视频播放前会先下载到本地。缓存只存在于这台电脑，清理缓存不会删除网盘上的任何文件；超过上限时自动淘汰最久未使用的副本。
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-[13px]">
-              <span>
-                已用 <strong>{formatCacheSize(cacheInfo?.bytes ?? 0)}</strong>
-              </span>
-              <span className="text-[var(--muted)]">
-                {cacheInfo?.files ?? 0} 个文件 · 上限 {formatCacheSize(cacheInfo?.limit ?? 0)}
-              </span>
-              <Button
-                size="sm"
-                className="ml-auto"
-                onClick={() => setCacheConfirm(true)}
-                disabled={cacheClearing || (cacheInfo?.files ?? 0) === 0}
-              >
-                {cacheClearing ? "清理中…" : "清理缓存"}
-              </Button>
-            </div>
-            {cacheMessage && <p className="mt-2 text-[13px] text-[#7ad9a2]">{cacheMessage}</p>}
-          </div>
         </>
       )}
 
+      {actionMessage && <p className="mt-3 text-[13px] text-[#7ad9a2]">{actionMessage}</p>}
       {error && <p className="mt-3 text-[13px] text-[var(--danger)]">{error}</p>}
 
-      {cacheConfirm && (
+      {archiveTarget && (
         <ConfirmDialog
-          title="清理网盘缓存"
-          message="删除所有已下载的远程视频副本？网盘上的源文件不会被删除，下次播放时会重新下载。"
-          confirmLabel="清理"
+          title="停用网盘并归档"
+          message={`停用「${archiveTarget.name}」后，其 ${archiveTarget.videoCount} 个活动收藏会移入回收站的「归档」区：不再联网、不能播放，长期保留记录和封面。\n\n归档不会自动恢复到片库；需要时可在回收站手动恢复。继续？`}
+          confirmLabel="停用并归档"
           cancelLabel="取消"
           danger
-          onConfirm={() => void clearCache()}
-          onCancel={() => setCacheConfirm(false)}
+          onConfirm={() => void archive()}
+          onCancel={() => setArchiveTarget(null)}
         />
       )}
 
@@ -1420,8 +1436,10 @@ function CloudSection() {
           title="删除网盘连接"
           message={
             deleteTarget.videoCount > 0
-              ? `「${deleteTarget.name}」下还有 ${deleteTarget.videoCount} 个收藏，请先移除这些收藏。`
-              : `删除「${deleteTarget.name}」？只会删除连接配置，不会删除网盘上的任何文件。`
+              ? `「${deleteTarget.name}」下还有 ${deleteTarget.videoCount} 个活动收藏，请先停用归档或移除这些收藏。`
+              : deleteTarget.enabled
+                ? `删除「${deleteTarget.name}」？只会删除连接配置，不会删除网盘上的任何文件。`
+                : `删除「${deleteTarget.name}」？连接会被移除，但已归档的收藏会继续保留在「归档与回收站」；网盘文件不会被删除。`
           }
           confirmLabel="删除"
           cancelLabel="取消"
@@ -1451,10 +1469,6 @@ function Field({
       {children}
     </div>
   );
-}
-
-function formatCacheSize(bytes: number): string {
-  return bytes > 0 ? formatFileSize(bytes) : "0 B";
 }
 
 function TestBadge({ result }: { result: CloudTestResult }) {

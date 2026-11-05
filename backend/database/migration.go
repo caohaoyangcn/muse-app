@@ -8,7 +8,7 @@ import (
 // currentSchemaVersion is the highest applied schema version. It is tracked in
 // PRAGMA user_version. Bump it whenever a migration adds a column/table that
 // requires (or could benefit from) re-extracting data for pre-existing rows.
-const currentSchemaVersion = 25
+const currentSchemaVersion = 26
 
 // MigrationResult reports what happened during Migrate so callers can trigger
 // one-off backfills (e.g. re-probing ffprobe for videos created before a new
@@ -396,6 +396,27 @@ func Migrate(db *sql.DB) (MigrationResult, error) {
 		version = 25
 	}
 
+	if version < 26 {
+		// v26 lets a cloud source be retired without losing its history. The
+		// connection keeps its credentials but is marked disabled; its active
+		// favorites become ordinary recycle-bin rows with reason "archived" and
+		// a source-name snapshot, so the trash can still explain them after the
+		// connection itself is deleted. Additive, no backfill.
+		if err := addColumnIfMissing(db, "cloud_connections", "enabled", `ALTER TABLE cloud_connections ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1`); err != nil {
+			return res, fmt.Errorf("migrate database v26 cloud enabled: %w", err)
+		}
+		if err := addColumnIfMissing(db, "cloud_connections", "disabled_at", `ALTER TABLE cloud_connections ADD COLUMN disabled_at INTEGER`); err != nil {
+			return res, fmt.Errorf("migrate database v26 cloud disabled_at: %w", err)
+		}
+		if err := addColumnIfMissing(db, "videos", "archive_source_name", `ALTER TABLE videos ADD COLUMN archive_source_name TEXT NOT NULL DEFAULT ''`); err != nil {
+			return res, fmt.Errorf("migrate database v26 archive source: %w", err)
+		}
+		if _, err := db.Exec(schemaV26Indexes); err != nil {
+			return res, fmt.Errorf("migrate database v26 indexes: %w", err)
+		}
+		version = 26
+	}
+
 	res.SchemaVersion = version
 	if err := setUserVersion(db, version); err != nil {
 		return res, err
@@ -514,6 +535,13 @@ CREATE INDEX IF NOT EXISTS idx_videos_source ON videos(source_id);
 // rows" and "expired trash"), which every library list now filters on.
 const schemaV25Indexes = `
 CREATE INDEX IF NOT EXISTS idx_videos_deleted_at ON videos(deleted_at);
+`
+
+// schemaV26Indexes supports archive lists and source deletion checks. The
+// existing deleted_at index still covers the active/trash split; this one makes
+// "only archived rows" cheap.
+const schemaV26Indexes = `
+CREATE INDEX IF NOT EXISTS idx_videos_delete_reason ON videos(delete_reason);
 `
 
 // userVersion reads PRAGMA user_version.

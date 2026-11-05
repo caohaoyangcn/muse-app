@@ -256,10 +256,14 @@ func (s *Service) ListDuplicates(includeIgnored bool) ([]DuplicateGroup, error) 
 	keys := make([]string, 0)
 	for _, candidate := range candidates {
 		part := PartForFile(candidate.Video.FileName, candidate.Code)
-		key := DuplicateKey(candidate.Code, part)
+		tier := DuplicateTierLocal
+		if candidate.Video.SourceID > 0 {
+			tier = DuplicateTierCloud
+		}
+		key := DuplicateGroupKey(candidate.Code, part, tier)
 		group, ok := byKey[key]
 		if !ok {
-			group = &DuplicateGroup{Key: key, Code: normalizeCode(candidate.Code), Part: part}
+			group = &DuplicateGroup{Key: key, Code: normalizeCode(candidate.Code), Part: part, Tier: tier}
 			byKey[key] = group
 			keys = append(keys, key)
 		}
@@ -281,6 +285,39 @@ func (s *Service) ListDuplicates(includeIgnored bool) ([]DuplicateGroup, error) 
 			continue
 		}
 		out = append(out, *group)
+	}
+	return out, nil
+}
+
+// BackedUpKeys returns the work keys that exist as an active, available copy on
+// both a local disk and an enabled cloud source. The read model uses it for the
+// 已备份 badge. It is deliberately work-level (番号 + part), not byte-level.
+func (s *Service) BackedUpKeys() (map[string]bool, error) {
+	candidates, err := s.repo.ListDuplicateCandidates()
+	if err != nil {
+		return nil, err
+	}
+	type tiers struct{ local, cloud bool }
+	byKey := make(map[string]tiers)
+	for _, candidate := range candidates {
+		if candidate.Video.Status != video.StatusAvailable {
+			continue
+		}
+		part := PartForFile(candidate.Video.FileName, candidate.Code)
+		key := DuplicateKey(candidate.Code, part)
+		t := byKey[key]
+		if candidate.Video.SourceID > 0 {
+			t.cloud = true
+		} else {
+			t.local = true
+		}
+		byKey[key] = t
+	}
+	out := make(map[string]bool)
+	for key, t := range byKey {
+		if t.local && t.cloud {
+			out[key] = true
+		}
 	}
 	return out, nil
 }

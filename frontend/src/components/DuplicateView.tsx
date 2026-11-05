@@ -264,6 +264,9 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
             >
               <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2">
                 <span className="font-semibold">{group.code}</span>
+                <span className="rounded-full bg-[var(--panel-2)] px-2 py-0.5 text-[10px] text-[var(--muted)]">
+                  {group.tier === "cloud" ? "网盘重复" : "本地重复"}
+                </span>
                 {group.part && (
                   <span className="text-xs text-[var(--muted)]">第 {group.part} 集</span>
                 )}

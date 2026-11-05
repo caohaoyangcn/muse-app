@@ -193,7 +193,7 @@ export function VideoDetailView({
           ) : null}
           <button
             className="mt-2 w-full py-1 text-xs text-[var(--muted)] active:text-[var(--text)]"
-            disabled={v.status === "missing" || v.volumeOffline || v.sourceOffline}
+            disabled={v.status === "missing" || v.volumeOffline || v.sourceOffline || v.sourceId > 0}
             onClick={() => onChoosePlayer(v)}
             type="button"
           >

@@ -25,19 +25,19 @@ export function AddVideos(arg1:Array<string>):Promise<Array<video.AddVideoResult
 
 export function AddWatchDir(arg1:string):Promise<watch.WatchedDir>;
 
+export function ArchiveCloudConnection(arg1:number):Promise<number>;
+
 export function BrowseCloud(arg1:number,arg2:string):Promise<Array<cloud.Entry>>;
 
-export function CancelCloudDownload(arg1:number):Promise<void>;
+export function ClearArchivedSource(arg1:number):Promise<number>;
 
-export function ClearCloudCache():Promise<number>;
+export function ClearArchivedVideos():Promise<number>;
 
 export function ClearFC2Cookie():Promise<void>;
 
 export function ClearJavBusCookie():Promise<void>;
 
 export function ClearVideoLikes(arg1:number):Promise<video.Video>;
-
-export function CloudCacheInfo():Promise<cloud.CacheInfo>;
 
 export function CloudStorageAvailable():Promise<boolean>;
 
@@ -58,6 +58,8 @@ export function DeleteVideoPermanently(arg1:number):Promise<void>;
 export function Emit(arg1:string,arg2:Array<any>):Promise<void>;
 
 export function EmptyTrash():Promise<number>;
+
+export function EnableCloudConnection(arg1:number):Promise<void>;
 
 export function EnsureVideoIn4KGroup(arg1:number):Promise<void>;
 
@@ -84,6 +86,8 @@ export function IgnoreJavDuplicate(arg1:string):Promise<void>;
 export function LikeVideo(arg1:number):Promise<video.Video>;
 
 export function ListActors():Promise<Array<jav.ActorSummary>>;
+
+export function ListArchived():Promise<Array<video.Video>>;
 
 export function ListCloudConnections():Promise<Array<cloud.ConnectionView>>;
 

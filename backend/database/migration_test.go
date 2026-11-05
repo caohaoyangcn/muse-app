@@ -780,9 +780,13 @@ func TestV25AddsTrashSchema(t *testing.T) {
 	// Rewind to v24 by removing the v25 additions, which is what an install
 	// from the previous release looks like.
 	for _, stmt := range []string{
+		`DROP INDEX IF EXISTS idx_videos_delete_reason`,
 		`DROP INDEX IF EXISTS idx_videos_deleted_at`,
+		`ALTER TABLE videos DROP COLUMN archive_source_name`,
 		`ALTER TABLE videos DROP COLUMN deleted_at`,
 		`ALTER TABLE videos DROP COLUMN delete_reason`,
+		`ALTER TABLE cloud_connections DROP COLUMN disabled_at`,
+		`ALTER TABLE cloud_connections DROP COLUMN enabled`,
 		`PRAGMA user_version = 24`,
 	} {
 		if _, err := db.Exec(stmt); err != nil {
@@ -833,5 +837,57 @@ func TestV25AddsTrashSchema(t *testing.T) {
 	}
 	if res2.SchemaVersion != currentSchemaVersion {
 		t.Errorf("re-migrate version = %d", res2.SchemaVersion)
+	}
+}
+
+// TestV26AddsCloudArchiveSchema verifies the source lifecycle and archive
+// snapshot columns, and that an existing v25 database upgrades additively.
+func TestV26AddsCloudArchiveSchema(t *testing.T) {
+	db := openMigrated(t)
+	if _, err := Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	// Rewind to v25, which is what the previous release looks like.
+	for _, stmt := range []string{
+		`DROP INDEX IF EXISTS idx_videos_delete_reason`,
+		`ALTER TABLE videos DROP COLUMN archive_source_name`,
+		`ALTER TABLE cloud_connections DROP COLUMN disabled_at`,
+		`ALTER TABLE cloud_connections DROP COLUMN enabled`,
+		`PRAGMA user_version = 25`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("rewind to v25 (%s): %v", stmt, err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO cloud_connections (name, endpoint, created_at, updated_at) VALUES ('dav','http://host/dav',1,1)`); err != nil {
+		t.Fatalf("insert connection: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status) VALUES ('C:\v\a.mp4','a.mp4',1,1,1,'available')`); err != nil {
+		t.Fatalf("insert video: %v", err)
+	}
+	res, err := Migrate(db)
+	if err != nil {
+		t.Fatalf("migrate v25 -> v26: %v", err)
+	}
+	if res.SchemaVersion != currentSchemaVersion {
+		t.Errorf("schema version = %d", res.SchemaVersion)
+	}
+	if !hasColumn(db, "cloud_connections", "enabled") || !hasColumn(db, "cloud_connections", "disabled_at") {
+		t.Error("cloud connection lifecycle columns missing")
+	}
+	if !hasColumn(db, "videos", "archive_source_name") {
+		t.Error("videos.archive_source_name missing")
+	}
+	var enabled int
+	if err := db.QueryRow(`SELECT enabled FROM cloud_connections WHERE name='dav'`).Scan(&enabled); err != nil || enabled != 1 {
+		t.Errorf("existing connection enabled = %d, err=%v, want 1", enabled, err)
+	}
+	var archiveName string
+	if err := db.QueryRow(`SELECT archive_source_name FROM videos WHERE file_name='a.mp4'`).Scan(&archiveName); err != nil || archiveName != "" {
+		t.Errorf("archive source default = %q, err=%v", archiveName, err)
+	}
+	var idx int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_videos_delete_reason'`).Scan(&idx); err != nil || idx != 1 {
+		t.Errorf("idx_videos_delete_reason = %d, err=%v", idx, err)
 	}
 }

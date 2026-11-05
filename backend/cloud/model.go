@@ -27,10 +27,15 @@ type Connection struct {
 	PasswordEnc string
 	RootPath    string
 	VerifyTLS   bool
-	CreatedAt   int64
-	UpdatedAt   int64
-	LastOKAt    int64
-	LastError   string
+	// Enabled is the source lifecycle switch. A disabled source keeps its row
+	// and credentials but performs no health checks, browsing or playback; its
+	// active favorites are archived into the recycle bin.
+	Enabled    bool
+	DisabledAt int64
+	CreatedAt  int64
+	UpdatedAt  int64
+	LastOKAt   int64
+	LastError  string
 }
 
 // RangeResponse is an in-progress media response. The caller owns Body and must
@@ -83,6 +88,8 @@ type ConnectionView struct {
 	Username    string `json:"username"`
 	RootPath    string `json:"rootPath"`
 	VerifyTLS   bool   `json:"verifyTls"`
+	Enabled     bool   `json:"enabled"`
+	DisabledAt  int64  `json:"disabledAt"`
 	HasPassword bool   `json:"hasPassword"`
 	Online      bool   `json:"online"`
 	LastError   string `json:"lastError"`
@@ -103,6 +110,10 @@ type TestResult struct {
 // shown on a remote card and whether the source is currently reachable. It
 // avoids loading favorite counts for every library read.
 type SourceState struct {
-	Name   string
-	Online bool
+	Name    string
+	Online  bool
+	Enabled bool
+	// WebURL is the OpenList management root (web_url or endpoint minus /dav).
+	// It is used to build the file page a remote favorite opens in.
+	WebURL string
 }

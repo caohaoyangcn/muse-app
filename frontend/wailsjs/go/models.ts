@@ -97,22 +97,6 @@ export namespace api {
 
 export namespace cloud {
 	
-	export class CacheInfo {
-	    files: number;
-	    bytes: number;
-	    limit: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new CacheInfo(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.files = source["files"];
-	        this.bytes = source["bytes"];
-	        this.limit = source["limit"];
-	    }
-	}
 	export class ConnectionInput {
 	    id: number;
 	    name: string;
@@ -152,6 +136,8 @@ export namespace cloud {
 	    username: string;
 	    rootPath: string;
 	    verifyTls: boolean;
+	    enabled: boolean;
+	    disabledAt: number;
 	    hasPassword: boolean;
 	    online: boolean;
 	    lastError: string;
@@ -172,6 +158,8 @@ export namespace cloud {
 	        this.username = source["username"];
 	        this.rootPath = source["rootPath"];
 	        this.verifyTls = source["verifyTls"];
+	        this.enabled = source["enabled"];
+	        this.disabledAt = source["disabledAt"];
 	        this.hasPassword = source["hasPassword"];
 	        this.online = source["online"];
 	        this.lastError = source["lastError"];
@@ -417,6 +405,7 @@ export namespace jav {
 	    key: string;
 	    code: string;
 	    part: string;
+	    tier: string;
 	    ignored: boolean;
 	    videos: video.Video[];
 	
@@ -429,6 +418,7 @@ export namespace jav {
 	        this.key = source["key"];
 	        this.code = source["code"];
 	        this.part = source["part"];
+	        this.tier = source["tier"];
 	        this.ignored = source["ignored"];
 	        this.videos = this.convertValues(source["videos"], video.Video);
 	    }
@@ -695,8 +685,12 @@ export namespace video {
 	    remotePath: string;
 	    sourceName: string;
 	    sourceOffline: boolean;
+	    sourceEnabled: boolean;
+	    backedUp: boolean;
+	    cloudUrl: string;
 	    deletedAt: number;
 	    deleteReason: string;
+	    archiveSourceName: string;
 	    trashGroupNames: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -738,8 +732,12 @@ export namespace video {
 	        this.remotePath = source["remotePath"];
 	        this.sourceName = source["sourceName"];
 	        this.sourceOffline = source["sourceOffline"];
+	        this.sourceEnabled = source["sourceEnabled"];
+	        this.backedUp = source["backedUp"];
+	        this.cloudUrl = source["cloudUrl"];
 	        this.deletedAt = source["deletedAt"];
 	        this.deleteReason = source["deleteReason"];
+	        this.archiveSourceName = source["archiveSourceName"];
 	        this.trashGroupNames = source["trashGroupNames"];
 	    }
 	}

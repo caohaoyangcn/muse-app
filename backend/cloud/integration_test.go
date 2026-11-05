@@ -115,16 +115,4 @@ func TestLocalWebDAVEndToEnd(t *testing.T) {
 		t.Errorf("cover not written: %v", err)
 	}
 
-	cache := NewCache(t.TempDir(), 1<<20, nil, nil)
-	cached, err := cache.Ensure(context.Background(), CacheSpec{
-		VideoID: 1, SourceID: conn.ID, RemotePath: "/sample.mp4", FileName: "sample.mp4", Size: info.Size(),
-	}, svc.StatContext, svc.OpenRange)
-	if err != nil {
-		t.Fatalf("cache: %v", err)
-	}
-	got, _ := os.ReadFile(cached)
-	want, _ := os.ReadFile(mediaPath)
-	if len(got) != len(want) {
-		t.Errorf("cached size = %d, want %d", len(got), len(want))
-	}
 }

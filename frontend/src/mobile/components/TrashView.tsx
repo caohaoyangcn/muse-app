@@ -121,14 +121,14 @@ export function TrashView({
       )}
 
       <p className="px-4 py-4 text-[11px] leading-relaxed text-[var(--muted)]">
-        回收站不复制原视频；彻底删除或超期清理只删除 Muse 的收藏记录、生成的缩略图/封面与网盘缓存，不会删除源视频。
+        回收站不复制原视频；彻底删除或超期清理只删除 Muse 的收藏记录与生成的缩略图/封面，不会删除源视频。
       </p>
 
       <ConfirmSheet
         busy={busy}
         confirmLabel="彻底删除"
         danger
-        message="只删除 Muse 的收藏记录、生成的缩略图/封面与网盘缓存；原始视频文件不会被删除。此操作无法撤销。"
+        message="只删除 Muse 的收藏记录与生成的缩略图/封面；原始视频文件不会被删除。此操作无法撤销。"
         onClose={() => setTarget(null)}
         onConfirm={() => void purge()}
         open={target !== null}
@@ -139,7 +139,7 @@ export function TrashView({
         busy={busy}
         confirmLabel="清空回收站"
         danger
-        message={`将彻底删除回收站里的 ${videos.length} 项收藏。只删除 Muse 的记录与生成的图片/缓存，原始视频文件不会被删除。`}
+        message={`将彻底删除回收站里的 ${videos.length} 项收藏。只删除 Muse 的记录与生成的图片，原始视频文件不会被删除。`}
         onClose={() => setEmptyOpen(false)}
         onConfirm={() => void empty()}
         open={emptyOpen}
