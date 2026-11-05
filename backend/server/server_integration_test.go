@@ -41,6 +41,16 @@ func (r *stubVideoRepo) Create(v *video.Video) error {
 	return nil
 }
 func (r *stubVideoRepo) Get(id int64) (*video.Video, error) {
+	v, err := r.GetAny(id)
+	if err != nil {
+		return nil, err
+	}
+	if v.DeletedAt > 0 {
+		return nil, video.ErrNotFound
+	}
+	return v, nil
+}
+func (r *stubVideoRepo) GetAny(id int64) (*video.Video, error) {
 	if v, ok := r.byID[id]; ok {
 		return v, nil
 	}
@@ -54,11 +64,64 @@ func (r *stubVideoRepo) GetByPath(path string) (*video.Video, error) {
 	}
 	return nil, video.ErrNotFound
 }
-func (r *stubVideoRepo) List() ([]video.Video, error) { return r.all, nil }
-func (r *stubVideoRepo) Search(keyword string) ([]video.Video, error) {
-	return r.all, nil
+func (r *stubVideoRepo) GetByRemote(sourceID int64, remotePath string) (*video.Video, error) {
+	for i := range r.all {
+		if r.all[i].SourceID == sourceID && r.all[i].RemotePath == remotePath {
+			return &r.all[i], nil
+		}
+	}
+	return nil, video.ErrNotFound
 }
-func (r *stubVideoRepo) Delete(id int64) error                 { return nil }
+func (r *stubVideoRepo) List() ([]video.Video, error) {
+	out := make([]video.Video, 0, len(r.all))
+	for _, v := range r.all {
+		if v.DeletedAt == 0 {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+func (r *stubVideoRepo) Search(keyword string) ([]video.Video, error) {
+	return r.List()
+}
+func (r *stubVideoRepo) Trash(id int64, reason string, at int64) error {
+	v, err := r.GetAny(id)
+	if err != nil {
+		return err
+	}
+	if v.DeletedAt == 0 {
+		v.DeletedAt, v.DeleteReason = at, reason
+	}
+	return nil
+}
+func (r *stubVideoRepo) Restore(id int64, at int64) error {
+	v, err := r.GetAny(id)
+	if err != nil {
+		return err
+	}
+	v.DeletedAt, v.DeleteReason = 0, ""
+	return nil
+}
+func (r *stubVideoRepo) ListTrashed() ([]video.Video, error) {
+	out := make([]video.Video, 0)
+	for _, v := range r.all {
+		if v.DeletedAt > 0 {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+func (r *stubVideoRepo) Delete(id int64) error {
+	out := r.all[:0]
+	for _, v := range r.all {
+		if v.ID != id {
+			out = append(out, v)
+		}
+	}
+	r.all = out
+	delete(r.byID, id)
+	return nil
+}
 func (r *stubVideoRepo) UpdateStatus(id int64, s string) error { return nil }
 func (r *stubVideoRepo) UpdateMetadata(id int64, d int64, w, h int, fr float64, br int64, vc, ac string) error {
 	return nil
@@ -190,6 +253,9 @@ func (r *stubGroupRepo) SetMembers(videoID int64, ids []int64) error  { return n
 func (r *stubGroupRepo) AddVideoToGroup(videoID, groupID int64) error { return nil }
 func (r *stubGroupRepo) VideosInGroup(groupID int64) ([]int64, error) { return nil, nil }
 func (r *stubGroupRepo) ClearVideoMembers(videoID int64) error        { return nil }
+func (r *stubGroupRepo) GroupNamesForVideos(videoIDs []int64) (map[int64][]string, error) {
+	return map[int64][]string{}, nil
+}
 
 func newTestServer(t *testing.T) (*Server, string /*dataDir*/, string /*base url*/) {
 	t.Helper()
@@ -714,6 +780,73 @@ func TestAPIWrites(t *testing.T) {
 	res, body = doJSON(t, http.MethodPut, base+"/api/groups/1", `{"name":"新名"}`)
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("rename status = %d, want 200 (body=%s)", res.StatusCode, body)
+	}
+}
+
+// TestAPITrashRoutes pins the recycle-bin HTTP surface: removal is a soft
+// delete, restore/delete/permanent routes exist, and the snapshot carries the
+// retention a mobile client needs to render "N days left".
+func TestAPITrashRoutes(t *testing.T) {
+	_, _, base := newTestServer(t)
+
+	res, body := doJSON(t, http.MethodDelete, base+"/api/videos/1", "")
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("remove status = %d (body=%s)", res.StatusCode, body)
+	}
+
+	res, body = doJSON(t, http.MethodGet, base+"/api/trash", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("trash status = %d (body=%s)", res.StatusCode, body)
+	}
+	var snapshot api.TrashSnapshot
+	if err := json.Unmarshal(body, &snapshot); err != nil {
+		t.Fatalf("trash JSON: %v (%s)", err, body)
+	}
+	if snapshot.RetentionDays != api.DefaultTrashRetentionDays {
+		t.Errorf("retention = %d, want %d", snapshot.RetentionDays, api.DefaultTrashRetentionDays)
+	}
+	if len(snapshot.Videos) != 1 || snapshot.Videos[0].ID != 1 {
+		t.Fatalf("trash videos = %+v, want id 1", snapshot.Videos)
+	}
+	if snapshot.Videos[0].DeleteReason != video.TrashReasonUser {
+		t.Errorf("reason = %q, want user", snapshot.Videos[0].DeleteReason)
+	}
+
+	res, body = doJSON(t, http.MethodPost, base+"/api/trash/1/restore", "")
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("restore status = %d (body=%s)", res.StatusCode, body)
+	}
+	res, body = doJSON(t, http.MethodGet, base+"/api/videos", "")
+	if res.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`"sample.mp4"`)) {
+		t.Errorf("restored video missing from library: status=%d body=%s", res.StatusCode, body)
+	}
+
+	// Trash again, then permanent delete.
+	if res, _ := doJSON(t, http.MethodDelete, base+"/api/videos/1", ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("second remove status = %d", res.StatusCode)
+	}
+	res, body = doJSON(t, http.MethodDelete, base+"/api/trash/1", "")
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("permanent delete status = %d (body=%s)", res.StatusCode, body)
+	}
+	_, body = doJSON(t, http.MethodGet, base+"/api/trash", "")
+	if !bytes.Contains(body, []byte(`"videos":[]`)) {
+		t.Errorf("trash should be empty, body=%s", body)
+	}
+
+	// Empty-trash and maintenance routes answer with a count; use a fresh
+	// server because the first one's only record was purged above.
+	_, _, base2 := newTestServer(t)
+	if res, _ := doJSON(t, http.MethodDelete, base2+"/api/videos/1", ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("third remove status = %d", res.StatusCode)
+	}
+	res, body = doJSON(t, http.MethodDelete, base2+"/api/trash", "")
+	if res.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`"count":1`)) {
+		t.Errorf("empty trash = %d %s", res.StatusCode, body)
+	}
+	res, body = doJSON(t, http.MethodPost, base2+"/api/maintenance/trash/purge", "")
+	if res.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`"count":0`)) {
+		t.Errorf("purge expired = %d %s", res.StatusCode, body)
 	}
 }
 

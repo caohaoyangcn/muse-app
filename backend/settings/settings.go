@@ -32,6 +32,7 @@ const (
 	keyFC2Cookie       = "fc2cmadb_cookie_dpapi"
 	keyWindowPlacement = "window_placement"
 	keyTourSeen        = "tour_seen"
+	keyTrashRetention  = "trash_retention_days"
 	// Cookie headers are normally much smaller than this. The limit prevents
 	// accidentally persisting an unbounded paste while allowing complete
 	// browser Cookie headers with auxiliary session values.
@@ -179,6 +180,37 @@ func (s *Store) SetWindowPlacement(placement windowstate.Placement) error {
 		return fmt.Errorf("encode window placement: %w", err)
 	}
 	return s.set(keyWindowPlacement, string(raw))
+}
+
+// TrashRetentionDays returns the configured recycle-bin retention in days.
+// configured is false when nothing usable is stored (never set, corrupt, or out
+// of range), which lets the caller apply its own default without this generic
+// store knowing the product policy.
+func (s *Store) TrashRetentionDays() (days int, configured bool, err error) {
+	raw, err := s.get(keyTrashRetention)
+	if err != nil {
+		return 0, false, err
+	}
+	if raw == "" {
+		return 0, false, nil
+	}
+	days, err = strconv.Atoi(raw)
+	if err != nil || days < 1 {
+		// A corrupt value must not break startup; the effective default applies
+		// until the user saves a new one.
+		return 0, false, nil
+	}
+	return days, true, nil
+}
+
+// SetTrashRetentionDays persists the retention. Range validation belongs to the
+// product façade that owns the policy (api.Library), so this store only checks
+// that the value can be stored as a positive integer.
+func (s *Store) SetTrashRetentionDays(days int) error {
+	if days < 1 {
+		return fmt.Errorf("retention days must be positive")
+	}
+	return s.set(keyTrashRetention, strconv.Itoa(days))
 }
 
 // TourSeen reports whether the first-run guided tour has already played.

@@ -236,6 +236,16 @@ func main() {
 	}()
 	settingsStore := settings.New(db)
 	app.SetSettings(settingsStore)
+	// The recycle bin's retention is a user preference. The sweep reads it on
+	// every pass, so a changed value applies to entries that are already in the
+	// trash without restarting the app.
+	lib.SetTrashRetention(func() int {
+		days, configured, err := settingsStore.TrashRetentionDays()
+		if err != nil || !configured {
+			return api.DefaultTrashRetentionDays
+		}
+		return days
+	})
 	// The window placement is needed by both OnStartup and shutdown; build it
 	// here so shutdown can include its poller as a named step.
 	placement := newWindowPlacement(settingsStore, log)
@@ -316,6 +326,10 @@ func main() {
 	// startup and daily after that: one directory read per folder, in the
 	// background, never on the path to the first screen.
 	stopImageSweep := videoSvc.StartImageSweep(0)
+	// Recycle bin retention: sweep once at startup, then hourly. A trashed
+	// favorite older than the configured period is permanently removed; the
+	// source file is never touched.
+	stopTrashPurge := lib.StartTrashPurge(0)
 	shutdown := newShutdownManager(log,
 		shutdownStep{"window placement", placement.stop},
 		shutdownStep{"web server", func() {
@@ -334,6 +348,7 @@ func main() {
 		shutdownStep{"folder watch", watchSvc.Stop},
 		shutdownStep{"volume watch", stopVolumeWatch},
 		shutdownStep{"image sweep", stopImageSweep},
+		shutdownStep{"trash purge", stopTrashPurge},
 		shutdownStep{"thumbnail processor", processor.Close},
 		shutdownStep{"fingerprinter", fingerprinter.Close},
 		shutdownStep{"jav scraper", javSvc.Close},

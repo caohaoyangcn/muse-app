@@ -24,6 +24,10 @@ type GroupRepository interface {
 	VideosInGroup(groupID int64) ([]int64, error)     // direct member video ids, ordered by created_at desc
 	VideosInGroups(groupIDs []int64) ([]int64, error) // union across groups, distinct, newest first
 	ClearVideoMembers(videoID int64) error
+	// GroupNamesForVideos returns the group names each video belongs to, keyed
+	// by video id. The recycle bin uses it to show where a trashed favorite
+	// came from; memberships are retained while trashed.
+	GroupNamesForVideos(videoIDs []int64) (map[int64][]string, error)
 }
 
 type sqliteRepository struct {
@@ -54,7 +58,9 @@ func scanGroup(scan func(dest ...any) error) (*Group, error) {
 // recursive parent/child union count is computed in List() from the full tree.
 const groupListSQL = `
 SELECT g.id, g.name, g.position, g.created_at, g.updated_at,
-       (SELECT COUNT(*) FROM video_group_members m WHERE m.group_id = g.id) AS video_count,
+       (SELECT COUNT(*) FROM video_group_members m
+          JOIN videos v ON v.id = m.video_id AND v.deleted_at IS NULL
+         WHERE m.group_id = g.id) AS video_count,
        g.parent_id
 FROM video_groups g`
 
@@ -147,8 +153,9 @@ func (r *sqliteRepository) applyUnionCounts(groups []Group) {
 		args[i] = groups[i].ID
 	}
 	rows, err := r.db.Query(
-		`SELECT group_id, COUNT(*) FROM video_group_members WHERE group_id IN (`+
-			placeholders(len(groups))+`) GROUP BY group_id`,
+		`SELECT m.group_id, COUNT(*) FROM video_group_members m
+		 JOIN videos v ON v.id = m.video_id AND v.deleted_at IS NULL
+		 WHERE m.group_id IN (`+placeholders(len(groups))+`) GROUP BY m.group_id`,
 		args...,
 	)
 	if err == nil {
@@ -339,7 +346,7 @@ func (r *sqliteRepository) VideosInGroups(groupIDs []int64) ([]int64, error) {
 	}
 	query := `SELECT m.video_id FROM video_group_members m
 		 JOIN videos v ON v.id = m.video_id
-		 WHERE m.group_id IN (` + placeholders(len(groupIDs)) + `)
+		 WHERE v.deleted_at IS NULL AND m.group_id IN (` + placeholders(len(groupIDs)) + `)
 		 GROUP BY m.video_id
 		 ORDER BY MAX(v.created_at) DESC, m.video_id DESC`
 	args := make([]any, len(groupIDs))
@@ -368,4 +375,37 @@ func (r *sqliteRepository) ClearVideoMembers(videoID int64) error {
 		return fmt.Errorf("clear video members: %w", err)
 	}
 	return nil
+}
+
+// GroupNamesForVideos returns each video's group names in sidebar display
+// order. It is a single query for the whole recycle-bin page; an empty id list
+// is a valid request and costs no query.
+func (r *sqliteRepository) GroupNamesForVideos(videoIDs []int64) (map[int64][]string, error) {
+	out := make(map[int64][]string, len(videoIDs))
+	if len(videoIDs) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(videoIDs))
+	for i, id := range videoIDs {
+		args[i] = id
+	}
+	rows, err := r.db.Query(
+		`SELECT m.video_id, g.name FROM video_group_members m
+		 JOIN video_groups g ON g.id = m.group_id
+		 WHERE m.video_id IN (`+placeholders(len(videoIDs))+`)
+		 ORDER BY g.position ASC, g.id ASC`, args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query video group names: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var videoID int64
+		var name string
+		if err := rows.Scan(&videoID, &name); err != nil {
+			return nil, fmt.Errorf("scan video group name: %w", err)
+		}
+		out[videoID] = append(out[videoID], name)
+	}
+	return out, rows.Err()
 }

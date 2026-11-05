@@ -270,3 +270,11 @@ func (s *Service) emitChanged() {
 func nowMillis() int64 {
 	return time.Now().UnixMilli()
 }
+
+// GroupNamesForVideos returns the group names each video belongs to, in sidebar
+// order. The recycle bin shows this beside a trashed favorite so the user knows
+// which group a restore will bring it back to; membership rows are retained
+// while a favorite is trashed.
+func (s *Service) GroupNamesForVideos(videoIDs []int64) (map[int64][]string, error) {
+	return s.repo.GroupNamesForVideos(videoIDs)
+}

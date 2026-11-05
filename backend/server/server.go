@@ -197,6 +197,10 @@ func (s *Server) routes() http.Handler {
 
 	// Reads.
 	mux.HandleFunc("GET /api/videos", s.handleListVideos)
+	mux.HandleFunc("GET /api/trash", s.handleListTrash)
+	mux.HandleFunc("DELETE /api/trash", s.handleEmptyTrash)
+	mux.HandleFunc("POST /api/trash/{id}/restore", s.handleRestoreTrash)
+	mux.HandleFunc("DELETE /api/trash/{id}", s.handleDeleteTrash)
 	mux.HandleFunc("GET /api/videos/{id}", s.handleGetVideo)
 	mux.HandleFunc("GET /api/videos/{id}/jav", s.handleVideoJav)
 	mux.HandleFunc("GET /api/videos/{id}/jav/task", s.handleVideoJavTask)
@@ -229,6 +233,8 @@ func (s *Server) routes() http.Handler {
 	// Maintenance: re-answer "is the file there?" for every favorite (文件检测).
 	mux.HandleFunc("GET /api/maintenance/files/scan", s.handleFileScanStatus)
 	mux.HandleFunc("POST /api/maintenance/files/scan", s.handleStartFileScan)
+	// Maintenance: permanently delete recycle-bin entries past their retention.
+	mux.HandleFunc("POST /api/maintenance/trash/purge", s.handlePurgeExpiredTrash)
 
 	// Media.
 	mux.HandleFunc("GET /stream/video/{id}", s.handleStreamVideo)
@@ -561,6 +567,67 @@ func (s *Server) handleAddVideos(w http.ResponseWriter, r *http.Request) {
 	}
 	results := s.lib.AddVideos(body.Paths)
 	writeJSON(w, results)
+}
+
+// handleListTrash returns the recycle bin together with the retention period.
+func (s *Server) handleListTrash(w http.ResponseWriter, r *http.Request) {
+	snapshot, err := s.lib.ListTrash()
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "回收站不可用")
+		return
+	}
+	if snapshot.Videos == nil {
+		snapshot.Videos = []video.Video{}
+	}
+	writeJSON(w, snapshot)
+}
+
+// handleRestoreTrash brings one trashed favorite back into the library.
+func (s *Server) handleRestoreTrash(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	if err := s.lib.RestoreVideo(id); err != nil {
+		httpError(w, http.StatusBadRequest, video.UserMessage(err))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleDeleteTrash permanently deletes one trashed favorite. The source file
+// is never touched; only Muse's own record and generated assets are removed.
+func (s *Server) handleDeleteTrash(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	if err := s.lib.DeleteVideoPermanently(id); err != nil {
+		httpError(w, http.StatusBadRequest, video.UserMessage(err))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleEmptyTrash permanently deletes every trashed favorite.
+func (s *Server) handleEmptyTrash(w http.ResponseWriter, r *http.Request) {
+	count, err := s.lib.EmptyTrash()
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "清空回收站失败")
+		return
+	}
+	writeJSON(w, map[string]int{"count": count})
+}
+
+// handlePurgeExpiredTrash is the maintenance entry point for the retention
+// sweep, so a headless LAN deployment can run the same cleanup as the desktop.
+func (s *Server) handlePurgeExpiredTrash(w http.ResponseWriter, r *http.Request) {
+	count, err := s.lib.PurgeExpiredTrash()
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "清理回收站失败")
+		return
+	}
+	writeJSON(w, map[string]int{"count": count})
 }
 
 func (s *Server) handleRemoveVideo(w http.ResponseWriter, r *http.Request) {

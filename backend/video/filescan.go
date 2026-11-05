@@ -39,8 +39,9 @@ type FileScanStatus struct {
 	// Checked is how many files have been asked about so far.
 	Checked int `json:"checked"`
 	// Removed counts favorites whose file was confirmed gone and whose record
-	// was cleaned up (record and generated assets only — never the source
-	// video).
+	// was moved to the recycle bin (never the source video). The name is kept
+	// for API compatibility; the destination is the trash, so a restore is
+	// possible until the retention expires.
 	Removed int `json:"removed"`
 	// Skipped counts favorites confirmed gone but deliberately kept: the whole
 	// volume looked wrong (a reused drive letter, or a mount that is not ready
@@ -93,9 +94,9 @@ func (s *Service) FileScanStatus() FileScanStatus {
 // RefreshAllStatuses re-checks every favorite at startup: it observes the
 // volumes first (a favorite whose drive is not attached is left untouched),
 // then reconciles each attached volume. A file that is gone while its volume is
-// present is removed as a favorite — record, thumbnail, group memberships and
-// scraped metadata — because the reference no longer describes anything on the
-// disk. Files that are only unreadable stay visible as status = missing.
+// present is moved to the recycle bin because the reference no longer describes
+// anything on the disk. Files that are only unreadable stay visible as
+// status = missing.
 //
 // It runs synchronously (app.startup already calls it from its own goroutine)
 // and records its outcome in the same status ScanFileStatuses reports, so 文件检测

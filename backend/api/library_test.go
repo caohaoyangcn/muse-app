@@ -31,6 +31,16 @@ func (r *memVideoRepo) Create(v *video.Video) error {
 	return nil
 }
 func (r *memVideoRepo) Get(id int64) (*video.Video, error) {
+	v, err := r.GetAny(id)
+	if err != nil {
+		return nil, err
+	}
+	if v.DeletedAt > 0 {
+		return nil, video.ErrNotFound
+	}
+	return v, nil
+}
+func (r *memVideoRepo) GetAny(id int64) (*video.Video, error) {
 	for i := range r.all {
 		if r.all[i].ID == id {
 			return &r.all[i], nil
@@ -38,7 +48,14 @@ func (r *memVideoRepo) Get(id int64) (*video.Video, error) {
 	}
 	return nil, video.ErrNotFound
 }
-func (r *memVideoRepo) GetByPath(path string) (*video.Video, error) { return nil, video.ErrNotFound }
+func (r *memVideoRepo) GetByPath(path string) (*video.Video, error) {
+	for i := range r.all {
+		if r.all[i].Path == path {
+			return &r.all[i], nil
+		}
+	}
+	return nil, video.ErrNotFound
+}
 func (r *memVideoRepo) GetByRemote(sourceID int64, remotePath string) (*video.Video, error) {
 	for i := range r.all {
 		if r.all[i].SourceID == sourceID && r.all[i].RemotePath == remotePath {
@@ -47,10 +64,54 @@ func (r *memVideoRepo) GetByRemote(sourceID int64, remotePath string) (*video.Vi
 	}
 	return nil, video.ErrNotFound
 }
-func (r *memVideoRepo) List() ([]video.Video, error)                 { return r.all, nil }
-func (r *memVideoRepo) Search(keyword string) ([]video.Video, error) { return r.all, nil }
-func (r *memVideoRepo) Delete(id int64) error                        { return nil }
-func (r *memVideoRepo) UpdateStatus(id int64, s string) error        { return nil }
+func (r *memVideoRepo) List() ([]video.Video, error) {
+	out := make([]video.Video, 0, len(r.all))
+	for _, v := range r.all {
+		if v.DeletedAt == 0 {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+func (r *memVideoRepo) Search(keyword string) ([]video.Video, error) { return r.List() }
+func (r *memVideoRepo) Trash(id int64, reason string, at int64) error {
+	v, err := r.GetAny(id)
+	if err != nil {
+		return err
+	}
+	if v.DeletedAt == 0 {
+		v.DeletedAt, v.DeleteReason = at, reason
+	}
+	return nil
+}
+func (r *memVideoRepo) Restore(id int64, at int64) error {
+	v, err := r.GetAny(id)
+	if err != nil {
+		return err
+	}
+	v.DeletedAt, v.DeleteReason = 0, ""
+	return nil
+}
+func (r *memVideoRepo) ListTrashed() ([]video.Video, error) {
+	out := make([]video.Video, 0)
+	for _, v := range r.all {
+		if v.DeletedAt > 0 {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+func (r *memVideoRepo) Delete(id int64) error {
+	out := r.all[:0]
+	for _, v := range r.all {
+		if v.ID != id {
+			out = append(out, v)
+		}
+	}
+	r.all = out
+	return nil
+}
+func (r *memVideoRepo) UpdateStatus(id int64, s string) error { return nil }
 func (r *memVideoRepo) UpdateMetadata(id int64, d int64, w, h int, fr float64, br int64, vc, ac string) error {
 	return nil
 }
@@ -279,6 +340,21 @@ func (r *memGroupRepo) ClearVideoMembers(videoID int64) error {
 	r.clearVids = append(r.clearVids, videoID)
 	return nil
 }
+func (r *memGroupRepo) GroupNamesForVideos(videoIDs []int64) (map[int64][]string, error) {
+	out := make(map[int64][]string, len(videoIDs))
+	wanted := make(map[int64]bool, len(videoIDs))
+	for _, id := range videoIDs {
+		wanted[id] = true
+	}
+	for _, g := range r.groups {
+		for _, vid := range r.members[g.ID] {
+			if wanted[vid] {
+				out[vid] = append(out[vid], g.Name)
+			}
+		}
+	}
+	return out, nil
+}
 
 func newFacade(t *testing.T) (*Library, *memVideoRepo, *memGroupRepo) {
 	t.Helper()
@@ -314,31 +390,62 @@ func TestVideosInGroupResolvesObjects(t *testing.T) {
 	}
 }
 
-// RemoveVideo orchestrates: video removal + clearing the group memberships.
-func TestRemoveVideoClearsMembers(t *testing.T) {
-	lib, _, gr := newFacade(t)
+// RemoveVideo is now a soft delete: the record moves to the recycle bin and
+// keeps its group memberships, so restoring it puts it back where it was.
+func TestRemoveVideoMovesToTrashKeepsMembers(t *testing.T) {
+	lib, vr, gr := newFacade(t)
 	if err := lib.RemoveVideo(10); err != nil {
 		t.Fatal(err)
 	}
-	if len(gr.clearVids) != 1 || gr.clearVids[0] != 10 {
-		t.Errorf("cleared videos = %v, want [10]", gr.clearVids)
+	if len(gr.clearVids) != 0 {
+		t.Errorf("trashing must not clear memberships, got %v", gr.clearVids)
+	}
+	if v, err := vr.GetAny(10); err != nil || v.DeletedAt == 0 || v.DeleteReason != video.TrashReasonUser {
+		t.Fatalf("trashed row = %+v, err=%v", v, err)
+	}
+	if _, err := vr.Get(10); !errors.Is(err, video.ErrNotFound) {
+		t.Errorf("trashed row must not be visible to Get: %v", err)
+	}
+	trash, err := lib.ListTrash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trash.Videos) != 1 || trash.Videos[0].ID != 10 {
+		t.Errorf("trash = %+v, want video 10", trash)
+	}
+	if trash.RetentionDays != DefaultTrashRetentionDays {
+		t.Errorf("retention = %d, want %d", trash.RetentionDays, DefaultTrashRetentionDays)
 	}
 }
 
-// A stale list (the record was already removed) must not surface an error: the
-// caller's intent is satisfied, and only a real storage failure is reported.
+// A stale list (the record was already removed) must not surface an error.
 func TestRemoveVideoAlreadyGone(t *testing.T) {
-	lib, _, gr := newFacade(t)
+	lib, _, _ := newFacade(t)
 	if err := lib.RemoveVideo(10); err != nil {
 		t.Fatalf("first remove: %v", err)
 	}
 	if err := lib.RemoveVideo(10); err != nil {
-		t.Errorf("removing an already removed favorite must succeed, got %v", err)
+		t.Errorf("removing an already trashed favorite must succeed, got %v", err)
 	}
 	if err := lib.RemoveVideo(999); err != nil {
 		t.Errorf("removing an unknown favorite must succeed, got %v", err)
 	}
-	if len(gr.clearVids) == 0 || gr.clearVids[len(gr.clearVids)-1] != 999 {
+}
+
+// Permanent deletion is the only path that clears memberships and scraped
+// metadata, and it stays idempotent for a stale card.
+func TestDeleteVideoPermanentlyClearsRelations(t *testing.T) {
+	lib, _, gr := newFacade(t)
+	if err := lib.DeleteVideoPermanently(10); err != nil {
+		t.Fatalf("permanent delete: %v", err)
+	}
+	if len(gr.clearVids) != 1 || gr.clearVids[0] != 10 {
+		t.Errorf("cleared videos = %v, want [10]", gr.clearVids)
+	}
+	if err := lib.DeleteVideoPermanently(999); err != nil {
+		t.Errorf("deleting an unknown favorite must succeed, got %v", err)
+	}
+	if len(gr.clearVids) != 2 || gr.clearVids[1] != 999 {
 		t.Errorf("group memberships should still be cleared for a stale removal, got %v", gr.clearVids)
 	}
 }
@@ -1046,5 +1153,97 @@ func TestContentDuplicatesWithoutFingerprintWorker(t *testing.T) {
 	// Reading the worklist needs no worker: an unhashed library simply has none.
 	if groups, err := lib.ListContentDuplicates(false); err != nil || len(groups) != 0 {
 		t.Fatalf("groups = %#v, err = %v, want an empty worklist", groups, err)
+	}
+}
+
+// TestTrashSnapshotCarriesRetentionAndGroups verifies the recycle-bin read
+// model: the retention travels with the rows, and the groups a favorite
+// belonged to are shown so a restore has no surprises.
+func TestTrashSnapshotCarriesRetentionAndGroups(t *testing.T) {
+	lib, vr, gr := newFacade(t)
+	gr.groups = []group.Group{{ID: 1, Name: "收藏夹"}}
+	vr.all[0].DeletedAt = 1000
+	vr.all[0].DeleteReason = video.TrashReasonUser
+	lib.SetTrashRetention(func() int { return 30 })
+
+	snapshot, err := lib.ListTrash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.RetentionDays != 30 {
+		t.Errorf("retention = %d, want 30", snapshot.RetentionDays)
+	}
+	if len(snapshot.Videos) != 1 || snapshot.Videos[0].ID != 10 {
+		t.Fatalf("videos = %+v, want video 10", snapshot.Videos)
+	}
+	if len(snapshot.Videos[0].TrashGroupNames) != 1 || snapshot.Videos[0].TrashGroupNames[0] != "收藏夹" {
+		t.Errorf("group names = %v, want [收藏夹]", snapshot.Videos[0].TrashGroupNames)
+	}
+}
+
+// TestTrashRetentionClampsInvalidValues keeps a broken preference from silently
+// turning into a one-day policy.
+func TestTrashRetentionClampsInvalidValues(t *testing.T) {
+	lib, _, _ := newFacade(t)
+	for _, days := range []int{0, -5, MaxTrashRetentionDays + 1} {
+		lib.SetTrashRetention(func() int { return days })
+		if got := lib.TrashRetentionDays(); got != DefaultTrashRetentionDays {
+			t.Errorf("retention(%d) = %d, want default %d", days, got, DefaultTrashRetentionDays)
+		}
+	}
+	lib.SetTrashRetention(func() int { return 30 })
+	if got := lib.TrashRetentionDays(); got != 30 {
+		t.Errorf("valid retention = %d, want 30", got)
+	}
+}
+
+// TestPurgeExpiredTrashOnlyRemovesPastTheRetention pins the boundary and proves
+// the purge hard-deletes what it removes.
+func TestPurgeExpiredTrashOnlyRemovesPastTheRetention(t *testing.T) {
+	lib, vr, gr := newFacade(t)
+	const day = int64(24 * 60 * 60 * 1000)
+	lib.now = func() int64 { return 100 * day }
+	lib.SetTrashRetention(func() int { return 14 })
+	vr.all[0].DeletedAt = 87 * day // exactly 13 days old: kept
+	vr.all[0].DeleteReason = video.TrashReasonUser
+	vr.all[1].DeletedAt = 80 * day // 20 days old: purged
+	vr.all[1].DeleteReason = video.TrashReasonMissing
+
+	purged, err := lib.PurgeExpiredTrash()
+	if err != nil {
+		t.Fatalf("purge: %v", err)
+	}
+	if purged != 1 {
+		t.Errorf("purged = %d, want 1", purged)
+	}
+	if _, err := vr.GetAny(20); !errors.Is(err, video.ErrNotFound) {
+		t.Errorf("expired row still present: %v", err)
+	}
+	if _, err := vr.GetAny(10); err != nil {
+		t.Errorf("row inside retention was removed: %v", err)
+	}
+	if len(gr.clearVids) != 1 || gr.clearVids[0] != 20 {
+		t.Errorf("cleared videos = %v, want [20]", gr.clearVids)
+	}
+}
+
+// TestEmptyTrashPurgesEverythingAndReportsCount covers the explicit action.
+func TestEmptyTrashPurgesEverythingAndReportsCount(t *testing.T) {
+	lib, vr, _ := newFacade(t)
+	vr.all[0].DeletedAt = 1000
+	vr.all[1].DeletedAt = 2000
+	count, err := lib.EmptyTrash()
+	if err != nil {
+		t.Fatalf("empty: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("count = %d, want 2", count)
+	}
+	trash, err := lib.ListTrash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trash.Videos) != 0 {
+		t.Errorf("trash still has %d rows", len(trash.Videos))
 	}
 }

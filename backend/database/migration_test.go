@@ -768,3 +768,70 @@ func TestV24AddsCloudSourceSchema(t *testing.T) {
 		t.Errorf("re-migrate version = %d", res2.SchemaVersion)
 	}
 }
+
+// TestV25AddsTrashSchema verifies the recycle-bin columns: an existing library
+// is upgraded without backfill, every pre-existing row stays active
+// (deleted_at NULL), and the new index supports the active-row reads.
+func TestV25AddsTrashSchema(t *testing.T) {
+	db := openMigrated(t)
+	if _, err := Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	// Rewind to v24 by removing the v25 additions, which is what an install
+	// from the previous release looks like.
+	for _, stmt := range []string{
+		`DROP INDEX IF EXISTS idx_videos_deleted_at`,
+		`ALTER TABLE videos DROP COLUMN deleted_at`,
+		`ALTER TABLE videos DROP COLUMN delete_reason`,
+		`PRAGMA user_version = 24`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("rewind to v24 (%s): %v", stmt, err)
+		}
+	}
+	if _, err := db.Exec(
+		`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status)
+		 VALUES ('C:\v\a.mp4','a.mp4',10,1,1,'available')`); err != nil {
+		t.Fatalf("insert video: %v", err)
+	}
+
+	res, err := Migrate(db)
+	if err != nil {
+		t.Fatalf("migrate v24 -> v25: %v", err)
+	}
+	if res.SchemaVersion != currentSchemaVersion {
+		t.Errorf("schema version = %d, want %d", res.SchemaVersion, currentSchemaVersion)
+	}
+	if res.BackfillVideoMetadata || res.BackfillFingerprints {
+		t.Errorf("v25 is additive and must not request a backfill: %+v", res)
+	}
+	for _, col := range []string{"deleted_at", "delete_reason"} {
+		if !hasColumn(db, "videos", col) {
+			t.Errorf("videos.%s missing", col)
+		}
+	}
+	var deletedAt sql.NullInt64
+	var reason string
+	if err := db.QueryRow(`SELECT deleted_at, delete_reason FROM videos WHERE file_name='a.mp4'`).Scan(&deletedAt, &reason); err != nil {
+		t.Fatalf("read trash defaults: %v", err)
+	}
+	if deletedAt.Valid || reason != "" {
+		t.Errorf("pre-existing row = (deleted_at=%v, reason=%q), want active", deletedAt, reason)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_videos_deleted_at'`).Scan(&n); err != nil {
+		t.Fatalf("check index: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("idx_videos_deleted_at count = %d, want 1", n)
+	}
+
+	// Re-running migrate is a no-op.
+	res2, err := Migrate(db)
+	if err != nil {
+		t.Fatalf("re-migrate: %v", err)
+	}
+	if res2.SchemaVersion != currentSchemaVersion {
+		t.Errorf("re-migrate version = %d", res2.SchemaVersion)
+	}
+}

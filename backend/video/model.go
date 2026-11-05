@@ -7,6 +7,15 @@ const (
 	StatusMissing   = "missing"
 )
 
+// Reasons a favorite was moved to the recycle bin. user means the user removed
+// it from the library; missing means automatic cleanup found the file confirmed
+// gone on an attached volume. Both keep the record restorable for the retention
+// period (see docs/spec/trash.md).
+const (
+	TrashReasonUser    = "user"
+	TrashReasonMissing = "missing"
+)
+
 // Video is a single favorite. It only references the file on disk;
 // the app never owns the media itself (spec-v1.md §6, §41).
 type Video struct {
@@ -94,6 +103,20 @@ type Video struct {
 	// SourceOffline is a read-model projection: the connection failed its most
 	// recent health probe. It is never persisted on the video row.
 	SourceOffline bool `json:"sourceOffline"`
+
+	// DeletedAt is the unix-milli moment the favorite was moved to the recycle
+	// bin; 0 means it is active. A trashed row keeps its id, path and every
+	// relation, so restoring it is a flag change rather than a rebuild.
+	DeletedAt int64 `json:"deletedAt"`
+	// DeleteReason is TrashReasonUser or TrashReasonMissing for a trashed row,
+	// empty while active. It only explains the move; it never changes what the
+	// row owns.
+	DeleteReason string `json:"deleteReason"`
+	// TrashGroupNames is a read-model projection filled only by the recycle-bin
+	// read: the groups the favorite belonged to when it was moved to the trash.
+	// Memberships are deliberately retained, so a restore shows the same groups
+	// again; the field is never persisted on the row.
+	TrashGroupNames []string `json:"trashGroupNames"`
 }
 
 // IsRemote reports whether the favorite lives on a cloud connection.

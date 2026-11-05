@@ -211,8 +211,8 @@ func (v *volumeState) probe() []VolumeChange {
 
 // RefreshVolumes re-observes every volume the library references and returns
 // what it saw. A volume that came back is reconciled as a whole: a file that was
-// only unreachable is revived, and a file that is really gone is removed as a
-// favorite (see reconcileVolume). Both read paths and the background poll call
+// only unreachable is revived, and a file that is really gone is moved to the
+// recycle bin (see reconcileVolume). Both read paths and the background poll call
 // this, so the transition behaves the same everywhere.
 func (s *Service) RefreshVolumes() []VolumeChange {
 	changes := s.volumes.probe()
@@ -262,8 +262,8 @@ func (s *Service) WatchVolumes(every time.Duration) (stop func()) {
 
 // reconcileVolume re-answers "is the file there?" for every favorite on one
 // attached volume. It is the single place where a volume's return is reconciled:
-// files that came back are revived, files that are confirmed gone are removed as
-// favorites, and files that are merely unreadable stay visible as missing.
+// files that came back are revived, files that are confirmed gone are moved to
+// the recycle bin, and files that are merely unreadable stay visible as missing.
 //
 // Removal is the whole point of the feature and must never be based on "stat
 // failed":
@@ -351,10 +351,10 @@ func (s *Service) reconcileVolume(root string, announce bool, checked func()) (r
 	return revived, len(removedIDs), skipped
 }
 
-// cleanupMissing is the one place a candidate is actually removed. The caller
-// has already established that these paths are confirmed absent on an attached,
-// identifiable volume; this function adds the last guard and performs the
-// removal through the injected full-removal path.
+// cleanupMissing is the one place a candidate is actually moved to the recycle
+// bin. The caller has already established that these paths are confirmed absent
+// on an attached, identifiable volume; this function adds the last guard and
+// performs the soft delete through the injected full-removal path.
 //
 // total is every favorite on the volume; present is how many of them (candidates
 // are absent by definition) stat successfully. When none is present and the
@@ -385,7 +385,10 @@ func (s *Service) cleanupMissing(root string, total, present int, candidates []*
 	for _, v := range candidates {
 		remove := s.missingRemover
 		if remove == nil {
-			remove = s.Remove
+			// The video layer's own fallback still enters the recycle bin: an
+			// automatic cleanup must never hard-delete a record, even when the
+			// façade has not wired its cache-aware removal path.
+			remove = func(id int64) error { return s.Trash(id, TrashReasonMissing) }
 		}
 		if err := remove(v.ID); err != nil {
 			s.log.Error("auto-remove missing favorite failed",

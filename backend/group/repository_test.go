@@ -151,8 +151,19 @@ func TestGroupMembers(t *testing.T) {
 }
 
 func TestGroupListIncludesVideoCount(t *testing.T) {
-	repo := newTestRepo(t)
+	db, _, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repo := NewSQLiteRepository(db)
 	g, _ := repo.Create("G", 0, nil, 1)
+	if _, err := db.Exec(
+		`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status)
+		 VALUES ('D:\\Videos\\v1.mp4','v1.mp4',1,1,1,'available'),
+		        ('D:\\Videos\\v2.mp4','v2.mp4',1,1,1,'available')`); err != nil {
+		t.Fatal(err)
+	}
 	if err := repo.SetMembers(1, []int64{g.ID}); err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +182,17 @@ func TestGroupListIncludesVideoCount(t *testing.T) {
 // Parent/child hierarchy: List() reports transitive counts and parent ids, and
 // deleting a parent detaches its children instead of losing them.
 func TestGroupParentChild(t *testing.T) {
-	repo := newTestRepo(t)
+	db, _, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repo := NewSQLiteRepository(db)
+	if _, err := db.Exec(
+		`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status)
+		 VALUES ('D:\\Videos\\v7.mp4','v7.mp4',1,1,1,'available')`); err != nil {
+		t.Fatal(err)
+	}
 	root, _ := repo.Create("Root", 0, nil, 1)
 	child, _ := repo.Create("Child", 1, &root.ID, 1)
 	grand, _ := repo.Create("Grand", 2, &child.ID, 1)
@@ -193,7 +214,7 @@ func TestGroupParentChild(t *testing.T) {
 
 	// Assign a video to the grandchild; the transitive count should be visible
 	// up the whole ancestor chain via List().
-	if err := repo.SetMembers(7, []int64{grand.ID}); err != nil {
+	if err := repo.SetMembers(1, []int64{grand.ID}); err != nil {
 		t.Fatal(err)
 	}
 	list, _ = repo.List()
@@ -267,5 +288,64 @@ func TestGroupVideosInGroupsTransitive(t *testing.T) {
 	}
 	if !seen[vA] || !seen[vB] {
 		t.Errorf("transitive set = %v, want both %d and %d", got, vA, vB)
+	}
+}
+
+// TestGroupViewsExcludeTrashedFavorites is the recycle-bin contract for groups:
+// memberships survive while a favorite is trashed, but it must not appear in a
+// group view or count as a member until it is restored.
+func TestGroupViewsExcludeTrashedFavorites(t *testing.T) {
+	db, _, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repo := NewSQLiteRepository(db)
+	res, err := db.Exec(
+		`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status)
+		 VALUES ('D:\\Videos\\a.mp4','a.mp4',1,1,1,'available'),
+		        ('D:\\Videos\\b.mp4','b.mp4',1,1,1,'available')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res
+	g, err := repo.Create("G", 0, nil, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetMembers(1, []int64{g.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetMembers(2, []int64{g.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM video_group_members`).Scan(new(int)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE videos SET deleted_at=1000, delete_reason='user' WHERE id=2`); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := repo.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list[0].VideoCount != 1 {
+		t.Errorf("count with one trashed member = %d, want 1", list[0].VideoCount)
+	}
+	ids, err := repo.VideosInGroup(g.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 1 || ids[0] != 1 {
+		t.Errorf("group videos = %v, want [1]", ids)
+	}
+	// Membership is retained, so the recycle bin can still name the group.
+	names, err := repo.GroupNamesForVideos([]int64{1, 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names[2]) != 1 || names[2][0] != "G" {
+		t.Errorf("trashed favorite groups = %v, want [G]", names[2])
 	}
 }

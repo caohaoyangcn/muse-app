@@ -123,11 +123,10 @@ func (s *Service) SetFingerprinter(f *Fingerprinter) {
 	f.volumeOffline = s.volumes.offline
 }
 
-// SetMissingRemover wires the full removal path used when a favorite's file is
-// gone while its volume is attached. The façade passes api.Library.RemoveVideo
-// so an automatic cleanup also clears group memberships and scraped metadata;
-// leaving it unset falls back to Remove, which is everything the video layer
-// owns on its own.
+// SetMissingRemover wires the removal path used when a favorite's file is gone
+// while its volume is attached. The façade passes a wrapper that also drops the
+// downloaded cloud cache; leaving it unset falls back to Trash with the
+// "missing" reason, which is everything the video layer owns on its own.
 func (s *Service) SetMissingRemover(remove func(id int64) error) {
 	s.missingRemover = remove
 }
@@ -189,9 +188,15 @@ func (s *Service) addVideo(path string) (*Video, bool, error) {
 		return nil, false, err
 	}
 	if existing, err := s.repo.GetByPath(normalized); err == nil {
-		// The path is already recorded. When that favorite is marked missing the
-		// file has come back where the app last saw it, so the add revives the
-		// favorite instead of refusing the file the user is asking to add.
+		// The path is already recorded. A trashed record still owns its path,
+		// so adding the file again restores the favorite the user already had
+		// (id, groups, likes, scraped metadata) instead of inserting a second
+		// row or reporting a duplicate. When an active favorite is merely
+		// marked missing the file has come back where the app last saw it, so
+		// the add revives it for the same reason.
+		if existing.DeletedAt > 0 {
+			return s.restoreTrashed(existing), false, nil
+		}
 		if existing.Status == StatusMissing {
 			return s.reviveFavorite(existing), false, nil
 		}
@@ -305,6 +310,9 @@ func (s *Service) AddRemoteVideo(sourceID int64, remotePath, name string, size i
 		return nil, false, ErrUnsupportedType
 	}
 	if existing, err := s.repo.GetByRemote(sourceID, remotePath); err == nil {
+		if existing.DeletedAt > 0 {
+			return s.restoreTrashed(existing), false, nil
+		}
 		if existing.Status == StatusMissing {
 			return s.reviveFavorite(existing), false, nil
 		}
@@ -339,7 +347,7 @@ func (s *Service) AddRemoteVideo(sourceID int64, remotePath, name string, size i
 // and a reference to a file the user already deleted is exactly the one they
 // most want gone. Removal is driven by the record, not by the disk.
 func (s *Service) Remove(id int64) error {
-	v, err := s.repo.Get(id)
+	v, err := s.repo.GetAny(id)
 	if errors.Is(err, ErrNotFound) {
 		// The row is already gone, which is the outcome the caller asked for.
 		// This is not a corner case: a card goes stale whenever the record was

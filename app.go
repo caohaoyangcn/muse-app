@@ -263,10 +263,70 @@ func (a *App) AddVideos(paths []string) []video.AddVideoResult {
 	return a.lib.AddVideos(paths)
 }
 
-// RemoveVideo deletes only the favorite record and its thumbnail, and clears
-// any group memberships it had (orchestrated in the shared façade).
+// RemoveVideo moves the favorite to the recycle bin. The record, its generated
+// images, group memberships and scraped metadata are retained so it can be
+// restored; only downloaded cloud cache is dropped.
 func (a *App) RemoveVideo(id int64) error {
 	return a.lib.RemoveVideo(id)
+}
+
+// ListTrash returns the recycle bin together with the effective retention.
+func (a *App) ListTrash() (api.TrashSnapshot, error) {
+	return a.lib.ListTrash()
+}
+
+// RestoreVideo brings a trashed favorite back into the library.
+func (a *App) RestoreVideo(id int64) error {
+	return a.lib.RestoreVideo(id)
+}
+
+// DeleteVideoPermanently removes one trashed favorite and everything Muse
+// generated for it. The source video is never touched.
+func (a *App) DeleteVideoPermanently(id int64) error {
+	return a.lib.DeleteVideoPermanently(id)
+}
+
+// EmptyTrash permanently deletes every trashed favorite.
+func (a *App) EmptyTrash() (int, error) {
+	return a.lib.EmptyTrash()
+}
+
+// PurgeExpiredTrash permanently deletes the trashed favorites past the
+// configured retention and reports how many were removed.
+func (a *App) PurgeExpiredTrash() (int, error) {
+	return a.lib.PurgeExpiredTrash()
+}
+
+// GetTrashRetentionDays returns the effective recycle-bin retention in days.
+func (a *App) GetTrashRetentionDays() int {
+	if a.lib == nil {
+		return api.DefaultTrashRetentionDays
+	}
+	return a.lib.TrashRetentionDays()
+}
+
+// SetTrashRetentionDays persists the retention and immediately applies it to
+// entries that are already past the new (possibly shorter) period.
+func (a *App) SetTrashRetentionDays(days int) error {
+	if !api.ValidTrashRetentionDays(days) {
+		return fmt.Errorf("保留天数必须在 %d-%d 之间", api.MinTrashRetentionDays, api.MaxTrashRetentionDays)
+	}
+	if a.settings == nil {
+		return fmt.Errorf("设置存储未初始化")
+	}
+	if err := a.settings.SetTrashRetentionDays(days); err != nil {
+		return err
+	}
+	if a.lib != nil {
+		go func() {
+			if n, err := a.lib.PurgeExpiredTrash(); err != nil {
+				a.log.Warn("apply trash retention failed", "err", err)
+			} else if n > 0 {
+				a.log.Info("trash retention applied", "count", n)
+			}
+		}()
+	}
+	return nil
 }
 
 // UpdateVideoInfo saves a custom title/notes for a favorite (编辑影片信息).

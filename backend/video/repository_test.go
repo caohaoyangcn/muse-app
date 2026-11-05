@@ -338,3 +338,110 @@ func TestRepositoryRemoteExcludedFromLocalScans(t *testing.T) {
 		t.Errorf("ListByContentHash = %+v, want only local id %d", byHash, local.ID)
 	}
 }
+
+// TestRepositoryTrashSoftDelete covers the recycle-bin storage contract:
+// trashing hides the row from active reads, keeps it available to the trash
+// reads and to path lookups (the unique key still belongs to it), and restoring
+// brings it back unchanged.
+func TestRepositoryTrashSoftDelete(t *testing.T) {
+	repo := newTestRepo(t)
+	v := sampleVideo(`D:\Videos\trash.mp4`)
+	if err := repo.Create(v); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if err := repo.Trash(v.ID, TrashReasonUser, 5000); err != nil {
+		t.Fatalf("trash: %v", err)
+	}
+	if _, err := repo.Get(v.ID); err != ErrNotFound {
+		t.Errorf("trashed row must be hidden from Get: %v", err)
+	}
+	all, err := repo.List()
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(all) != 0 {
+		t.Errorf("active list = %d rows, want 0", len(all))
+	}
+	found, err := repo.Search("trash")
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if len(found) != 0 {
+		t.Errorf("active search = %d rows, want 0", len(found))
+	}
+
+	any, err := repo.GetAny(v.ID)
+	if err != nil {
+		t.Fatalf("get any: %v", err)
+	}
+	if any.DeletedAt != 5000 || any.DeleteReason != TrashReasonUser {
+		t.Errorf("trashed row = deletedAt %d reason %q", any.DeletedAt, any.DeleteReason)
+	}
+	byPath, err := repo.GetByPath(`D:\VIDEOS\TRASH.MP4`)
+	if err != nil {
+		t.Fatalf("get by path must see the trashed row: %v", err)
+	}
+	if byPath.ID != v.ID {
+		t.Errorf("path lookup id = %d, want %d", byPath.ID, v.ID)
+	}
+
+	trash, err := repo.ListTrashed()
+	if err != nil {
+		t.Fatalf("list trashed: %v", err)
+	}
+	if len(trash) != 1 || trash[0].ID != v.ID {
+		t.Fatalf("trash = %+v", trash)
+	}
+	// The image sweep needs every id, including trashed ones, or it would
+	// delete the cover the trash is still displaying.
+	ids, err := repo.ListVideoIDs()
+	if err != nil {
+		t.Fatalf("list ids: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != v.ID {
+		t.Errorf("all ids = %v, want the trashed row", ids)
+	}
+
+	// Trashing twice must not reset the retention clock.
+	if err := repo.Trash(v.ID, TrashReasonMissing, 9000); err != nil {
+		t.Fatalf("second trash: %v", err)
+	}
+	any, _ = repo.GetAny(v.ID)
+	if any.DeletedAt != 5000 || any.DeleteReason != TrashReasonUser {
+		t.Errorf("second trash changed = (%d,%q)", any.DeletedAt, any.DeleteReason)
+	}
+
+	if err := repo.Restore(v.ID, 10000); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	restored, err := repo.Get(v.ID)
+	if err != nil {
+		t.Fatalf("get after restore: %v", err)
+	}
+	if restored.DeletedAt != 0 || restored.DeleteReason != "" {
+		t.Errorf("restored row = (%d,%q)", restored.DeletedAt, restored.DeleteReason)
+	}
+}
+
+// TestRepositoryPurgeReleasesPath verifies that a permanent delete frees the
+// unique path, which is what lets the user re-add a file they really deleted.
+func TestRepositoryPurgeReleasesPath(t *testing.T) {
+	repo := newTestRepo(t)
+	v := sampleVideo(`D:\Videos\again.mp4`)
+	if err := repo.Create(v); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Trash(v.ID, TrashReasonUser, 1000); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Delete(v.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetAny(v.ID); err != ErrNotFound {
+		t.Fatalf("purged row still readable: %v", err)
+	}
+	if err := repo.Create(sampleVideo(`D:\Videos\again.mp4`)); err != nil {
+		t.Errorf("path should be free after purge: %v", err)
+	}
+}

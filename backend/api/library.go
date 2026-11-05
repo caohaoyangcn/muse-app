@@ -14,6 +14,8 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"muse-app/backend/cloud"
 	"muse-app/backend/group"
@@ -26,6 +28,23 @@ import (
 // (mosaic-removed) works. Its members carry a tag badge in the UI.
 const mosaicRestoredGroup = "马赛克破解"
 
+// Recycle-bin retention policy. A trashed favorite is restorable for this long
+// by default; the value is a user preference and is clamped to the same range
+// everywhere the façade reads it. The default lives here (not in settings) so
+// the domain is usable before any preference has been stored.
+const (
+	DefaultTrashRetentionDays = 14
+	MinTrashRetentionDays     = 1
+	MaxTrashRetentionDays     = 365
+)
+
+// TrashSnapshot is the recycle-bin read model. RetentionDays travels with the
+// rows so a client can render "N days left" without a second settings read.
+type TrashSnapshot struct {
+	Videos        []video.Video `json:"videos"`
+	RetentionDays int           `json:"retentionDays"`
+}
+
 // Library is the façade that owns the cross-service orchestration shared by
 // both transports. It is safe for concurrent use by the desktop bindings and
 // the HTTP handlers (the underlying services are themselves concurrency-safe).
@@ -37,17 +56,32 @@ type Library struct {
 	cloud  *cloud.Service
 	cache  *cloud.Cache
 	log    *slog.Logger
+	// trashRetention reads the configured retention in days. nil falls back to
+	// DefaultTrashRetentionDays.
+	trashRetention func() int
+	// now is the clock behind the retention sweep; tests replace it so the
+	// boundary can be described without sleeping.
+	now func() int64
 }
 
 // New builds the façade over the given services.
 func New(videos *video.Service, groups *group.Service, log *slog.Logger) *Library {
-	l := &Library{videos: videos, groups: groups, log: log}
+	l := &Library{
+		videos: videos, groups: groups, log: log,
+		now: func() int64 { return time.Now().UnixMilli() },
+	}
 	// Automatic cleanup of a favorite whose file is gone while its volume is
-	// attached must clear group memberships and scraped metadata too. Wire the
-	// façade's one removal path here, so every caller — desktop, LAN server,
-	// tests — gets the same orchestration instead of a bare repository delete.
+	// attached also has to drop the downloaded cache and record why it moved.
+	// Wire the façade's one soft-delete path here, so every caller — desktop,
+	// LAN server, tests — gets the same orchestration instead of a bare flag
+	// update.
 	if videos != nil {
-		videos.SetMissingRemover(l.RemoveVideo)
+		// Automatic cleanup of a missing file enters the recycle bin with the
+		// "missing" reason; the façade wrapper also drops the downloaded cache
+		// copy, which the video layer does not own.
+		videos.SetMissingRemover(func(id int64) error {
+			return l.trashVideo(id, video.TrashReasonMissing)
+		})
 	}
 	return l
 }
@@ -275,20 +309,48 @@ func (l *Library) AddVideos(paths []string) []video.AddVideoResult {
 	return results
 }
 
-// RemoveVideo deletes the favorite record (+ its thumbnail) and clears any
-// group memberships, in one orchestrated step shared by both transports.
+// RemoveVideo moves a favorite to the recycle bin. It keeps the record, its
+// generated images, group memberships and scraped metadata, so a restore is a
+// flag change; only the downloaded cloud copy is dropped (it is a generated
+// asset and can be fetched again).
 //
-// A record that is already gone removes cleanly rather than erroring (see
-// video.Service.Remove): both clients report the outcome by reloading, so a list
-// that went stale — a removed duplicate, another window, the LAN client — still
-// ends up consistent instead of leaving a card that can never be dismissed.
+// A record that is already gone removes cleanly rather than erroring: both
+// clients report the outcome by reloading, so a list that went stale — a
+// removed duplicate, another window, the LAN client — still ends up consistent
+// instead of leaving a card that can never be dismissed.
 func (l *Library) RemoveVideo(id int64) error {
-	if err := l.videos.Remove(id); err != nil {
+	return l.trashVideo(id, video.TrashReasonUser)
+}
+
+// trashVideo is the one soft-delete orchestration. The reason only explains why
+// the favorite left the library; both paths keep the same record.
+func (l *Library) trashVideo(id int64, reason string) error {
+	if err := l.videos.Trash(id, reason); err != nil {
 		return err
 	}
 	if l.cache != nil {
 		// The cached copy is a generated asset of this favorite; the WebDAV
 		// source file is untouched.
+		l.cache.Remove(id)
+	}
+	return nil
+}
+
+// RestoreVideo brings a trashed favorite back into the library. The record keeps
+// its id, groups, likes and scraped metadata; the video layer re-establishes its
+// file status from the disk.
+func (l *Library) RestoreVideo(id int64) error {
+	return l.videos.Restore(id)
+}
+
+// DeleteVideoPermanently is the only path that removes the database row and
+// everything generated for it. It never touches the source video or the WebDAV
+// file; the downloaded cloud copy is a generated asset and is removed too.
+func (l *Library) DeleteVideoPermanently(id int64) error {
+	if err := l.videos.Remove(id); err != nil {
+		return err
+	}
+	if l.cache != nil {
 		l.cache.Remove(id)
 	}
 	if err := l.groups.ClearVideoMembers(id); err != nil {
@@ -298,6 +360,151 @@ func (l *Library) RemoveVideo(id int64) error {
 		_ = l.jav.Delete(id)
 	}
 	return nil
+}
+
+// ListTrash returns the recycle bin, newest removal first, together with the
+// current retention. Group names are a best-effort projection: a membership
+// read failure must not hide the trash.
+func (l *Library) ListTrash() (TrashSnapshot, error) {
+	videos, err := l.videos.ListTrash()
+	if err != nil {
+		return TrashSnapshot{}, err
+	}
+	// A trashed favorite still shows under its scraped 番号 (or source name for
+	// a cloud favorite), exactly as it did in the library.
+	l.attachReadModel(videos)
+	for i := range videos {
+		// JSON null would make the client's group list non-iterable; an empty
+		// array is the contract for "no groups".
+		videos[i].TrashGroupNames = []string{}
+	}
+	snapshot := TrashSnapshot{
+		Videos:        videos,
+		RetentionDays: l.TrashRetentionDays(),
+	}
+	if len(videos) == 0 || l.groups == nil {
+		return snapshot, nil
+	}
+	ids := make([]int64, 0, len(videos))
+	for i := range videos {
+		ids = append(ids, videos[i].ID)
+	}
+	names, err := l.groups.GroupNamesForVideos(ids)
+	if err != nil {
+		l.log.Warn("load trash group names failed", "err", err)
+		return snapshot, nil
+	}
+	for i := range snapshot.Videos {
+		snapshot.Videos[i].TrashGroupNames = names[snapshot.Videos[i].ID]
+	}
+	return snapshot, nil
+}
+
+// EmptyTrash permanently deletes every trashed favorite. Per-item failures are
+// logged and left for the next sweep rather than stopping the whole bin.
+func (l *Library) EmptyTrash() (int, error) {
+	videos, err := l.videos.ListTrash()
+	if err != nil {
+		return 0, err
+	}
+	purged := 0
+	for _, v := range videos {
+		if err := l.DeleteVideoPermanently(v.ID); err != nil {
+			l.log.Warn("empty trash: delete failed", "id", v.ID, "err", err)
+			continue
+		}
+		purged++
+	}
+	if purged > 0 {
+		l.log.Info("trash emptied", "count", purged)
+	}
+	return purged, nil
+}
+
+// TrashRetentionDays returns the effective retention, clamped to the supported
+// range. A broken provider or an out-of-range preference falls back to the
+// default rather than shortening or extending the policy silently.
+func (l *Library) TrashRetentionDays() int {
+	days := DefaultTrashRetentionDays
+	if l.trashRetention != nil {
+		days = l.trashRetention()
+	}
+	if !ValidTrashRetentionDays(days) {
+		return DefaultTrashRetentionDays
+	}
+	return days
+}
+
+// ValidTrashRetentionDays reports whether days is an allowed retention.
+func ValidTrashRetentionDays(days int) bool {
+	return days >= MinTrashRetentionDays && days <= MaxTrashRetentionDays
+}
+
+// SetTrashRetention installs the settings reader behind the retention policy.
+// It is called once at startup, before the sweep can run.
+func (l *Library) SetTrashRetention(read func() int) {
+	l.trashRetention = read
+}
+
+// PurgeExpiredTrash permanently deletes the trashed favorites whose retention
+// has elapsed. It is safe to call repeatedly and while the app is running: the
+// list is re-read from the database and each deletion is idempotent.
+func (l *Library) PurgeExpiredTrash() (int, error) {
+	videos, err := l.videos.ListTrash()
+	if err != nil {
+		return 0, err
+	}
+	now := l.now()
+	cutoff := now - int64(l.TrashRetentionDays())*24*60*60*1000
+	purged := 0
+	for _, v := range videos {
+		if v.DeletedAt <= 0 || v.DeletedAt > cutoff {
+			continue
+		}
+		if err := l.DeleteVideoPermanently(v.ID); err != nil {
+			l.log.Warn("trash purge: delete failed", "id", v.ID, "err", err)
+			continue
+		}
+		purged++
+	}
+	if purged > 0 {
+		l.log.Info("trash purged expired favorites", "count", purged, "retentionDays", l.TrashRetentionDays())
+	}
+	return purged, nil
+}
+
+// StartTrashPurge runs the retention sweep now and then on every interval.
+// Retroactive changes to the retention are therefore picked up on the next
+// tick; App.SetTrashRetentionDays additionally triggers one immediate pass.
+// A non-positive interval uses one hour.
+func (l *Library) StartTrashPurge(every time.Duration) (stop func()) {
+	if every <= 0 {
+		every = time.Hour
+	}
+	done := make(chan struct{})
+	var once sync.Once
+	go func() {
+		if n, err := l.PurgeExpiredTrash(); err != nil {
+			l.log.Warn("initial trash purge failed", "err", err)
+		} else if n > 0 {
+			l.log.Info("initial trash purge removed entries", "count", n)
+		}
+		ticker := time.NewTicker(every)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if n, err := l.PurgeExpiredTrash(); err != nil {
+					l.log.Warn("trash purge failed", "err", err)
+				} else if n > 0 {
+					l.log.Info("trash purge removed entries", "count", n)
+				}
+			}
+		}
+	}()
+	return func() { once.Do(func() { close(done) }) }
 }
 
 // RemoveOrphanedImages deletes the generated thumbnails and scraped covers that

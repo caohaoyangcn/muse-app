@@ -390,3 +390,51 @@ func TestJavBusCookieUnsupportedOnNonWindows(t *testing.T) {
 		})
 	}
 }
+
+// TestTrashRetentionDefault verifies an unset preference is reported as
+// unconfigured, so the façade can apply its 14-day default.
+func TestTrashRetentionDefault(t *testing.T) {
+	s := newStore(t)
+	days, configured, err := s.TrashRetentionDays()
+	if err != nil {
+		t.Fatalf("read retention: %v", err)
+	}
+	if configured || days != 0 {
+		t.Errorf("unset retention = (%d, configured=%v), want (0,false)", days, configured)
+	}
+}
+
+// TestTrashRetentionRoundTrip verifies the configured value survives a restart.
+func TestTrashRetentionRoundTrip(t *testing.T) {
+	db, err := sql.Open(database.DriverName, "file:"+t.TempDir()+"/app.db")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := database.Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := New(db).SetTrashRetentionDays(30); err != nil {
+		t.Fatalf("set retention: %v", err)
+	}
+	days, configured, err := New(db).TrashRetentionDays()
+	if err != nil || !configured || days != 30 {
+		t.Fatalf("retention after restart = (%d, configured=%v, err=%v), want (30,true,nil)", days, configured, err)
+	}
+}
+
+// TestTrashRetentionCorruptValueFallsBack verifies a damaged value is ignored
+// instead of failing startup or silently becoming a shorter policy.
+func TestTrashRetentionCorruptValueFallsBack(t *testing.T) {
+	s := newStore(t)
+	if err := s.set(keyTrashRetention, "not-a-number"); err != nil {
+		t.Fatalf("write corrupt value: %v", err)
+	}
+	days, configured, err := s.TrashRetentionDays()
+	if err != nil {
+		t.Fatalf("read retention: %v", err)
+	}
+	if configured || days != 0 {
+		t.Errorf("corrupt retention = (%d, configured=%v), want unset", days, configured)
+	}
+}

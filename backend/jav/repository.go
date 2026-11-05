@@ -79,6 +79,7 @@ func (r *SQLiteRepository) ListTaskOverviews() ([]TaskOverview, error) {
 			v.like_count, v.cover_source, v.scraped_cover_path, v.allow_scraped_cover
 		FROM jav_scrape_tasks t
 		JOIN videos v ON v.id=t.video_id
+		WHERE v.deleted_at IS NULL
 		ORDER BY t.created_at DESC, t.id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list jav task overviews: %w", err)
@@ -141,7 +142,10 @@ func (r *SQLiteRepository) ListTaskOverviews() ([]TaskOverview, error) {
 // file name". The query is deliberately one scan of the small jav result table
 // rather than a per-video lookup: the library lists every favorite at once.
 func (r *SQLiteRepository) ListCodes() (map[int64]string, error) {
-	rows, err := r.db.Query(`SELECT video_id, TRIM(code) FROM video_jav WHERE TRIM(code) <> '' AND override_mode <> 'skip'`)
+	rows, err := r.db.Query(`
+		SELECT j.video_id, TRIM(j.code) FROM video_jav j
+		JOIN videos v ON v.id = j.video_id AND v.deleted_at IS NULL
+		WHERE TRIM(j.code) <> '' AND j.override_mode <> 'skip'`)
 	if err != nil {
 		return nil, fmt.Errorf("list jav codes: %w", err)
 	}
@@ -274,7 +278,14 @@ func (r *SQLiteRepository) RecoverPending(now int64) ([]Task, error) {
 	// retry scan interval). The service moves exhausted tasks to a terminal
 	// status; this guard covers rows written before that existed and keeps a
 	// future leak from turning into an unbounded loop.
-	rows, err := r.db.Query(`SELECT id, video_id, status, force, attempts, max_attempts, next_retry_at, lease_token, lease_until, error_code, last_error, error_at, created_at, updated_at, started_at, finished_at FROM jav_scrape_tasks WHERE status='queued' OR (status='retryable' AND attempts < max_attempts AND next_retry_at IS NOT NULL AND next_retry_at<=?) ORDER BY updated_at, id`, now)
+	rows, err := r.db.Query(`
+		SELECT t.id, t.video_id, t.status, t.force, t.attempts, t.max_attempts,
+		       t.next_retry_at, t.lease_token, t.lease_until, t.error_code, t.last_error,
+		       t.error_at, t.created_at, t.updated_at, t.started_at, t.finished_at
+		FROM jav_scrape_tasks t
+		JOIN videos v ON v.id = t.video_id AND v.deleted_at IS NULL
+		WHERE t.status='queued' OR (t.status='retryable' AND t.attempts < t.max_attempts AND t.next_retry_at IS NOT NULL AND t.next_retry_at<=?)
+		ORDER BY t.updated_at, t.id`, now)
 	if err != nil {
 		return nil, fmt.Errorf("list recoverable jav tasks: %w", err)
 	}
@@ -369,11 +380,12 @@ func (r *SQLiteRepository) SetOverride(videoID int64, mode, code string) error {
 // counted once. Rows whose actor list does not parse contribute nothing.
 func (r *SQLiteRepository) ListActorFilmRefs() ([]ActorFilmRef, error) {
 	rows, err := r.db.Query(`
-		SELECT actor.value AS name, v.video_id AS video_id
-		FROM video_jav v,
-		     json_each(CASE WHEN json_valid(v.actors_json) THEN v.actors_json ELSE '[]' END) AS actor
+		SELECT actor.value AS name, j.video_id AS video_id
+		FROM video_jav j
+		JOIN videos v ON v.id = j.video_id AND v.deleted_at IS NULL,
+		     json_each(CASE WHEN json_valid(j.actors_json) THEN j.actors_json ELSE '[]' END) AS actor
 		WHERE actor.value <> ''
-		GROUP BY actor.value, v.video_id`)
+		GROUP BY actor.value, j.video_id`)
 	if err != nil {
 		return nil, fmt.Errorf("list actor film refs: %w", err)
 	}
@@ -447,7 +459,7 @@ func (r *SQLiteRepository) VideoIDsByActorNames(names []string) ([]int64, error)
 		FROM video_jav vj,
 		     json_each(CASE WHEN json_valid(vj.actors_json) THEN vj.actors_json ELSE '[]' END) AS actor,
 		     videos v
-		WHERE v.id = vj.video_id AND actor.value IN (`+placeholders+`)
+		WHERE v.id = vj.video_id AND v.deleted_at IS NULL AND actor.value IN (`+placeholders+`)
 		GROUP BY vj.video_id
 		ORDER BY v.created_at DESC, v.id DESC`, args...)
 	if err != nil {
@@ -480,7 +492,7 @@ func (r *SQLiteRepository) ListDuplicateCandidates() ([]DuplicateCandidate, erro
 			v.allow_scraped_cover, TRIM(j.code)
 		FROM video_jav j
 		JOIN videos v ON v.id = j.video_id
-		WHERE TRIM(j.code) <> '' AND j.override_mode <> 'skip'
+		WHERE v.deleted_at IS NULL AND TRIM(j.code) <> '' AND j.override_mode <> 'skip'
 		ORDER BY v.created_at DESC, v.id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list duplicate candidates: %w", err)

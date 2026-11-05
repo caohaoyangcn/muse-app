@@ -9,13 +9,34 @@ import (
 // VideoRepository isolates persistence from business logic (spec-v1.md §25).
 type VideoRepository interface {
 	Create(video *Video) error
+	// Get returns an active favorite. A trashed row is not found; the trash
+	// read paths use GetAny/ListTrashed.
 	Get(id int64) (*Video, error)
+	// GetAny returns a row in either state. Only the recycle bin and the
+	// permanent-delete path use it, because they are about the record itself.
+	GetAny(id int64) (*Video, error)
+	// GetByPath includes trashed rows: the unique path index belongs to the
+	// favorite while it sits in the trash, so an add has to see it and restore
+	// the existing record instead of inserting a duplicate.
 	GetByPath(path string) (*Video, error)
 	// GetByRemote finds a favorite by its cloud connection and WebDAV path.
-	// The comparison is BINARY: remote paths are case-sensitive.
+	// The comparison is BINARY: remote paths are case-sensitive. Like
+	// GetByPath it includes trashed rows, so re-adding a removed remote file
+	// restores the original favorite.
 	GetByRemote(sourceID int64, remotePath string) (*Video, error)
 	List() ([]Video, error)
 	Search(keyword string) ([]Video, error)
+	// Trash soft-deletes an active row: it sets deleted_at/delete_reason and
+	// leaves the record, its path, its relations and its generated images in
+	// place. Trashing an already-trashed row is a no-op.
+	Trash(id int64, reason string, at int64) error
+	// Restore clears the trash marker. The record becomes active again with
+	// everything it owned still attached.
+	Restore(id int64, at int64) error
+	// ListTrashed returns the recycle bin, newest removal first.
+	ListTrashed() ([]Video, error)
+	// Delete is the permanent delete used after the retention period or when
+	// the user empties the trash.
 	Delete(id int64) error
 	UpdateStatus(id int64, status string) error
 	UpdateMetadata(id int64, durationMs int64, width, height int, frameRate float64, bitrate int64, videoCodec, audioCodec string) error
@@ -94,20 +115,21 @@ func NewSQLiteRepository(db *sql.DB) VideoRepository {
 	return &sqliteRepository{db: db}
 }
 
-const videoColumns = "id, path, file_name, file_size, duration_ms, width, height, frame_rate, bit_rate, video_codec, audio_codec, thumbnail_path, created_at, updated_at, last_opened_at, status, title, notes, custom_cover_at, like_count, cover_source, scraped_cover_path, allow_scraped_cover, content_hash, hash_version, hash_size, hash_mtime, hash_at, hash_error, full_hash, full_hash_at, source_id, remote_path"
+const videoColumns = "id, path, file_name, file_size, duration_ms, width, height, frame_rate, bit_rate, video_codec, audio_codec, thumbnail_path, created_at, updated_at, last_opened_at, status, title, notes, custom_cover_at, like_count, cover_source, scraped_cover_path, allow_scraped_cover, content_hash, hash_version, hash_size, hash_mtime, hash_at, hash_error, full_hash, full_hash_at, source_id, remote_path, deleted_at, delete_reason"
 
 func scanVideo(scan func(dest ...any) error) (*Video, error) {
 	var v Video
 	var durationMs, width, height, bitrate, lastOpened, customCoverAt, allowScrapedCover sql.NullInt64
 	var hashVersion, hashSize, hashMtime, hashAt, fullHashAt sql.NullInt64
+	var deletedAt sql.NullInt64
 	var frameRate sql.NullFloat64
 	var videoCodec, audioCodec, thumbnailPath, title, notes, coverSource, scrapedCoverPath sql.NullString
-	var contentHash, hashError, fullHash, remotePath sql.NullString
+	var contentHash, hashError, fullHash, remotePath, deleteReason sql.NullString
 	err := scan(&v.ID, &v.Path, &v.FileName, &v.FileSize, &durationMs, &width, &height,
 		&frameRate, &bitrate, &videoCodec, &audioCodec, &thumbnailPath, &v.CreatedAt, &v.UpdatedAt, &lastOpened, &v.Status,
 		&title, &notes, &customCoverAt, &v.LikeCount, &coverSource, &scrapedCoverPath, &allowScrapedCover,
 		&contentHash, &hashVersion, &hashSize, &hashMtime, &hashAt, &hashError, &fullHash, &fullHashAt,
-		&v.SourceID, &remotePath)
+		&v.SourceID, &remotePath, &deletedAt, &deleteReason)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +150,8 @@ func scanVideo(scan func(dest ...any) error) (*Video, error) {
 	v.AllowScrapedCover = allowScrapedCover.Int64 != 0
 	v.ContentHash = contentHash.String
 	v.RemotePath = remotePath.String
+	v.DeletedAt = deletedAt.Int64
+	v.DeleteReason = deleteReason.String
 	v.HashVersion = int(hashVersion.Int64)
 	v.HashState = FingerprintState{
 		Size:       hashSize.Int64,
@@ -160,6 +184,21 @@ func (r *sqliteRepository) Create(v *Video) error {
 }
 
 func (r *sqliteRepository) Get(id int64) (*Video, error) {
+	row := r.db.QueryRow(`SELECT `+videoColumns+` FROM videos WHERE id = ? AND deleted_at IS NULL`, id)
+	v, err := scanVideo(row.Scan)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get video: %w", err)
+	}
+	return v, nil
+}
+
+// GetAny is Get without the active-row filter. The recycle bin and the
+// permanent-delete path need to read a trashed row so they can restore or purge
+// it; every other caller must not see it.
+func (r *sqliteRepository) GetAny(id int64) (*Video, error) {
 	row := r.db.QueryRow(`SELECT `+videoColumns+` FROM videos WHERE id = ?`, id)
 	v, err := scanVideo(row.Scan)
 	if err == sql.ErrNoRows {
@@ -196,14 +235,15 @@ func (r *sqliteRepository) GetByRemote(sourceID int64, remotePath string) (*Vide
 }
 
 func (r *sqliteRepository) List() ([]Video, error) {
-	return r.query(`SELECT ` + videoColumns + ` FROM videos ORDER BY created_at DESC, id DESC`)
+	return r.query(`SELECT ` + videoColumns + ` FROM videos WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC`)
 }
 
 func (r *sqliteRepository) Search(keyword string) ([]Video, error) {
 	pattern := "%" + escapeLike(strings.TrimSpace(keyword)) + "%"
 	return r.query(
 		`SELECT `+videoColumns+` FROM videos
-		 WHERE file_name LIKE ? ESCAPE '\' OR path LIKE ? ESCAPE '\' OR remote_path LIKE ? ESCAPE '\'
+		 WHERE deleted_at IS NULL
+		   AND (file_name LIKE ? ESCAPE '\' OR path LIKE ? ESCAPE '\' OR remote_path LIKE ? ESCAPE '\')
 		 ORDER BY created_at DESC, id DESC`,
 		pattern, pattern, pattern,
 	)
@@ -226,6 +266,38 @@ func (r *sqliteRepository) query(sqlText string, args ...any) ([]Video, error) {
 		videos = append(videos, *v)
 	}
 	return videos, rows.Err()
+}
+
+// Trash soft-deletes an active favorite. The condition keeps the operation
+// idempotent: a row already in the trash keeps its original removal moment and
+// reason, so the retention clock cannot be reset by a stale client.
+func (r *sqliteRepository) Trash(id int64, reason string, at int64) error {
+	_, err := r.db.Exec(
+		`UPDATE videos SET deleted_at = ?, delete_reason = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`,
+		at, reason, at, id,
+	)
+	if err != nil {
+		return fmt.Errorf("trash video: %w", err)
+	}
+	return nil
+}
+
+// Restore clears the recycle-bin marker and nothing else.
+func (r *sqliteRepository) Restore(id int64, at int64) error {
+	_, err := r.db.Exec(
+		`UPDATE videos SET deleted_at = NULL, delete_reason = '', updated_at = ? WHERE id = ?`,
+		at, id,
+	)
+	if err != nil {
+		return fmt.Errorf("restore video: %w", err)
+	}
+	return nil
+}
+
+// ListTrashed reads the recycle bin. The newest removal comes first because
+// that is the one a user who just changed their mind is looking for.
+func (r *sqliteRepository) ListTrashed() ([]Video, error) {
+	return r.query(`SELECT ` + videoColumns + ` FROM videos WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC`)
 }
 
 func (r *sqliteRepository) Delete(id int64) error {
@@ -405,10 +477,11 @@ func (r *sqliteRepository) ClearLikes(id int64) error {
 func (r *sqliteRepository) ListNeedingMetadata() ([]int64, error) {
 	rows, err := r.db.Query(
 		`SELECT id FROM videos
-		 WHERE duration_ms IS NULL OR duration_ms <= 0
+		 WHERE deleted_at IS NULL
+		   AND (duration_ms IS NULL OR duration_ms <= 0
 		    OR frame_rate IS NULL OR frame_rate <= 0
-		    OR bit_rate IS NULL OR bit_rate <= 0
-		    OR video_codec IS NULL OR video_codec = ''`,
+		        OR bit_rate IS NULL OR bit_rate <= 0
+		        OR video_codec IS NULL OR video_codec = '')`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("query videos needing metadata: %w", err)
@@ -476,7 +549,7 @@ func (r *sqliteRepository) UpdateFullHash(id int64, hash string, at int64) error
 func (r *sqliteRepository) ListNeedingFingerprint(version int) ([]int64, error) {
 	rows, err := r.db.Query(
 		`SELECT id FROM videos
-		 WHERE source_id = 0 AND status = ?
+		 WHERE deleted_at IS NULL AND source_id = 0 AND status = ?
 		   AND (content_hash IS NULL OR content_hash = '' OR hash_version IS NULL OR hash_version <> ?)
 		 ORDER BY id`, StatusAvailable, version,
 	)
@@ -501,7 +574,7 @@ func (r *sqliteRepository) ListNeedingFingerprint(version int) ([]int64, error) 
 // query simple and the skip decision in one place.
 func (r *sqliteRepository) ListSameSizePeers(size int64, excludeID int64) ([]int64, error) {
 	rows, err := r.db.Query(
-		`SELECT id FROM videos WHERE source_id = 0 AND file_size = ? AND id <> ? AND status = ? ORDER BY id`,
+		`SELECT id FROM videos WHERE deleted_at IS NULL AND source_id = 0 AND file_size = ? AND id <> ? AND status = ? ORDER BY id`,
 		size, excludeID, StatusAvailable,
 	)
 	if err != nil {
@@ -543,6 +616,7 @@ func (r *sqliteRepository) RelinkPath(id int64, path, fileName, hash string, ver
 		UPDATE videos
 		SET path = ?, file_name = ?, status = ?, file_size = ?,
 		    content_hash = ?, hash_version = ?, hash_size = ?, hash_mtime = ?, hash_at = ?, hash_error = '',
+		    deleted_at = NULL, delete_reason = '',
 		    updated_at = ?
 		WHERE id = ?`,
 		path, fileName, StatusAvailable, size, hash, version, size, mtime, at, nowMillis(), id)
@@ -558,14 +632,14 @@ func (r *sqliteRepository) RelinkPath(id int64, path, fileName, hash string, ver
 // members as full rows.
 func (r *sqliteRepository) ListFingerprinted() ([]Video, error) {
 	return r.query(`SELECT `+videoColumns+` FROM videos
-		WHERE source_id = 0 AND status = ? AND content_hash IS NOT NULL AND content_hash <> ''
+		WHERE deleted_at IS NULL AND source_id = 0 AND status = ? AND content_hash IS NOT NULL AND content_hash <> ''
 		ORDER BY created_at DESC, id DESC`, StatusAvailable)
 }
 
 // ListByContentHash returns the available favorites carrying one digest.
 func (r *sqliteRepository) ListByContentHash(hash string) ([]Video, error) {
 	return r.query(`SELECT `+videoColumns+` FROM videos
-		WHERE source_id = 0 AND content_hash = ? AND status = ?
+		WHERE deleted_at IS NULL AND source_id = 0 AND content_hash = ? AND status = ?
 		ORDER BY created_at DESC, id DESC`, hash, StatusAvailable)
 }
 

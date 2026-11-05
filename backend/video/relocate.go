@@ -92,7 +92,14 @@ func (s *Service) relinkCandidates(size int64) ([]*Video, error) {
 	out := make([]*Video, 0, len(rows))
 	for i := range rows {
 		v := &rows[i]
-		if v.Status == StatusMissing || s.pathVanished(v.Path) {
+		// A favorite auto-trashed because its file disappeared is still a
+		// relocation candidate: the file may simply have moved. A favorite the
+		// user removed by hand while its file was still present is not — adding
+		// another copy must not silently undo that decision.
+		if v.DeletedAt > 0 && v.DeleteReason != TrashReasonMissing {
+			continue
+		}
+		if v.DeletedAt > 0 || v.Status == StatusMissing || s.pathVanished(v.Path) {
 			out = append(out, v)
 		}
 	}
@@ -151,6 +158,8 @@ func applyRelink(v *Video, path, fileName string, facts FingerprintResult, at in
 	v.Path = path
 	v.FileName = fileName
 	v.Status = StatusAvailable
+	v.DeletedAt = 0
+	v.DeleteReason = ""
 	v.FileSize = facts.Size
 	v.ContentHash = facts.Digest
 	v.HashVersion = FingerprintVersion

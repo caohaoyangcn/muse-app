@@ -8,7 +8,7 @@ import (
 // currentSchemaVersion is the highest applied schema version. It is tracked in
 // PRAGMA user_version. Bump it whenever a migration adds a column/table that
 // requires (or could benefit from) re-extracting data for pre-existing rows.
-const currentSchemaVersion = 24
+const currentSchemaVersion = 25
 
 // MigrationResult reports what happened during Migrate so callers can trigger
 // one-off backfills (e.g. re-probing ffprobe for videos created before a new
@@ -377,6 +377,25 @@ func Migrate(db *sql.DB) (MigrationResult, error) {
 		version = 24
 	}
 
+	if version < 25 {
+		// v25 adds the favorite recycle bin (收藏回收站): a soft-delete marker
+		// plus the reason the favorite was removed. Rows with deleted_at NULL
+		// are active and keep every existing behaviour; a trashed row stays in
+		// the table so its id, generated images, group memberships and scraped
+		// metadata survive a restore. Additive, no backfill: no existing row is
+		// trashed.
+		if err := addColumnIfMissing(db, "videos", "deleted_at", `ALTER TABLE videos ADD COLUMN deleted_at INTEGER`); err != nil {
+			return res, fmt.Errorf("migrate database v25 deleted_at: %w", err)
+		}
+		if err := addColumnIfMissing(db, "videos", "delete_reason", `ALTER TABLE videos ADD COLUMN delete_reason TEXT NOT NULL DEFAULT ''`); err != nil {
+			return res, fmt.Errorf("migrate database v25 delete_reason: %w", err)
+		}
+		if _, err := db.Exec(schemaV25Indexes); err != nil {
+			return res, fmt.Errorf("migrate database v25 indexes: %w", err)
+		}
+		version = 25
+	}
+
 	res.SchemaVersion = version
 	if err := setUserVersion(db, version); err != nil {
 		return res, err
@@ -489,6 +508,12 @@ CREATE TABLE IF NOT EXISTS cloud_connections (
 const schemaV24Indexes = `
 CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_remote ON videos(source_id, remote_path) WHERE source_id > 0;
 CREATE INDEX IF NOT EXISTS idx_videos_source ON videos(source_id);
+`
+
+// schemaV25Indexes supports the recycle-bin read and sweep queries ("active
+// rows" and "expired trash"), which every library list now filters on.
+const schemaV25Indexes = `
+CREATE INDEX IF NOT EXISTS idx_videos_deleted_at ON videos(deleted_at);
 `
 
 // userVersion reads PRAGMA user_version.
