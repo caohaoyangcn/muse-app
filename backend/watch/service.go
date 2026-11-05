@@ -50,10 +50,6 @@ type Service struct {
 	// scans serializes scan passes: one worker consumes root rows, so two
 	// passes never race the favorites dedup check with the same candidate.
 	scans chan *WatchedDir
-	// scanOnceMu serializes user-picked one-off scans. They run on the caller's
-	// goroutine (the Wails binding), not the watched-root worker, so a double
-	// click must not walk the same tree twice.
-	scanOnceMu sync.Mutex
 	// debounce holds one timer per root; bursts of fsnotify events collapse
 	// into a single scan once the filesystem goes quiet.
 	debounceMu sync.Mutex
@@ -170,65 +166,9 @@ func (s *Service) ScanAllAsync() {
 	}
 }
 
-// ScanOnce imports the video files under a user-picked directory once. It is
-// the "扫描文件夹" entry in the add-source dialog, not a watched directory:
-// nothing is persisted, fsnotify is not involved, and no watch:scanned event is
-// emitted. The caller gets the per-file results so the UI can summarize the
-// batch and offer group suggestions exactly like a manual add.
-//
-// The pass is serialized: a double click must not walk the same tree twice.
-// Files another process still holds exclusively are counted as Skipped instead
-// of being added; a one-off pass has no retry timer, so the user can run it
-// again later.
-func (s *Service) ScanOnce(path string) (ScanOnceResult, error) {
-	abs, err := normalizeDir(path)
-	if err != nil {
-		return ScanOnceResult{}, err
-	}
-
-	s.scanOnceMu.Lock()
-	defer s.scanOnceMu.Unlock()
-
-	existing, err := s.existingPaths()
-	if err != nil {
-		s.log.Error("one-off scan: list videos failed", "root", abs, "err", err)
-		return ScanOnceResult{}, err
-	}
-
-	candidates, skipped := s.collectCandidates(abs, existing)
-	result := ScanOnceResult{
-		Path:    abs,
-		Skipped: skipped,
-		Results: make([]video.AddVideoResult, 0, len(candidates)),
-	}
-	if len(candidates) == 0 {
-		s.log.Info("one-off scan finished", "root", abs, "added", 0, "skipped", skipped)
-		return result, nil
-	}
-
-	results := s.lib.AddVideos(candidates)
-	result.Results = results
-	for _, r := range results {
-		switch {
-		case !r.Success:
-			result.Failed++
-			s.log.Warn("one-off scan: add failed", "path", r.Path, "err", r.Error)
-		case r.Relocated:
-			result.Relocated++
-		default:
-			result.Added++
-		}
-	}
-	s.log.Info("one-off scan finished", "root", abs,
-		"added", result.Added, "relocated", result.Relocated,
-		"failed", result.Failed, "skipped", result.Skipped)
-	return result, nil
-}
-
 // collectCandidates walks root and returns the supported video files that are
 // not already favorites. The second return value counts files that exist but
-// are still locked by another process; the watched-root scan retries those,
-// while ScanOnce reports them as skipped.
+// are still locked by another process; the scan retries those on a later pass.
 func (s *Service) collectCandidates(root string, existing map[string]struct{}) ([]string, int) {
 	var candidates []string
 	unreadable := 0

@@ -146,10 +146,6 @@ export function OpenVideo(arg1) {
   return window['go']['main']['App']['OpenVideo'](arg1);
 }
 
-export function PickScanDir() {
-  return window['go']['main']['App']['PickScanDir']();
-}
-
 export function PickVideoFiles() {
   return window['go']['main']['App']['PickVideoFiles']();
 }
@@ -196,10 +192,6 @@ export function ReverifyContentDuplicate(arg1) {
 
 export function ScanContentDuplicates() {
   return window['go']['main']['App']['ScanContentDuplicates']();
-}
-
-export function ScanDirectoryOnce(arg1) {
-  return window['go']['main']['App']['ScanDirectoryOnce'](arg1);
 }
 
 export function ScanFileStatuses() {

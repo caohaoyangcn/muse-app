@@ -19,10 +19,6 @@ export interface CloudSummary {
 
 interface AddSourceDialogProps {
   open: boolean;
-  /** A one-off directory scan is running; the folder entry is disabled. */
-  scanning: boolean;
-  /** Folder name shown while scanning, without the full path. */
-  scanningLabel?: string;
   onPickLocal: () => void;
   onPickFolder: () => void;
   /**
@@ -45,8 +41,6 @@ interface AddSourceDialogProps {
  */
 export default function AddSourceDialog({
   open,
-  scanning,
-  scanningLabel,
   onPickLocal,
   onPickFolder,
   onPickCloud,
@@ -86,7 +80,7 @@ export default function AddSourceDialog({
     }
     if (event.key === "2") {
       event.preventDefault();
-      if (!scanning) onPickFolder();
+      onPickFolder();
       return;
     }
     if (event.key === "3" && cloudAvailable) {
@@ -126,14 +120,8 @@ export default function AddSourceDialog({
             ref={folderRef}
             icon={FolderSearch}
             title="扫描文件夹"
-            description={
-              scanning
-                ? `正在扫描${scanningLabel ? `「${scanningLabel}」` : ""}…`
-                : "一次性导入文件夹中的视频；持续监控请到设置"
-            }
+            description="加入目录监控并立即扫描；之后新增的视频会自动收录"
             shortcut="2"
-            badge={scanning ? "扫描中" : undefined}
-            disabled={scanning}
             onClick={onPickFolder}
           />
           {cloudAvailable && (
@@ -192,7 +180,6 @@ const SourceCard = ({
   description,
   shortcut,
   badge,
-  disabled,
   onClick,
 }: {
   ref?: React.Ref<HTMLButtonElement>;
@@ -201,19 +188,16 @@ const SourceCard = ({
   description: string;
   shortcut: string;
   badge?: string;
-  disabled?: boolean;
   onClick: () => void;
 }) => (
   <button
     ref={ref}
     type="button"
-    disabled={disabled}
     onClick={onClick}
     className={cn(
       "group flex w-full items-center gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] px-3.5 py-3 text-left transition-colors",
       "hover:border-[var(--accent)] hover:bg-[var(--panel-2)]",
       "focus-visible:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]",
-      disabled && "cursor-not-allowed opacity-50 hover:border-[var(--border)] hover:bg-[var(--panel)]",
     )}
   >
     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--panel-2)] text-[var(--accent)]">

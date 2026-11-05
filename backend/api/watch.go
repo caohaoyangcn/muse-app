@@ -61,15 +61,3 @@ func (l *Library) RescanWatchDirs() {
 		l.watch.ScanAllAsync()
 	}
 }
-
-// ScanDirectoryOnce imports the video files under path once, without adding the
-// directory to the folder-watch list. It is the 扫描文件夹 entry in the
-// add-source dialog; the caller gets the per-file results for the same summary
-// and group suggestions as a manual batch add.
-func (l *Library) ScanDirectoryOnce(path string) (watch.ScanOnceResult, error) {
-	svc, err := l.watchService()
-	if err != nil {
-		return watch.ScanOnceResult{}, err
-	}
-	return svc.ScanOnce(path)
-}

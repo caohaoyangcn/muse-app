@@ -6,7 +6,7 @@
 
 三份实施计划：
 
-1. [添加视频来源弹窗](add-video-source-dialog.md) —— 前端入口与一次性目录扫描。
+1. [添加视频来源弹窗](add-video-source-dialog.md) —— 前端入口，以及扫描文件夹与目录监控的统一。
 2. [Muse WebDAV 云盘片源](webdav-cloud-source.md) —— 连接、浏览、添加、元数据、播放、离线语义。
 3. [OpenList fork 与 BitQiu 驱动](openlist-bitqiu-driver.md) —— 私有 API 移植、构建、可选分发。
 
@@ -19,7 +19,7 @@ Muse WebDAV 客户端 ────┘
         │
         └── 网盘浏览/添加 API ── 添加来源弹窗的「从网盘添加」卡片
 
-本地一次性目录扫描 ── 添加来源弹窗的「扫描文件夹」卡片（可独立先做）
+本地目录监控入口 ── 添加来源弹窗的「扫描文件夹」卡片（复用 AddWatchDir）
 ```
 
 - 添加来源弹窗的本地/扫描部分**不依赖**网盘；可以先交付，网盘卡片先显示「未配置」。
@@ -41,7 +41,7 @@ Muse WebDAV 客户端 ────┘
 
 | 工作流 | 文档 | 状态 | 当前里程碑 | 下一个提交 |
 | --- | --- | --- | --- | --- |
-| 添加来源弹窗 | [add-video-source-dialog.md](add-video-source-dialog.md) | In progress | 本地/扫描已接入；网盘卡片待 WebDAV | 下一步：网盘 M1 schema |
+| 添加来源弹窗 | [add-video-source-dialog.md](add-video-source-dialog.md) | In progress | 本地/扫描已接入；扫描=目录监控；网盘卡片待 WebDAV | 下一步：网盘 M1 schema |
 | WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | Proposed | M1 schema | `Add cloud source schema and repository` |
 | OpenList BitQiu 驱动 | [openlist-bitqiu-driver.md](openlist-bitqiu-driver.md) | Proposed / Spike | Phase 1 最小可读驱动 | `Add BitQiu driver`（OpenList fork） |
 
@@ -81,7 +81,8 @@ Muse WebDAV 客户端 ────┘
 
 ## 进度记录
 
-| 日期 | 事件 | 说明 |
-| --- | --- | --- |
-| 2026-11-05 | 计划建立 | 三份实施计划与路线图写入 `docs/spec/`（`9da1586`） |
-| 2026-11-05 | 本地/扫描入口 | `watch.ScanOnce` + `AddSourceDialog` + Library 接入；网盘卡片暂不渲染 | `0800c72` / `d40a9ac` |
+| 日期 | 事件 | 说明 | 提交 |
+| --- | --- | --- | --- |
+| 2026-11-05 | 计划建立 | 三份实施计划与路线图写入 `docs/spec/` | `9da1586` |
+| 2026-11-05 | 本地/扫描入口 | 初版 `watch.ScanOnce` + `AddSourceDialog` + Library 接入；后收拢为目录监控 | `0800c72` / `d40a9ac` |
+| 2026-11-05 | 语义收拢 | 扫描文件夹改为 `pickWatchDir` + `addWatchDir`，删除一次性 `ScanOnce` | 本次提交 |

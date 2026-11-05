@@ -1,16 +1,16 @@
 # 添加视频来源弹窗实施计划
 
-**状态：** Proposed（未实现）
-**范围：** 桌面端顶部「添加视频」入口、来源选择弹窗、一次性目录扫描、网盘入口的交接
+**状态：** In progress（本地文件 / 扫描文件夹已实现；网盘待接入）
+**范围：** 桌面端顶部「添加视频」入口、来源选择弹窗、扫描文件夹与目录监控的统一、网盘入口的交接
 **非范围：** 网盘/WebDAV 后端（见 [Muse WebDAV 云盘片源](webdav-cloud-source.md)）、OpenList BitQiu 驱动（见 [OpenList fork 与 BitQiu 驱动](openlist-bitqiu-driver.md)）、移动端
-**依赖：** 网盘卡片依赖 [Muse WebDAV 云盘片源](webdav-cloud-source.md) 的连接与浏览 API；本地/扫描两项可先独立交付
+**依赖：** 网盘卡片依赖 [Muse WebDAV 云盘片源](webdav-cloud-source.md) 的连接与浏览 API；本地/扫描两项已经独立可用
 **最后更新：** 2026-11-05
 
 ---
 
 ## 1. 背景与已确认决策
 
-现状：顶部 `＋ 添加视频` 直接调用 `pickVideoFiles()`，只支持本地文件。目录监控在设置里，网盘入口尚不存在。
+现状：顶部 `＋ 添加视频` 原本直接调用 `pickVideoFiles()`，只支持本地文件。目录监控只在设置里，网盘入口尚不存在。
 
 目标：点「添加视频」先进入一个来源选择弹窗，把「本地文件 / 扫描文件夹 / 从网盘添加」放在同一个入口下。
 
@@ -19,8 +19,10 @@
 - 选择「本地文件」或「扫描文件夹」后，**先关闭来源弹窗，再打开系统选择器**；取消选择器就回到主界面，不保留弹窗。
 - 弹窗内**不再做拖拽区**；保留现有「把文件拖进窗口」的全局能力。
 - 没有任何网盘连接时，**仍然显示「从网盘添加」卡片**，进入后给「去设置 → 网盘」入口，不强迫安装 OpenList。
-- 「扫描文件夹」是**一次性导入**，不写入目录监控；持续监控仍在「设置 → 目录监控」。
+- **「扫描文件夹」不是一次性动作**：它等同于「设置 → 目录监控 → 添加目录」，会持久化监控目录、立即扫描，并持续收录之后新增的视频。来源弹窗只是把这个动作放到添加入口旁边。
 - 不采用分裂按钮/下拉菜单；这个入口就是弹窗。
+
+> 2026-11-05 修订：最初实现过一次性 `watch.ScanOnce`，现按上述决策删除；扫描文件夹统一复用 `watch.Service.Add` / `AddWatchDir`。
 
 ## 2. 目标与非目标
 
@@ -28,15 +30,15 @@
 
 - 一个来源无关的添加入口，三种来源的文案、状态、下一步一致。
 - 本地高频操作仍然快：弹窗打开后本地卡片默认聚焦，`1`/`Enter` 即可进入文件选择器。
-- 目录扫描与目录监控语义分开，不让用户以为「扫一次」就多了一个后台监控目录。
+- 「扫描文件夹」与「目录监控」是同一套语义和同一套持久化：添加后出现在设置 → 目录监控列表，之后新增文件自动收录。
 - 没有网盘或 OpenList 的用户完全不受影响，不出现安装提示或错误。
 - 弹窗打开时拖入文件仍能添加，且不出现两层遮罩或重复添加。
 
 ### 非目标
 
 - 不在弹窗里直接列出文件、目录或网盘内容；选择后进入各自流程。
-- 不做扫描进度条/取消（v1）；扫描期间只显示状态。
-- 不改变本地文件选择器、拖拽添加、目录监控的既有行为。
+- 不做一次性扫描模式；不再维护第二条「只扫描、不监控」的代码路径。
+- 不改变本地文件选择器、拖拽添加、目录监控的既有行为（除了新增一个入口）。
 - 不改变移动端（移动端本来就不提供添加入口）。
 
 ## 3. 交互与视觉规格
@@ -48,11 +50,14 @@
    ↓
 AddSourceDialog
    ├─ 本地文件   → 关闭弹窗 → pickVideoFiles() → addVideos()
-   ├─ 扫描文件夹 → 关闭弹窗 → pickScanDir()   → scanDirectoryOnce()
+   ├─ 扫描文件夹 → 关闭弹窗 → pickWatchDir()   → addWatchDir()
+   │                              （写入目录监控，后台扫描，watch:scanned 报告结果）
    └─ 从网盘添加 → 关闭弹窗 → CloudBrowserDialog
 ```
 
 - 本地/扫描选择后不保留来源弹窗；系统选择器取消 = 本次操作结束，无错误提示。
+- 扫描文件夹添加成功后立即提示「已加入目录监控，正在扫描…」；扫描结果由现有的 `watch:scanned` 事件提示并刷新列表。
+- 重复选择已在监控清单中的目录：提示「该目录已在目录监控中」，不重复添加。
 - 网盘选择后来源弹窗关闭，再打开网盘浏览弹窗，避免两层遮罩叠加。
 
 ### 3.2 弹窗布局
@@ -66,7 +71,7 @@ AddSourceDialog
 │              选择一个或多个视频文件   │
 │                                      │
 │ [FolderSearch] 扫描文件夹        2 › │
-│              一次性导入；持续监控去设置│
+│              加入目录监控并立即扫描   │
 │                                      │
 │ [Cloud]      从网盘添加      可选 3 › │
 │              未配置；进入后可去设置   │
@@ -92,7 +97,7 @@ AddSourceDialog
 | 来源 | 标题 | 描述 |
 | --- | --- | --- |
 | 本地 | 本地文件 | 选择一个或多个视频文件 |
-| 扫描 | 扫描文件夹 | 一次性导入文件夹中的视频；持续监控请到设置 |
+| 扫描 | 扫描文件夹 | 加入目录监控并立即扫描；之后新增的视频会自动收录 |
 | 网盘 | 从网盘添加 | 有连接：`N 个连接可用`；无连接：`未配置；进入后可去设置`；加载中：`正在检查网盘连接…`；读取失败：`无法读取网盘连接；仍可进入设置` |
 
 - 标题：`添加视频`；描述：`选择来源`。
@@ -116,91 +121,68 @@ AddSourceDialog
 | 网盘连接全部离线 | 显示「N 个连接 · 离线」，仍可进入查看/重试 |
 | 网盘连接读取失败 | 显示「无法读取网盘连接；仍可进入设置」 |
 | 弹窗打开时拖入文件 | 关闭弹窗，走现有全局拖拽添加；不重复添加 |
-| 扫描目录很大 | 显示「正在扫描 <目录名>…」；禁止再次启动扫描；v1 不做取消 |
-| 扫描到 0 个新视频 | 成功提示「未发现新视频」 |
-| 扫描中文件被占用 | 计入失败并在汇总中列出；不自动重试 |
+| 扫描文件夹已存在监控清单 | 提示「该目录已在目录监控中」，不重复添加 |
+| 扫描文件夹添加成功 | 立即提示「已加入目录监控，正在扫描…」；结果由 `watch:scanned` 汇总 |
+| 目录很大 | 扫描在后台进行，不阻塞来源弹窗；设置 → 目录监控可看到上次扫描时间 |
 
 ## 4. 组件与代码结构
 
 ### 4.1 前端
 
-新增 `frontend/src/components/AddSourceDialog.tsx`：
+`frontend/src/components/AddSourceDialog.tsx`：
 
 ```ts
 interface AddSourceDialogProps {
   open: boolean;
-  cloud: {
-    loading: boolean;
-    count: number;
-    onlineCount: number;
-    error: string | null;
-  };
-  scanning: boolean;
   onPickLocal: () => void;
   onPickFolder: () => void;
-  onPickCloud: () => void;
+  onPickCloud?: () => void; // WebDAV 接入后启用
+  cloud?: CloudSummary | null;
   onClose: () => void;
 }
 ```
 
-组件只负责展示、键盘和焦点；不直接调用 Wails 绑定，便于后续测试/复用。
+组件只负责展示、键盘和焦点；不直接调用 Wails 绑定，便于后续测试/复用。扫描文件夹卡片不再有「扫描中」禁用态，因为它现在走目录监控的异步扫描。
 
 `frontend/src/pages/Library.tsx`：
 
 - 现有 `handleAdd` 改为 `openAddSource`。
-- 新增 `addSourceOpen`、`scanningDir` 状态。
+- 新增 `addSourceOpen` 状态。
 - `handleAddLocal`：关闭弹窗 → `pickVideoFiles` → `addVideos` → `showAddSummary` / `showGroupSuggestions` / `invalidate`。
-- `handleScanDirectory`：关闭弹窗 → `pickScanDir` → `scanDirectoryOnce` → 汇总/建议/刷新。
-- `handleAddCloud`：关闭弹窗 → 打开 `CloudBrowserDialog`。
+- `handleAddFolder`：关闭弹窗 → `pickWatchDir` → `addWatchDir`；成功 toast「已加入目录监控，正在扫描…」；重复时提示已在监控中；结果由 `watch:scanned` 事件处理。
+- `handleAddCloud`：关闭弹窗 → 打开 `CloudBrowserDialog`（待 WebDAV 后端）。
 - 全局拖拽 handler：如果 `addSourceOpen` 为真，先关闭弹窗再走原添加逻辑。
 - 空收藏库的 CTA 仍打开同一个来源弹窗，不再直接调用本地选择器。
 
 `frontend/src/services/api.ts`：
 
-- 新增 `pickScanDir`、`scanDirectoryOnce`。
+- 复用 `pickWatchDir`、`addWatchDir`，不新增一次性扫描 API。
 - 网盘相关沿用 `listCloudConnections` / `browseCloud` / `addCloudVideos`。
 
-### 4.2 后端：一次性目录扫描
+### 4.2 后端：复用目录监控
 
-新增接口放在 `backend/watch`，因为它已经拥有目录遍历、跳过系统目录、可读性判断和 `AddVideos` 入口：
+不再新增一次性扫描接口。`扫描文件夹` 直接调用现有的：
 
-```go
-type ScanOnceResult struct {
-    Path      string
-    Added     int
-    Relocated int
-    Failed    int
-    Skipped   int   // 文件仍被其他程序占用，未导入
-    Results   []video.AddVideoResult
-}
+- `backend/watch.Service.Add(path)`：规范化目录、写入 `watched_dirs`、注册 fsnotify、入队首次扫描、发出 `watch:changed`。
+- `backend/api.Library.AddWatchDir(path)`。
+- `app.go` 的 `App.AddWatchDir` 与 `App.PickWatchDir`（标题「选择要监控的目录」）。
 
-func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
-```
-
-实现要点：
-
-- 把 `scanRoot` 中的遍历逻辑抽成 `collectCandidates(root string, existing map[string]struct{})`，供 `scanRoot` 和 `ScanOnce` 共用。
-- `ScanOnce` 使用 `normalizeDir`、`existingPaths`、`collectCandidates`，调用 `lib.AddVideos`，统计成功/重连/失败并返回逐文件结果。
-- **不写入 `watched_dirs`、不注册 fsnotify、不更新 `last_scan_at`、不发 `watch:scanned`。**
-- 不调用 `AutoTagVideos`；一次性扫描按手动批量添加处理，由前端展示分组建议。
-- 复用 `canImport`：读不到的文件计入失败，不重试。
-- 在 `backend/api/watch.go` 增加 `ScanDirectoryOnce(path)`；在 `app.go` 增加 `ScanDirectoryOnce`、`PickScanDir`（标题「选择要扫描的目录」），不改 `PickWatchDir`。
+保留的纯重构：`scanRoot` 的遍历逻辑抽成 `collectCandidates(root, existing)`，让首次扫描、周期扫描和 fsnotify 触发共用同一套跳过规则；它不再服务于第二套一次性扫描。
 
 ## 5. 实施步骤
 
 ### Phase 0：文档与接口约定
 
-- [ ] 本计划评审通过，确认三个来源的文案与语义。
-- [ ] 确认 `ScanOnceResult` 字段；前端汇总可直接复用 `AddVideoResult`。
-- [ ] 确认 `PickScanDir` 与 `PickWatchDir` 分开，避免选择器标题串台。
+- [x] 本计划评审通过，确认三个来源的文案与语义。
+- [x] 确认「扫描文件夹」= 添加目录监控，不新增一次性 API。
+- [x] 删除 `ScanOnce` / `ScanOnceResult` / `ScanDirectoryOnce` / `PickScanDir` 及其测试/绑定。
 
-### Phase 1：一次性目录扫描后端
+### Phase 1：扫描文件夹复用目录监控
 
 - [x] 抽出 `collectCandidates`，保证 `scanRoot` 行为不变。
-- [x] 实现 `watch.Service.ScanOnce`（含 `Skipped`）。
-- [x] `api.Library.ScanDirectoryOnce`。
-- [x] `App.ScanDirectoryOnce` / `App.PickScanDir`。
-- [x] 单测：添加、跳过已收藏、跳过隐藏/系统目录、失败/占用计数、不创建监控项。
+- [x] 删除一次性 `watch.ScanOnce` 与相关测试。
+- [x] `Library.handleAddFolder` 改为 `pickWatchDir` + `addWatchDir`。
+- [x] 重复目录、成功/失败 toast。
 - [x] `go test ./backend/watch ./backend/api ./...`。
 
 ### Phase 2：来源弹窗组件
@@ -208,15 +190,15 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 - [x] 新建 `AddSourceDialog.tsx`，实现本地/扫描卡片、键盘、焦点、footer。
 - [x] 接入 `Dialog` 原语，保持现有深色 token。
 - [ ] 网盘卡片：组件已预留 `onPickCloud` / `cloud` 与 loading/count/offline/error 文案，等网盘后端接入后启用。
-- [ ] 窄窗口手测。
+- [x] 窄窗口检查。
 
 ### Phase 3：接入 Library
 
 - [x] `addSourceOpen` 状态与打开/关闭逻辑。
 - [x] 本地、扫描 handler；网盘 handler 等 Phase 4。
 - [x] 拖拽时关闭弹窗并继续添加。
-- [x] 扫描中的状态提示与禁止重复扫描。
 - [x] 空库 CTA 复用同一入口。
+- [x] 扫描文件夹的异步结果交给现有 `watch:scanned` 事件，不新增前端扫描状态。
 
 ### Phase 4：网盘交接
 
@@ -226,7 +208,7 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 
 ### Phase 5：文案、无障碍、引导
 
-- [x] 更新新手引导中「添加视频」的说明为「选择来源」。
+- [x] 更新新手引导中「添加视频」的说明为「选择来源」，并说明扫描文件夹会持续监控。
 - [x] 检查 `aria-describedby`、焦点环、Esc、键盘顺序。
 - [x] 更新 `PRODUCT.md` 的能力清单（来源选择弹窗）。
 
@@ -234,8 +216,9 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 
 - [x] `cd frontend && npm run lint && npm run build`。
 - [x] `go test ./...`。
-- [ ] 手测矩阵见 §6。
+- [x] Headless Chromium 布局/键盘检查。
 - [x] 实现完成后运行一次 Impeccable 机械检测：`impeccable detect --json frontend/src/components/AddSourceDialog.tsx frontend/src/pages/Library.tsx`（结果为空）。
+- [ ] Windows 原生窗口实机检查。
 
 ## 6. 测试与验收
 
@@ -245,10 +228,10 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 | --- | --- |
 | 点添加视频 | 打开来源弹窗，不直接弹系统文件选择器 |
 | 点本地文件 | 弹窗关闭，系统文件选择器打开；取消后无错误 |
-| 点扫描文件夹 | 弹窗关闭，系统目录选择器打开；选择后开始扫描 |
-| 扫描一个含 3 个新视频的目录 | 汇总「已添加 3 个视频」；目录监控列表不增加 |
-| 扫描一个空目录 | 提示「未发现新视频」 |
-| 重复扫描同一目录 | 不重复添加；提示未发现新视频 |
+| 点扫描文件夹 | 弹窗关闭，系统目录选择器打开；选择后目录出现在「设置 → 目录监控」 |
+| 扫描一个含 3 个新视频的目录 | 后台扫描完成后 `watch:scanned` 提示「已自动添加 3 个视频」 |
+| 再次选择同一目录 | 提示「该目录已在目录监控中」，不重复写入 |
+| 扫描后在目录里新增一个视频 | 目录监控自动收录（fsnotify 或周期扫描） |
 | 无网盘连接时点网盘 | 进入空状态，能到设置；不出现安装强制提示 |
 | 弹窗打开时拖入文件 | 弹窗关闭，文件被添加；无重复卡片 |
 | 键盘 1/2/3、方向键、Enter、Esc | 全部可用，焦点可见 |
@@ -258,28 +241,25 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 
 - `＋ 添加视频` 不再直接打开本地文件选择器。
 - 三种来源都能完成各自流程，取消路径无副作用。
-- 扫描是一次性的；现有目录监控行为完全不变。
+- 「扫描文件夹」与「设置 → 目录监控 → 添加目录」产生同一条记录、同一套后续自动收录行为。
 - 无网盘/OpenList 的用户不被打扰。
 - lint/build 通过；无新增控制台错误。
 
 ## 7. 提交拆分
 
-| 顺序 | 提交信息（建议） | 内容 |
-| --- | --- | --- |
-| 1 | `Add one-off directory scan for add-source flow` | `watch.ScanOnce`、API、bindings、测试 |
-| 2 | `Add add-source chooser dialog` | `AddSourceDialog.tsx`、样式、键盘 |
-| 3 | `Wire add-source chooser into library` | `Library.tsx` handlers、拖拽、扫描状态 |
-| 4 | `Connect cloud source to add-source dialog` | `CloudBrowserDialog` 空状态、网盘交接 |
-| 5 | `Document add-source chooser` | 本文件状态更新、PRODUCT.md、引导文案 |
-
-每个提交单独跑对应范围的测试；文档提交可以与前一项合并，但不要把后端扫描和前端弹窗攒成一个大提交。
+| 顺序 | 提交信息（建议） | 内容 | 状态 |
+| --- | --- | --- | --- |
+| 1 | `Add one-off directory scan for add-source flow` | 初版 `watch.ScanOnce`（已被下一步替代） | `0800c72` |
+| 2 | `Add add-source chooser dialog` | `AddSourceDialog.tsx`、Library 接入 | `d40a9ac` |
+| 3 | `Record add-source implementation progress` | 文档进度 | `4c63d61` |
+| 4 | `Unify scan folder with folder watch` | 删除一次性扫描，改用 `addWatchDir` | 本次提交 |
 
 ## 8. 风险与取舍
 
 - **多一步点击**：这是用户明确要求。用默认聚焦、数字键、Enter、拖拽兜底降低摩擦；不再额外加「最近使用」之类的隐藏状态。
 - **弹窗疲劳**：这个弹窗只在添加入口出现，且三项都是真实分叉；不把文件列表/网盘浏览塞进来，避免变成万能弹窗。
-- **扫描阻塞**：v1 同步遍历，大目录可能等待较久；先显示状态，后续再加进度/取消。
-- **语义混淆**：扫描 vs 监控必须在文案上分开；扫描结果里不出现「已加入监控」。
+- **后台扫描不可见**：添加监控目录后扫描在后台进行，结果只在 `watch:scanned` 时提示；用户可以在设置 → 目录监控查看列表和上次扫描时间。v1 不新增进度条。
+- **语义收拢的代价**：来源弹窗不再提供「只扫一次」选项。如果用户只想临时导入，可以先添加监控、扫完再在设置里移除；这比维护两套扫描语义更可预测。
 - **云盘可选**：没有连接时卡片仍然出现，可能让本地用户多看到一个「可选」项；这是为了让网盘功能可发现，但不强制。
 
 ## 9. 进度记录
@@ -287,13 +267,14 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 | 日期 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- |
 | 2026-11-05 | Planned | 计划文档建立 | `9da1586` |
-| 2026-11-05 | In progress | 一次性目录扫描、来源弹窗、Library 接入完成；网盘卡片等 WebDAV 后端后启用 | `0800c72` / `d40a9ac` |
+| 2026-11-05 | In progress | 一次性扫描 + 来源弹窗 + Library 接入 | `0800c72` / `d40a9ac` |
+| 2026-11-05 | Revised | 扫描文件夹改为添加目录监控，删除一次性扫描路径 | 本次提交 |
 
 ## 10. 实现记录（2026-11-05）
 
-- 后端：`watch.ScanOnce` 与 `ScanOnceResult` 已实现；`Skipped` 记录被其他程序占用的文件；不写 `watched_dirs`、不发 `watch:scanned`、不调用 `AutoTagVideos`。
-- 前端：`AddSourceDialog` 当前只渲染本地/扫描两张卡片。网盘卡片代码已预留（`onPickCloud` / `cloud`），但 WebDAV 后端尚未实现，因此不渲染，避免出现点不开的死入口。等 `webdav-cloud-source.md` 的 M4/M7 完成后再接第三张卡片。
+- 后端：保留 `collectCandidates` 作为 `scanRoot` 的提取；删除 `watch.ScanOnce`、`ScanOnceResult`、`api.ScanDirectoryOnce`、`App.ScanDirectoryOnce`、`App.PickScanDir` 及对应测试/绑定。
+- 前端：`AddSourceDialog` 只有本地/扫描两张卡片；扫描卡片不再有「扫描中」禁用态。网盘卡片代码仍预留，等 WebDAV 后端接入。
 - 入口：顶部 `＋ 添加视频` 和空库 CTA 都打开来源弹窗；拖拽仍直接添加，并在弹窗打开时先关闭弹窗。
-- 已完成：引导文案、`PRODUCT.md` 能力清单、`go test` / `go vet` / 前端 `lint` + `build`。
-- 已验证：headless Chromium 1280×800 与 700×600 下弹窗居中、宽度 520px 不溢出；键盘 1/2/3、Esc、焦点默认本地卡片、扫描中禁用扫描卡片、扫描完成后 toast 均通过。
+- 扫描文件夹：`pickWatchDir` → `addWatchDir`；成功提示「已加入目录监控，正在扫描…」，结果由现有 `watch:scanned` 事件提示并刷新。
+- 已完成：引导文案、`PRODUCT.md` 能力清单、`go test` / `go vet` / 前端 `lint` + `build`、headless Chromium 布局/键盘检查；点击扫描文件夹确认调用 `PickWatchDir` + `AddWatchDir`，重复目录提示正确。
 - 尚未完成：网盘交接、Windows 原生窗口实机检查。

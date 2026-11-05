@@ -82,8 +82,6 @@ export function OpenContainingFolder(arg1:number):Promise<void>;
 
 export function OpenVideo(arg1:number):Promise<void>;
 
-export function PickScanDir():Promise<string>;
-
 export function PickVideoFiles():Promise<Array<string>>;
 
 export function PickWatchDir():Promise<string>;
@@ -107,8 +105,6 @@ export function ResetVideoCover(arg1:number):Promise<video.Video>;
 export function ReverifyContentDuplicate(arg1:string):Promise<void>;
 
 export function ScanContentDuplicates():Promise<video.ContentScanStatus>;
-
-export function ScanDirectoryOnce(arg1:string):Promise<watch.ScanOnceResult>;
 
 export function ScanFileStatuses():Promise<video.FileScanStatus>;
 

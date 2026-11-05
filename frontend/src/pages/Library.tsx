@@ -30,6 +30,7 @@ import WorkspaceTabs, { type WorkspaceTabItem } from "../components/WorkspaceTab
 import {
   addVideoToGroup,
   addVideos,
+  addWatchDir,
   copyPath,
   createGroup,
   deleteGroup,
@@ -38,14 +39,13 @@ import {
   listVideos,
   openContainingFolder,
   openVideo,
-  pickScanDir,
   pickVideoFiles,
+  pickWatchDir,
   refreshStatus,
   refreshVolumes,
   removeVideo,
   renameGroup,
   reorderGroups,
-  scanDirectoryOnce,
   searchVideos,
   setGroupParent,
   setVideoGroups,
@@ -155,9 +155,6 @@ export default function Library({
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
   const [suggestFiles, setSuggestFiles] = useState<SuggestFile[] | null>(null);
   const [addSourceOpen, setAddSourceOpen] = useState(false);
-  // The directory being scanned one-off, if any. Kept separate from the watch
-  // list: this scan never becomes a monitored root.
-  const [scanningDir, setScanningDir] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   // Grid ordering: field + direction, applied in the frontend over whatever
   // list the active view/search produced. Defaults match the backend order
@@ -857,42 +854,38 @@ export default function Library({
     }
   };
 
-  const handleScanDirectory = async () => {
+  const handleAddFolder = async () => {
     setAddSourceOpen(false);
     let dir: string;
     try {
-      dir = await pickScanDir();
+      dir = await pickWatchDir();
     } catch (e) {
       pushToast({ kind: "error", message: "无法选择文件夹", details: [String(e)] });
       return;
     }
     if (!dir) return;
 
-    setScanningDir(dir);
     try {
-      const result = await scanDirectoryOnce(dir);
-      if (result.results.length > 0) {
-        showAddSummary(result.results);
-        void showGroupSuggestions(result.results);
-      } else if (result.skipped > 0) {
-        pushToast({
-          kind: "info",
-          message: `没有新增视频，${result.skipped} 个文件暂不可读`,
-        });
-      } else {
-        pushToast({ kind: "info", message: "未发现新视频" });
-      }
-      if (result.skipped > 0 && result.results.length > 0) {
-        pushToast({
-          kind: "info",
-          message: `${result.skipped} 个文件暂不可读，已跳过`,
-        });
-      }
+      await addWatchDir(dir);
+      pushToast({
+        kind: "success",
+        message: "已加入目录监控，正在扫描…",
+        details: [dir],
+      });
+      // The scan runs asynchronously; watch:scanned reports the added count,
+      // reconnects and failures when it finishes.
       invalidate();
     } catch (e) {
-      pushToast({ kind: "error", message: "扫描文件夹失败", details: [String(e)] });
-    } finally {
-      setScanningDir(null);
+      const message = e instanceof Error ? e.message : String(e);
+      if (/already|已在/.test(message)) {
+        pushToast({
+          kind: "info",
+          message: "该目录已在目录监控中",
+          details: [dir],
+        });
+      } else {
+        pushToast({ kind: "error", message: "添加监控目录失败", details: [message] });
+      }
     }
   };
 
@@ -1411,9 +1404,6 @@ export default function Library({
         <Button data-tour="add-video" variant="primary" onClick={() => setAddSourceOpen(true)}>
           + 添加视频
         </Button>
-        {scanningDir && (
-          <span className="max-w-[180px] truncate text-xs text-[var(--muted)]">正在扫描 {baseName(scanningDir)}…</span>
-        )}
         <div className="flex-1" />
         <ServerBar />
         {!actorView && !duplicateView && (
@@ -1634,10 +1624,8 @@ export default function Library({
 
       <AddSourceDialog
         open={addSourceOpen}
-        scanning={scanningDir !== null}
-        scanningLabel={scanningDir ? baseName(scanningDir) : undefined}
         onPickLocal={() => void handleAddLocal()}
-        onPickFolder={() => void handleScanDirectory()}
+        onPickFolder={() => void handleAddFolder()}
         onClose={() => setAddSourceOpen(false)}
       />
 

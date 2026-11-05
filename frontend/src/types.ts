@@ -9,8 +9,6 @@ export type ServerStartInfo = server.StartInfo;
 export type GroupSuggestion = api.GroupSuggestion;
 export type VideoGroupSuggestion = api.VideoGroupSuggestion;
 export type WatchedDir = watch.WatchedDir;
-/** 一次性扫描文件夹的结果（不写入目录监控）。 */
-export type ScanOnceResult = watch.ScanOnceResult;
 export type JavDetail = jav.Detail;
 export type JavTask = jav.Task;
 export type ActorSummary = jav.ActorSummary;
