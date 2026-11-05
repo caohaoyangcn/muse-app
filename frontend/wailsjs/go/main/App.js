@@ -34,6 +34,14 @@ export function BrowseCloud(arg1, arg2) {
   return window['go']['main']['App']['BrowseCloud'](arg1, arg2);
 }
 
+export function CancelCloudDownload(arg1) {
+  return window['go']['main']['App']['CancelCloudDownload'](arg1);
+}
+
+export function ClearCloudCache() {
+  return window['go']['main']['App']['ClearCloudCache']();
+}
+
 export function ClearFC2Cookie() {
   return window['go']['main']['App']['ClearFC2Cookie']();
 }
@@ -44,6 +52,10 @@ export function ClearJavBusCookie() {
 
 export function ClearVideoLikes(arg1) {
   return window['go']['main']['App']['ClearVideoLikes'](arg1);
+}
+
+export function CloudCacheInfo() {
+  return window['go']['main']['App']['CloudCacheInfo']();
 }
 
 export function CloudStorageAvailable() {
@@ -156,6 +168,10 @@ export function ListWatchDirs() {
 
 export function MergeActors(arg1, arg2) {
   return window['go']['main']['App']['MergeActors'](arg1, arg2);
+}
+
+export function OpenCloudPage(arg1) {
+  return window['go']['main']['App']['OpenCloudPage'](arg1);
 }
 
 export function OpenContainingFolder(arg1) {

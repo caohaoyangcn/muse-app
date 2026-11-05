@@ -35,6 +35,7 @@ type Library struct {
 	watch  *watch.Service
 	jav    *jav.Service
 	cloud  *cloud.Service
+	cache  *cloud.Cache
 	log    *slog.Logger
 }
 
@@ -56,6 +57,9 @@ func (l *Library) SetJavService(svc *jav.Service) { l.jav = svc }
 
 // SetCloudService wires optional WebDAV sources into the façade.
 func (l *Library) SetCloudService(svc *cloud.Service) { l.cloud = svc }
+
+// SetCloudCache wires the downloaded-copy cache (play, delete, clear).
+func (l *Library) SetCloudCache(cache *cloud.Cache) { l.cache = cache }
 
 // scrapedCodes loads the authoritative 番号 per favorite for the video read
 // model. It is deliberately best effort: a scrape result that cannot be read
@@ -281,6 +285,11 @@ func (l *Library) AddVideos(paths []string) []video.AddVideoResult {
 func (l *Library) RemoveVideo(id int64) error {
 	if err := l.videos.Remove(id); err != nil {
 		return err
+	}
+	if l.cache != nil {
+		// The cached copy is a generated asset of this favorite; the WebDAV
+		// source file is untouched.
+		l.cache.Remove(id)
 	}
 	if err := l.groups.ClearVideoMembers(id); err != nil {
 		l.log.Warn("clear video group members failed", "id", id, "err", err)
@@ -777,6 +786,46 @@ func (l *Library) AddCloudVideos(sourceID int64, paths []string) []video.AddVide
 		results = append(results, result)
 	}
 	return results
+}
+
+// CloudPageURL returns the OpenList management page for a remote favorite.
+func (l *Library) CloudPageURL(videoID int64) (string, error) {
+	if l.cloud == nil {
+		return "", fmt.Errorf("网盘服务未初始化")
+	}
+	v, err := l.videos.Get(videoID)
+	if err != nil {
+		return "", err
+	}
+	if !v.IsRemote() {
+		return "", fmt.Errorf("该视频不在网盘上")
+	}
+	return l.cloud.ManagementURL(v.SourceID)
+}
+
+// CloudCacheInfo reports downloaded-copy usage and the configured limit.
+func (l *Library) CloudCacheInfo() cloud.CacheInfo {
+	if l.cache == nil {
+		return cloud.CacheInfo{}
+	}
+	return l.cache.Info()
+}
+
+// ClearCloudCache removes every downloaded copy. It never touches a WebDAV
+// source file.
+func (l *Library) ClearCloudCache() (int64, error) {
+	if l.cache == nil {
+		return 0, nil
+	}
+	return l.cache.Clear()
+}
+
+// CancelCloudDownload stops one in-flight cache download, keeping its partial
+// file for a later resume.
+func (l *Library) CancelCloudDownload(videoID int64) {
+	if l.cache != nil {
+		l.cache.Cancel(videoID)
+	}
 }
 
 // ---- Group suggestions (auto-detected after adding videos) ----

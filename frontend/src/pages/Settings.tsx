@@ -22,8 +22,17 @@ import {
   deleteCloudConnection,
   testCloudConnection,
   cloudStorageAvailable,
+  cloudCacheInfo,
+  clearCloudCache,
 } from "../services/api";
-import type { CloudConnection, CloudConnectionInput, CloudTestResult, WatchedDir } from "../types";
+import type {
+  CloudCacheInfo,
+  CloudConnection,
+  CloudConnectionInput,
+  CloudTestResult,
+  WatchedDir,
+} from "../types";
+import { formatFileSize } from "../utils/format";
 import { BrowserOpenURL } from "../../wailsjs/runtime";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { Button } from "../components/ui/button";
@@ -857,6 +866,10 @@ function draftFrom(c: CloudConnection): ConnectionDraft {
 function CloudSection() {
   const [connections, setConnections] = useState<CloudConnection[]>([]);
   const [storageAvailable, setStorageAvailable] = useState(true);
+  const [cacheInfo, setCacheInfo] = useState<CloudCacheInfo | null>(null);
+  const [cacheClearing, setCacheClearing] = useState(false);
+  const [cacheConfirm, setCacheConfirm] = useState(false);
+  const [cacheMessage, setCacheMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<ConnectionDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -869,9 +882,14 @@ function CloudSection() {
 
   const load = useCallback(async () => {
     try {
-      const [list, storage] = await Promise.all([listCloudConnections(), cloudStorageAvailable()]);
+      const [list, storage, cache] = await Promise.all([
+        listCloudConnections(),
+        cloudStorageAvailable(),
+        cloudCacheInfo(),
+      ]);
       setConnections(list);
       setStorageAvailable(storage);
+      setCacheInfo(cache);
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -956,6 +974,21 @@ function CloudSection() {
       }));
     } finally {
       setRowTesting(null);
+    }
+  };
+
+  const clearCache = async () => {
+    setCacheConfirm(false);
+    setCacheClearing(true);
+    setCacheMessage(null);
+    try {
+      const freed = await clearCloudCache();
+      setCacheMessage(`已清理 ${formatCacheSize(freed)}`);
+      setCacheInfo(await cloudCacheInfo());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setCacheClearing(false);
     }
   };
 
@@ -1200,10 +1233,46 @@ function CloudSection() {
           <p className="mt-4 max-w-[620px] text-xs leading-relaxed text-[var(--muted)]">
             OpenList 是可选组件，不随 Muse 安装包分发。Muse 只连接它提供的 WebDAV 地址；挂载、改名、移动等管理操作请在 OpenList 网页完成。
           </p>
+
+          <div className="mt-5 border-t border-[var(--border)] pt-4">
+            <h3 className="text-sm font-semibold">本地缓存</h3>
+            <p className="mt-1 max-w-[620px] text-[13px] leading-relaxed text-[var(--muted)]">
+              远程视频播放前会先下载到本地。缓存只存在于这台电脑，清理缓存不会删除网盘上的任何文件；超过上限时自动淘汰最久未使用的副本。
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-[13px]">
+              <span>
+                已用 <strong>{formatCacheSize(cacheInfo?.bytes ?? 0)}</strong>
+              </span>
+              <span className="text-[var(--muted)]">
+                {cacheInfo?.files ?? 0} 个文件 · 上限 {formatCacheSize(cacheInfo?.limit ?? 0)}
+              </span>
+              <Button
+                size="sm"
+                className="ml-auto"
+                onClick={() => setCacheConfirm(true)}
+                disabled={cacheClearing || (cacheInfo?.files ?? 0) === 0}
+              >
+                {cacheClearing ? "清理中…" : "清理缓存"}
+              </Button>
+            </div>
+            {cacheMessage && <p className="mt-2 text-[13px] text-[#7ad9a2]">{cacheMessage}</p>}
+          </div>
         </>
       )}
 
       {error && <p className="mt-3 text-[13px] text-[var(--danger)]">{error}</p>}
+
+      {cacheConfirm && (
+        <ConfirmDialog
+          title="清理网盘缓存"
+          message="删除所有已下载的远程视频副本？网盘上的源文件不会被删除，下次播放时会重新下载。"
+          confirmLabel="清理"
+          cancelLabel="取消"
+          danger
+          onConfirm={() => void clearCache()}
+          onCancel={() => setCacheConfirm(false)}
+        />
+      )}
 
       {deleteTarget && (
         <ConfirmDialog
@@ -1241,6 +1310,10 @@ function Field({
       {children}
     </div>
   );
+}
+
+function formatCacheSize(bytes: number): string {
+  return bytes > 0 ? formatFileSize(bytes) : "0 B";
 }
 
 function TestBadge({ result }: { result: CloudTestResult }) {

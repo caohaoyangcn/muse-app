@@ -65,6 +65,22 @@ export namespace api {
 
 export namespace cloud {
 	
+	export class CacheInfo {
+	    files: number;
+	    bytes: number;
+	    limit: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CacheInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.files = source["files"];
+	        this.bytes = source["bytes"];
+	        this.limit = source["limit"];
+	    }
+	}
 	export class ConnectionInput {
 	    id: number;
 	    name: string;
@@ -814,6 +830,7 @@ export namespace video {
 	    skipped: number;
 	    revived: number;
 	    offline: number;
+	    remote: number;
 	    error: string;
 	    startedAt: number;
 	    finishedAt: number;
@@ -831,6 +848,7 @@ export namespace video {
 	        this.skipped = source["skipped"];
 	        this.revived = source["revived"];
 	        this.offline = source["offline"];
+	        this.remote = source["remote"];
 	        this.error = source["error"];
 	        this.startedAt = source["startedAt"];
 	        this.finishedAt = source["finishedAt"];

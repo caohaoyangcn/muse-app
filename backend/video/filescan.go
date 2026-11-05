@@ -52,6 +52,10 @@ type FileScanStatus struct {
 	// Offline counts favorites left alone because their volume is not attached.
 	// A drive that is away is not a missing file, so those are not "checked".
 	Offline int `json:"offline"`
+	// Remote counts WebDAV favorites skipped by the local file-existence pass.
+	// Their source has its own health check; stat-ing a cloud:// key would be a
+	// guaranteed false missing.
+	Remote int `json:"remote"`
 	// Error is why a pass could not run at all (the library could not be read),
 	// empty otherwise. A pass that ran leaves it empty even if it freed nothing.
 	Error string `json:"error"`
@@ -131,8 +135,12 @@ func (s *Service) executeFileScan() {
 	// A favorite on a detached volume is not checked: the drive being away is
 	// not a missing file. Everything else is the work the progress bar counts.
 	roots := make(map[string]string, len(videos))
-	total, offline := 0, 0
+	total, offline, remote := 0, 0, 0
 	for i := range videos {
+		if videos[i].IsRemote() {
+			remote++
+			continue
+		}
 		root := VolumeRoot(videos[i].Path)
 		roots[volumeKey(root)] = root
 		if s.volumes.offline(root) {
@@ -148,7 +156,7 @@ func (s *Service) executeFileScan() {
 	// A stable order keeps the pass (and its progress) independent of map
 	// iteration, exactly like the volume poll.
 	sort.Strings(ordered)
-	s.planFileScan(total, offline)
+	s.planFileScan(total, offline, remote)
 
 	revived, removed, skipped := 0, 0, 0
 	for _, root := range ordered {
@@ -166,10 +174,11 @@ func (s *Service) executeFileScan() {
 
 // planFileScan publishes the work set: how many files will be asked about, and
 // how many favorites are left alone on detached volumes.
-func (s *Service) planFileScan(total, offline int) {
+func (s *Service) planFileScan(total, offline, remote int) {
 	s.fileScan.mu.Lock()
 	s.fileScan.status.Total = total
 	s.fileScan.status.Offline = offline
+	s.fileScan.status.Remote = remote
 	status := s.fileScan.status
 	s.fileScan.mu.Unlock()
 
@@ -209,6 +218,7 @@ func (s *Service) finishFileScan(revived, removed, skipped int, runErr error) {
 		"checked", status.Checked,
 		"total", status.Total,
 		"offline", status.Offline,
+		"remote", status.Remote,
 		"revived", status.Revived,
 		"removed", status.Removed,
 		"skipped", status.Skipped,

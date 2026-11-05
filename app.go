@@ -651,6 +651,25 @@ func (a *App) AddCloudVideos(sourceID int64, paths []string) []video.AddVideoRes
 // platform (DPAPI on Windows).
 func (a *App) CloudStorageAvailable() bool { return a.lib.CloudStorageAvailable() }
 
+// OpenCloudPage opens a remote favorite's OpenList/web management page. Muse
+// itself remains read-only.
+func (a *App) OpenCloudPage(videoID int64) error {
+	url, err := a.lib.CloudPageURL(videoID)
+	if err != nil {
+		return err
+	}
+	return platform.OpenURL(url)
+}
+
+// CloudCacheInfo reports downloaded-copy usage for Settings → 网盘.
+func (a *App) CloudCacheInfo() cloud.CacheInfo { return a.lib.CloudCacheInfo() }
+
+// ClearCloudCache removes every downloaded copy (never a WebDAV source file).
+func (a *App) ClearCloudCache() (int64, error) { return a.lib.ClearCloudCache() }
+
+// CancelCloudDownload stops one in-flight cache download.
+func (a *App) CancelCloudDownload(videoID int64) { a.lib.CancelCloudDownload(videoID) }
+
 // ---- Guided tour (新手引导) ----
 
 // GetTourSeen reports whether the first-run guided tour has already played. The

@@ -44,6 +44,12 @@ type Service struct {
 	// without touching a disk.
 	fingerprintFile func(path string) (FingerprintResult, error)
 	stat            func(path string) (os.FileInfo, error)
+	// Remote WebDAV support. Wired by main before the library can be used; nil
+	// means this build/configuration has no cloud sources.
+	remoteOpen   func(context.Context, *Video) error
+	remoteCheck  func(context.Context, *Video) (bool, error)
+	remotePage   func(*Video) error
+	remoteOnline func(*Video) bool
 	// missingRemover is the full removal path (record, thumbnail, group
 	// memberships, scraped metadata). The façade wires it once at startup; nil
 	// falls back to Remove, which is everything the video layer owns.
@@ -78,6 +84,29 @@ func NewService(repo VideoRepository, processor *Processor, dataDir string, log 
 	s.volumes = newVolumeState(func(path string) (os.FileInfo, error) { return s.stat(path) })
 	return s
 }
+
+// SetRemoteSupport wires the WebDAV behaviors the video domain cannot own:
+// cache-and-play, a single-file existence check, and the connection health
+// predicate. mediaURL, when set, becomes the processor's media path resolver.
+func (s *Service) SetRemoteSupport(
+	open func(context.Context, *Video) error,
+	check func(context.Context, *Video) (bool, error),
+	mediaURL func(*Video) (string, error),
+	online func(*Video) bool,
+) {
+	s.remoteOpen, s.remoteCheck, s.remoteOnline = open, check, online
+	if mediaURL != nil {
+		s.SetMediaPathResolver(func(v *Video) (string, error) {
+			if !v.IsRemote() {
+				return v.Path, nil
+			}
+			return mediaURL(v)
+		})
+	}
+}
+
+// SetRemotePage wires "open in OpenList" for remote favorites.
+func (s *Service) SetRemotePage(page func(*Video) error) { s.remotePage = page }
 
 // SetMediaPathResolver wires how ffprobe/ffmpeg reach a favorite's bytes. Local
 // favorites keep using Path; remote favorites use the loopback media proxy.
@@ -392,6 +421,21 @@ func (s *Service) Open(id int64) error {
 	if err != nil {
 		return err
 	}
+	if v.IsRemote() {
+		if s.remoteOnline != nil && !s.remoteOnline(v) {
+			return fmt.Errorf("网盘未连接：%s", v.SourceName)
+		}
+		if s.remoteOpen == nil {
+			return fmt.Errorf("网盘播放不可用")
+		}
+		if err := s.remoteOpen(context.Background(), v); err != nil {
+			return err
+		}
+		if err := s.repo.UpdateLastOpened(v.ID, nowMillis()); err != nil {
+			s.log.Warn("update last opened failed", "id", v.ID, "err", err)
+		}
+		return nil
+	}
 	if _, err := s.stat(v.Path); err != nil {
 		if root := s.volumeDetached(v.Path); root != "" {
 			return fmt.Errorf("磁盘未接入：%s\n%s", root, v.Path)
@@ -416,6 +460,12 @@ func (s *Service) OpenContainingFolder(id int64) error {
 	if err != nil {
 		return err
 	}
+	if v.IsRemote() {
+		if s.remotePage == nil {
+			return fmt.Errorf("网盘文件没有本地目录")
+		}
+		return s.remotePage(v)
+	}
 	if _, err := s.stat(v.Path); err != nil {
 		if root := s.volumeDetached(v.Path); root != "" {
 			return fmt.Errorf("磁盘未接入：%s\n%s", root, v.Path)
@@ -434,6 +484,30 @@ func (s *Service) RefreshStatus(id int64) (*Video, error) {
 	v, err := s.repo.Get(id)
 	if err != nil {
 		return nil, err
+	}
+	if v.IsRemote() {
+		v.VolumeRoot = ""
+		v.VolumeOffline = false
+		if s.remoteOnline != nil {
+			v.SourceOffline = !s.remoteOnline(v)
+		}
+		if v.SourceOffline || s.remoteCheck == nil {
+			// A network/auth failure says nothing about the file's existence.
+			return v, nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ok, checkErr := s.remoteCheck(ctx, v)
+		cancel()
+		if checkErr != nil {
+			return v, nil
+		}
+		status := StatusAvailable
+		if !ok {
+			status = StatusMissing
+		}
+		s.markStatus(v, status)
+		v.Status = status
+		return v, nil
 	}
 	v.VolumeRoot = VolumeRoot(v.Path)
 	if root := s.volumeDetached(v.Path); root != "" {

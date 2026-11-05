@@ -3,6 +3,7 @@ import { EventsOn, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime";
 import ActorFilmsView from "../components/ActorFilmsView";
 import AddSourceDialog from "../components/AddSourceDialog";
 import CloudBrowserDialog from "../components/CloudBrowserDialog";
+import CloudDownloadBar from "../components/CloudDownloadBar";
 import ActorIndexView from "../components/ActorIndexView";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ContextMenu, { type MenuAction } from "../components/ContextMenu";
@@ -32,6 +33,7 @@ import {
   addVideoToGroup,
   addVideos,
   addWatchDir,
+  cancelCloudDownload,
   copyPath,
   createGroup,
   deleteGroup,
@@ -40,6 +42,7 @@ import {
   listGroups,
   listVideos,
   openContainingFolder,
+  openCloudPage,
   openVideo,
   pickVideoFiles,
   pickWatchDir,
@@ -62,6 +65,7 @@ import type {
   Group,
   SortDir,
   SortKey,
+  CloudDownloadProgress,
   Video,
   ViewFilter,
   ViewMode,
@@ -158,6 +162,7 @@ export default function Library({
   const [suggestFiles, setSuggestFiles] = useState<SuggestFile[] | null>(null);
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [cloudBrowserOpen, setCloudBrowserOpen] = useState(false);
+  const [cloudDownload, setCloudDownload] = useState<CloudDownloadProgress | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   // Grid ordering: field + direction, applied in the frontend over whatever
   // list the active view/search produced. Defaults match the backend order
@@ -226,6 +231,24 @@ export default function Library({
   // backend never touches the network here), so it is cheap enough to keep
   // mounted and refresh after cloud:status invalidations.
   const cloudQuery = useLiveQuery(listCloudConnections, "cloud-connections");
+
+  // Cache progress is a payload event, so it lives with the view that draws it
+  // (not in services/events.ts). A completed/error card hides itself after a
+  // moment; the download itself keeps running in the backend until it finishes
+  // or is cancelled.
+  useEffect(() => {
+    const off = EventsOn("cloud:download", (progress?: CloudDownloadProgress) => {
+      if (!progress) return;
+      setCloudDownload(progress);
+      if (progress.status !== "downloading") {
+        const ttl = progress.status === "error" ? 7000 : 3000;
+        window.setTimeout(() => {
+          setCloudDownload((current) => (current === progress ? null : current));
+        }, ttl);
+      }
+    });
+    return () => off();
+  }, []);
 
   const videos = library.data ?? NO_VIDEOS;
   const groups = groupsQuery.data ?? NO_GROUPS;
@@ -919,10 +942,11 @@ export default function Library({
     }
     try {
       await openVideo(video.id);
-    } catch {
-      // The backend marks a file missing only when its volume is attached. Ask
-      // it which case this was, so an unplugged drive never offers to remove a
-      // favorite whose file is safe (spec-v1.md §21).
+    } catch (e) {
+      // The backend marks a file missing only when its volume is attached (or,
+      // for a WebDAV source, when the remote path answers 404). Ask it which
+      // case this was so a network failure never offers to remove a favorite
+      // whose remote file is safe.
       invalidate();
       const checked = await refreshStatus(video.id).catch(() => null);
       if (checked?.volumeOffline) {
@@ -930,6 +954,26 @@ export default function Library({
           kind: "error",
           message: "磁盘未接入",
           details: [`${checked.volumeRoot || "磁盘"} 未接入，插回后即可播放`, video.path],
+        });
+        return;
+      }
+      if (video.sourceId > 0) {
+        if (checked?.sourceOffline) {
+          pushToast({
+            kind: "error",
+            message: "网盘未连接",
+            details: [`「${video.sourceName || "网盘"}」当前离线，恢复后即可播放`, video.remotePath],
+          });
+          return;
+        }
+        if (checked?.status === "missing") {
+          setMissingOpen(video);
+          return;
+        }
+        pushToast({
+          kind: "error",
+          message: "网盘视频播放失败",
+          details: [String(e)],
         });
         return;
       }
@@ -1133,7 +1177,13 @@ export default function Library({
         openDetail(video);
         break;
       case "openFolder":
-        handleRevealPath(video);
+        if (video.sourceId > 0) {
+          openCloudPage(video.id).catch((e) =>
+            pushToast({ kind: "error", message: "无法打开 OpenList 管理页", details: [String(e)] }),
+          );
+        } else {
+          handleRevealPath(video);
+        }
         break;
       case "copyPath":
         copyPath(video.id)
@@ -1764,6 +1814,16 @@ export default function Library({
           files={suggestFiles}
           onApplyGroups={handleApplySuggestedGroups}
           onClose={() => setSuggestFiles(null)}
+        />
+      )}
+
+      {cloudDownload && (
+        <CloudDownloadBar
+          progress={cloudDownload}
+          onCancel={() => {
+            void cancelCloudDownload(cloudDownload.videoId);
+          }}
+          onDismiss={() => setCloudDownload(null)}
         />
       )}
 

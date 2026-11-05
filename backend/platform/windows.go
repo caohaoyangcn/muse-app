@@ -66,6 +66,24 @@ func OpenWithDefaultApp(path string) error {
 	return nil
 }
 
+// OpenURL opens an http(s) URL in the user's default browser. ShellExecuteW is
+// the same dispatch OpenWithDefaultApp uses, with no cmd.exe re-parsing.
+func OpenURL(rawURL string) error {
+	opPtr, err := syscall.UTF16PtrFromString("open")
+	if err != nil {
+		return fmt.Errorf("encode shell operation: %w", err)
+	}
+	urlPtr, err := syscall.UTF16PtrFromString(rawURL)
+	if err != nil {
+		return fmt.Errorf("encode URL: %w", err)
+	}
+	rc, _, callErr := procShellExecuteW.Call(0, uintptr(unsafe.Pointer(opPtr)), uintptr(unsafe.Pointer(urlPtr)), 0, 0, syscall.SW_SHOWNORMAL)
+	if rc <= 32 {
+		return fmt.Errorf("open URL failed: code=%d err=%v", int32(rc), callErr)
+	}
+	return nil
+}
+
 // ---------- Windows Shell API via syscall ----------
 //
 // "Open containing folder" is implemented with SHOpenFolderAndSelectItems, the

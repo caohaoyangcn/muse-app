@@ -1,6 +1,7 @@
 package video
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -475,5 +476,79 @@ func TestServiceAddRemoteVideo(t *testing.T) {
 	}
 	if created || revived.ID != v.ID || revived.Status != StatusAvailable {
 		t.Errorf("revived = %+v created=%v", revived, created)
+	}
+}
+
+func TestServiceRemoteOpenAndStatusHooks(t *testing.T) {
+	svc, _ := newTestService(t)
+	v, _, err := svc.AddRemoteVideo(4, "/媒体/remote.mp4", "remote.mp4", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	online := true
+	opened := false
+	paged := false
+	exists := true
+	var checkErr error
+	svc.SetRemoteSupport(
+		func(_ context.Context, got *Video) error {
+			opened = true
+			if got.ID != v.ID {
+				t.Errorf("opened id = %d", got.ID)
+			}
+			return nil
+		},
+		func(context.Context, *Video) (bool, error) { return exists, checkErr },
+		nil,
+		func(*Video) bool { return online },
+	)
+	svc.SetRemotePage(func(*Video) error { paged = true; return nil })
+
+	if err := svc.Open(v.ID); err != nil {
+		t.Fatalf("remote open: %v", err)
+	}
+	if !opened {
+		t.Error("remote open hook was not called")
+	}
+	online = false
+	if err := svc.Open(v.ID); err == nil {
+		t.Error("offline remote open must fail")
+	}
+	online = true
+
+	// A 404 marks the favorite missing.
+	exists = false
+	got, err := svc.RefreshStatus(v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusMissing {
+		t.Errorf("status after 404 = %q, want missing", got.Status)
+	}
+	// A network/auth failure leaves the status alone.
+	if err := svc.repo.UpdateStatus(v.ID, StatusAvailable); err != nil {
+		t.Fatal(err)
+	}
+	checkErr = context.DeadlineExceeded
+	got, err = svc.RefreshStatus(v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusAvailable {
+		t.Errorf("network failure changed status to %q", got.Status)
+	}
+	// An offline source is not even asked.
+	online = false
+	got, _ = svc.RefreshStatus(v.ID)
+	if !got.SourceOffline || got.Status != StatusAvailable {
+		t.Errorf("offline refresh = %+v", got)
+	}
+	online = true
+
+	if err := svc.OpenContainingFolder(v.ID); err != nil {
+		t.Fatalf("remote page: %v", err)
+	}
+	if !paged {
+		t.Error("remote page hook was not called")
 	}
 }

@@ -276,3 +276,23 @@ func waitForFileScan(t *testing.T, svc *Service) FileScanStatus {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
+
+func TestFileScanSkipsRemoteFavorites(t *testing.T) {
+	svc, _ := newTestService(t)
+	v, _, err := svc.AddRemoteVideo(5, "/媒体/a.mp4", "a.mp4", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RefreshAllStatuses()
+	status := svc.FileScanStatus()
+	if status.Remote != 1 || status.Total != 0 || status.Checked != 0 {
+		t.Errorf("remote pass = %+v, want remote=1 total=0", status)
+	}
+	if status.Removed != 0 {
+		t.Errorf("remote favorite was removed by the local pass: %+v", status)
+	}
+	got, err := svc.Get(v.ID)
+	if err != nil || got.Status != StatusAvailable {
+		t.Errorf("remote status changed: %+v err=%v", got, err)
+	}
+}

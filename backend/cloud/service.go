@@ -340,11 +340,16 @@ func (s *Service) Browse(id int64, path string) ([]Entry, error) {
 
 // Stat describes one remote path.
 func (s *Service) Stat(id int64, path string) (*Entry, error) {
+	return s.StatContext(context.Background(), id, path)
+}
+
+// StatContext is Stat with a caller-owned context (media proxy/cache checks).
+func (s *Service) StatContext(ctx context.Context, id int64, path string) (*Entry, error) {
 	client, conn, err := s.client(id)
 	if err != nil {
 		return nil, err
 	}
-	entry, err := client.Stat(context.Background(), path)
+	entry, err := client.Stat(ctx, path)
 	if err != nil {
 		s.observe(conn, err)
 		return nil, err
@@ -543,6 +548,10 @@ func userMessage(err error) string {
 		return "远程文件已变化，请重新读取"
 	case errors.Is(err, ErrConnectionNotFound):
 		return "网盘连接不存在"
+	case errors.Is(err, ErrCacheTooSmall):
+		return "该文件超过网盘缓存上限，请先清理缓存或手动播放"
+	case errors.Is(err, ErrDownloadInProgress):
+		return "该视频正在下载"
 	default:
 		return err.Error()
 	}
@@ -567,3 +576,51 @@ func (s *Service) SourceStates() (map[int64]SourceState, error) {
 
 // UserMessage maps a cloud failure to the Chinese text shown to the user.
 func UserMessage(err error) string { return userMessage(err) }
+
+// Exists is the single-file existence check used by a remote favorite's status
+// refresh. A 404 is a definitive false; network/auth failures are returned so
+// the caller keeps the favorite untouched.
+func (s *Service) Exists(ctx context.Context, id int64, path string) (bool, error) {
+	client, conn, err := s.client(id)
+	if err != nil {
+		return false, err
+	}
+	if _, err := client.Head(ctx, path); err != nil {
+		s.observe(conn, err)
+		if errors.Is(err, ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	s.observe(conn, nil)
+	return true, nil
+}
+
+// ManagementURL returns the OpenList/web management page for one connection:
+// web_url when configured, otherwise the endpoint with a trailing /dav removed.
+func (s *Service) ManagementURL(id int64) (string, error) {
+	conn, err := s.repo.GetConnection(id)
+	if err != nil {
+		return "", err
+	}
+	if web := strings.TrimSpace(conn.WebURL); web != "" {
+		return web, nil
+	}
+	u, err := url.Parse(strings.TrimSpace(conn.Endpoint))
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return "", ErrInvalidEndpoint
+	}
+	p := strings.TrimRight(u.Path, "/")
+	if strings.HasSuffix(strings.ToLower(p), "/dav") {
+		p = p[:len(p)-len("/dav")]
+	}
+	if p == "" {
+		p = "/"
+	}
+	u.Path = p
+	u.RawPath = ""
+	u.RawQuery = ""
+	u.Fragment = ""
+	u.User = nil
+	return strings.TrimRight(u.String(), "/"), nil
+}

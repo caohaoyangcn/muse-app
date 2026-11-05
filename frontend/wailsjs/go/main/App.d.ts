@@ -27,11 +27,17 @@ export function AddWatchDir(arg1:string):Promise<watch.WatchedDir>;
 
 export function BrowseCloud(arg1:number,arg2:string):Promise<Array<cloud.Entry>>;
 
+export function CancelCloudDownload(arg1:number):Promise<void>;
+
+export function ClearCloudCache():Promise<number>;
+
 export function ClearFC2Cookie():Promise<void>;
 
 export function ClearJavBusCookie():Promise<void>;
 
 export function ClearVideoLikes(arg1:number):Promise<video.Video>;
+
+export function CloudCacheInfo():Promise<cloud.CacheInfo>;
 
 export function CloudStorageAvailable():Promise<boolean>;
 
@@ -88,6 +94,8 @@ export function ListVideos():Promise<Array<video.Video>>;
 export function ListWatchDirs():Promise<Array<watch.WatchedDir>>;
 
 export function MergeActors(arg1:string,arg2:string):Promise<void>;
+
+export function OpenCloudPage(arg1:number):Promise<void>;
 
 export function OpenContainingFolder(arg1:number):Promise<void>;
 

@@ -126,6 +126,7 @@ function buttonTitle(status: FileScanStatus | null): string {
   if (status.skipped > 0) text += `，${status.skipped} 个因整卷保护未清理`;
   if (status.revived > 0) text += `，恢复 ${status.revived} 个`;
   if (status.offline > 0) text += `，${status.offline} 个所在磁盘未接入`;
+  if (status.remote > 0) text += `，${status.remote} 个网盘收藏跳过`;
   return text;
 }
 
@@ -153,6 +154,9 @@ function summarize(status: FileScanStatus): Omit<ToastItem, "id"> {
   }
   if (status.offline > 0) {
     details.push(`${status.offline} 个收藏所在磁盘未接入，本次未检测`);
+  }
+  if (status.remote > 0) {
+    details.push(`${status.remote} 个网盘收藏不参与本地文件检测，可打开视频时单独校验`);
   }
 
   if (status.checked === 0) {

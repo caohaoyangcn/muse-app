@@ -30,6 +30,14 @@ func OpenWithDefaultApp(path string) error {
 	return nil
 }
 
+// OpenURL opens an http(s) URL in the user's default browser.
+func OpenURL(rawURL string) error {
+	if err := Command("open", rawURL).Run(); err != nil {
+		return fmt.Errorf("open URL: %w", err)
+	}
+	return nil
+}
+
 // OpenContainingFolder reveals a file in Finder.
 func OpenContainingFolder(path string) error {
 	info, err := os.Stat(path)

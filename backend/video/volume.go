@@ -302,6 +302,9 @@ func (s *Service) reconcileVolume(root string, announce bool, checked func()) (r
 	key := volumeKey(root)
 	onVolume := make([]Video, 0, len(videos))
 	for _, v := range videos {
+		if v.IsRemote() {
+			continue // a cloud:// key has no local volume to reconcile
+		}
 		if volumeKey(VolumeRoot(v.Path)) == key {
 			onVolume = append(onVolume, v)
 		}
@@ -436,6 +439,9 @@ func (s *Service) ReconcileMissing(ids []int64) (map[int64]bool, error) {
 
 	byVolume := make(map[string][]Video)
 	for _, v := range videos {
+		if v.IsRemote() {
+			continue
+		}
 		root := VolumeRoot(v.Path)
 		key := volumeKey(root)
 		byVolume[key] = append(byVolume[key], v)

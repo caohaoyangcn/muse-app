@@ -4,7 +4,10 @@ import {
   AddWatchDir,
   AddCloudVideos,
   BrowseCloud,
+  CancelCloudDownload,
+  ClearCloudCache,
   ClearVideoLikes,
+  CloudCacheInfo as CloudCacheInfoBinding,
   CloudStorageAvailable,
   DeleteCloudConnection,
   CopyPath,
@@ -15,6 +18,7 @@ import {
   GetScrapeProxy,
   GetTourSeen,
   ListCloudConnections,
+  OpenCloudPage,
   SaveCloudConnection,
   TestCloudConnection,
   ListGroups,
@@ -93,6 +97,7 @@ import type {
   JavTaskOverview,
   JavBusCookieStatus,
   FC2CookieStatus,
+  CloudCacheInfo,
   CloudConnection,
   CloudConnectionInput,
   CloudEntry,
@@ -346,3 +351,16 @@ export const addCloudVideos = (
 
 /** 当前平台是否能安全保存密码（Windows DPAPI）。 */
 export const cloudStorageAvailable = (): Promise<boolean> => CloudStorageAvailable();
+
+/** 远程收藏的管理页（OpenList）。Muse 只打开网页，不在内部做写操作。 */
+export const openCloudPage = (videoId: number): Promise<void> => OpenCloudPage(videoId);
+
+/** 网盘下载缓存占用。 */
+export const cloudCacheInfo = (): Promise<CloudCacheInfo> => CloudCacheInfoBinding();
+
+/** 清空下载缓存（不会删除网盘源文件）。返回释放的字节数。 */
+export const clearCloudCache = (): Promise<number> => ClearCloudCache();
+
+/** 取消正在进行的缓存下载；已下载的部分会保留以便续传。 */
+export const cancelCloudDownload = (videoId: number): Promise<void> =>
+  CancelCloudDownload(videoId);
