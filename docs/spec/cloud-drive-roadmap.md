@@ -42,7 +42,7 @@ Muse WebDAV 客户端 ────┘
 | 工作流 | 文档 | 状态 | 当前里程碑 | 下一个提交 |
 | --- | --- | --- | --- | --- |
 | 添加来源弹窗 | [add-video-source-dialog.md](add-video-source-dialog.md) | In progress | 三来源已接通；仅剩 Windows 原生窗口检查 | 文档收尾 |
-| WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | In progress | M4 浏览/添加完成 | `Add cloud media proxy and cache playback` |
+| WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | In progress | M5 媒体代理完成 | `Add cloud cache playback` |
 | OpenList BitQiu 驱动 | [openlist-bitqiu-driver.md](openlist-bitqiu-driver.md) | Proposed / Spike | Phase 1 最小可读驱动 | `Add BitQiu driver`（OpenList fork） |
 
 > 状态只在本表和各文档的「进度记录」中更新；不要用代码注释代替进度记录。
@@ -90,3 +90,4 @@ Muse WebDAV 客户端 ────┘
 | 2026-11-06 | WebDAV M2 | 只读 WebDAV 客户端与 `httptest` 覆盖 | `74d4126` |
 | 2026-11-06 | WebDAV M3 | secret 抽取、连接 CRUD/删除保护/健康检查 | `efa5e34` |
 | 2026-11-06 | WebDAV M4 | 远程收藏、浏览/添加 API、设置与网盘浏览弹窗 | `edcb7a7` |
+| 2026-11-06 | WebDAV M5 | 127.0.0.1 媒体代理、远程元数据/封面 resolver | `b0b059a` |
