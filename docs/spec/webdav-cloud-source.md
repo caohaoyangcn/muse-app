@@ -1,6 +1,6 @@
 # Muse WebDAV 云盘片源实施计划
 
-**状态：** In progress（M1–M8 完成；M9 本地端到端完成，真实 OpenList/BitQiu 待联调）
+**状态：** In progress（M1–M9 本地链路完成；已移除视频缓存、增加来源归档与跨层备份；真实 OpenList/BitQiu 待联调）
 **范围：** Muse Go 后端 `backend/cloud`、v24 schema、WebDAV 只读访问、云端片源的添加/元数据/封面/播放/局域网串流、桌面端设置与浏览弹窗
 **非范围：** OpenList BitQiu 驱动本身（见 [OpenList fork 与 BitQiu 驱动](openlist-bitqiu-driver.md)）、Muse 内重命名/移动/删除/上传网盘文件、远程目录监控、远程内容哈希去重
 **依赖：** 真实比特球联调依赖 [OpenList BitQiu 驱动](openlist-bitqiu-driver.md)；本地可先用 `httptest` WebDAV 或任意 OpenList/AList 实例开发
@@ -21,7 +21,9 @@
 已确认的产品决策：
 
 - Muse 内只读：浏览目录、多选视频、加入收藏；不改名/移动/删除/上传。
-- 桌面播放采用**先缓存后播放**；缩略图/元数据走本地代理按需读取，不下载完整文件。
+- 桌面播放**直接打开 OpenList 文件页**；Muse 不下载、不缓存、不保存任何视频内容。
+- 缩略图/元数据走本地代理按需读取，代理只临时转发字节。
+- 网盘来源停用后，其收藏进入回收站的「归档」区，长期只读保留。
 - 远程文件不参与内容指纹去重、移动重连和启动时批量文件检测。
 - 远程 404 标记 `missing`，但保留记录；网络/鉴权失败只标记来源离线，不删收藏。
 
@@ -32,8 +34,9 @@
 - 配置任意 WebDAV/OpenList 连接，测试连通性，密码加密存储。
 - 浏览远程目录，把选中的视频加入收藏；重复添加有明确提示。
 - 生成缩略图、时长、分辨率、编码信息；卡片显示来源与离线状态。
-- 远程视频可缓存后播放；可一键打开 OpenList 网页管理页。
-- 局域网移动端能播放远程收藏（通过 LAN 服务代理 Range）。
+- 远程视频通过 OpenList 文件页播放；Muse 只保存记录、封面和元数据。
+- 局域网移动端的远程播放同样打开 OpenList，不走 Muse 串流。
+- 网盘停用可归档，归档长期保留且可一键清除。
 - OpenList/网络离线时，收藏保留、状态可恢复、绝不误删。
 
 ### 非目标
@@ -43,6 +46,7 @@
 - 不做远程目录监控（fsnotify 只适用于本地）。
 - 不把远程文件纳入内容哈希/查重/移动重连。
 - 不在 v1 做远程批量「文件检测」；单文件在打开/详情刷新时校验。
+- 不缓存、不转存、不代理播放远程视频内容。
 - 不把 OpenList 打包进默认 Muse 包。
 
 ## 3. 架构
@@ -56,9 +60,7 @@ backend/cloud/
   repository.go   cloud_connections 的 SQLite 读写
   webdav.go       PROPFIND / GET Range / HEAD 客户端
   service.go      连接 CRUD、浏览、Stat、OpenRange、健康检查
-  proxy.go        仅 127.0.0.1 的媒体代理（带随机 token）
-  cache.go        下载缓存、断点续传、LRU、清理
-  stream.go       供本地代理与 LAN 服务复用的 Range 转发
+  proxy.go        仅 127.0.0.1 的元数据代理（带随机 token）
   *_test.go
 ```
 
@@ -187,18 +189,19 @@ TestCloudConnection
 BrowseCloud
 AddCloudVideos
 OpenCloudPage
-CancelCloudDownload
-ClearCloudCache
-CloudCacheInfo
+ArchiveCloudConnection
+EnableCloudConnection
+ListArchived
+ClearArchivedVideos
+ClearArchivedSource
 ```
 
 `app.go` 暴露同名 Wails 绑定；`main.go` 完成 wiring：
 
 ```text
 cloudSvc → api.Library.SetCloudService
-         → videoSvc.SetRemoteSupport
-         → processor.SetMediaPathResolver
-         → server.SetCloudService
+         → videoSvc.SetRemoteSupport (open → OpenList URL)
+         → processor.SetMediaPathResolver (metadata proxy only)
 ```
 
 ### 3.8 局域网服务
@@ -206,9 +209,8 @@ cloudSvc → api.Library.SetCloudService
 `backend/server/server.go` 的 `handleStreamVideo`：
 
 - 本地：保持 `streaming.ServeFile`。
-- 远程：调用 `cloud.ServeVideo(w, r, sourceID, remotePath, fileName)`，复用 Range 转发。
-- 离线：503 + 可读中文错误；404：404。
-- 手机端 `/stream/video/{id}` 不变，远程收藏可直接播放。
+- 远程：返回 409「请在 OpenList 中播放该网盘视频」，Muse 不再转发远程视频字节。
+- 手机端远程收藏改用 `Video.CloudURL` 打开 OpenList。
 
 ### 3.9 前端
 
@@ -220,18 +222,19 @@ cloudSvc → api.Library.SetCloudService
   - 连接选择、面包屑、目录/视频列表、多选、添加、加载/错误/空状态。
   - 无连接时显示「去设置 → 网盘」。
 - `frontend/src/components/AddSourceDialog.tsx`：网盘卡片入口（见 `add-video-source-dialog.md`）。
-- `VideoCard`/详情：云端角标、`SourceOffline` 警告、`missing` 提示。
+- `VideoCard`/详情：云端角标、`SourceOffline` 警告、`missing` 提示、`BackedUp` 「已备份」。
 - `ContextMenu`：远程视频显示「在 OpenList 中打开」；复制路径复制 `RemotePath`。
-- `services/api.ts` 增加绑定封装；`services/events.ts` 接入 `cloud:status`；`cloud:download` 由 Library 视图订阅。
+- `services/api.ts` 增加绑定封装；`services/events.ts` 接入 `cloud:status` 与 `cloud:source:archived`。
+- `TrashView` 合并为「归档与回收站」两个 tab；归档长期保留并提供「清空归档」。
 
-### 3.10 播放与缓存
+### 3.10 播放与归档
 
-- 远程「打开」：下载到 `dataDir/cloud-cache/<videoID>-<安全文件名>`，进度通过 `cloud:download` 上报，完成后调用系统默认播放器。
-- 支持取消、`Range` 断点续传、大小 + 远端修改时间校验。
-- 默认缓存上限 10 GiB，LRU 淘汰；设置页提供「清理缓存」。
-- 删除收藏时删除对应缓存副本（只删生成物，不碰网盘源文件）。
+- 远程「打开」：用 `web_url + 编码后的 remote_path` 打开 OpenList 文件页，播放器、登录、转码由 OpenList 负责。
+- Muse 不缓存、不转存、不保存视频内容；`Video.CloudURL` 供桌面和手机共用。
 - 「在 OpenList 中打开」使用连接 `web_url`；为空则从 endpoint 去掉 `/dav` 推导。
-- v1 不做边下边播；后续可基于代理 URL 增加 `.m3u`/流式选项，不改数据模型。
+- 停用来源：`cloud_connections.enabled=0`，该来源活动收藏写入 `deleted_at`、`delete_reason='archived'`、`archive_source_name` 快照。
+- 归档条目复用回收站读模型（活动读已过滤 `deleted_at`），但 `PurgeExpiredTrash`/`EmptyTrash` 排除 `archived`；提供独立「清空归档」。
+- 重新启用来源只恢复连接，不自动恢复归档。
 
 ## 4. 关键数据流
 
@@ -256,8 +259,8 @@ CloudBrowserDialog
 ```text
 OpenVideo(id)
   → 远程：cloud.Open
-  → 缓存有效：直接打开
-  → 缓存无效：下载（进度事件）→ 完成 → 系统播放器
+  → 生成/复用 Video.CloudURL
+  → 浏览器打开 OpenList 文件页，播放由 OpenList 负责
   → 用户也可「在 OpenList 中打开」
 ```
 
@@ -311,12 +314,13 @@ OpenVideo(id)
 - [x] 远程 ffprobe/缩略图超时。
 - [ ] 生成封面与元数据手测。
 
-### M6：播放与缓存
+### M6：播放委托与归档
 
-- [x] 下载器、进度、取消、断点续传。
-- [x] LRU 清理、删除收藏清缓存。
-- [x] `OpenCloudPage`。
-- [ ] 桌面播放手测。
+- [x] 移除视频下载缓存/缓存 UI/API。
+- [x] 远程播放打开 OpenList 文件页。
+- [x] 取消 LAN 远程串流。
+- [x] 停用来源归档到回收站、长期保留、清空归档。
+- [ ] 桌面/手机 OpenList 播放手测。
 
 ### M7：离线与检测语义
 
@@ -327,9 +331,9 @@ OpenVideo(id)
 
 ### M8：LAN 与移动端
 
-- [x] `server.handleStreamVideo` 远程分支。
-- [x] 手机端播放远程收藏。
-- [x] 离线 503 文案。
+- [x] `server.handleStreamVideo` 远程分支改为 409（不再代理）。
+- [x] 手机端远程播放打开 OpenList。
+- [x] 离线状态文案。
 
 ### M9：文档与端到端
 
@@ -337,7 +341,7 @@ OpenVideo(id)
 - [ ] OpenList fork 联调（需要真实比特球账号与 OpenList fork 构建）。
 - [x] 全套静态检查。
 
-> 2026-11-06 补充：已用 `golang.org/x/net/webdav` + 真实 ffmpeg/ffprobe 跑通本地 WebDAV 端到端（浏览 → 代理 Range → 元数据/封面 → 缓存），并完成 Windows 交叉编译与 `wails build`（macOS 本机产物）。真实 OpenList/BitQiu 仅剩外部环境联调，Muse 侧 WebDAV 链路已完整。
+> 2026-11-06 补充：已用 `golang.org/x/net/webdav` + 真实 ffmpeg/ffprobe 跑通本地 WebDAV 端到端（浏览 → 代理 Range → 元数据/封面），并完成 Windows 交叉编译与 `wails build`（macOS 本机产物）。缓存与 LAN 远程串流已移除；真实 OpenList/BitQiu 仅剩外部环境联调。
 
 ## 6. 边界与失败模式
 
@@ -346,11 +350,11 @@ OpenVideo(id)
 | WebDAV 401/403 | 连接测试失败，提示检查账号/密码；不删收藏 |
 | WebDAV 404 | 目录不存在或文件已删；收藏标 `missing`，保留记录 |
 | 网络超时/DNS 失败 | 连接离线；保留收藏；后台重试 |
-| 服务端不支持 Range | 代理退化为完整流；缓存仍可完成 |
+| 服务端不支持 Range | 只影响 Muse 的元数据代理；播放由 OpenList 处理 |
 | 重复添加 | 返回「已在收藏中」，不新建记录 |
-| 连接下仍有收藏却删除连接 | 拒绝，提示先移除收藏 |
-| 缓存盘满/超上限 | LRU 淘汰；单文件过大时提示手动清理 |
-| 远程大小/修改时间变化 | 缓存失效，重新下载 |
+| 连接下仍有活动收藏却删除连接 | 拒绝；先停用归档或移除活动收藏 |
+| 停用来源 | 活动收藏归档，长期保留，可清空归档 |
+| 远程大小/修改时间变化 | 下次打开 OpenList 时由它读取最新内容 |
 | 非 Windows 保存密码 | 返回「当前平台不支持安全保存密码」；匿名 WebDAV 可测试 |
 | 自签名 HTTPS | 连接级开关，默认校验；关闭时 UI 警告 |
 | 批量添加 | 逐个校验，限并发 2–3 |
@@ -379,7 +383,7 @@ OpenVideo(id)
 - 连接 CRUD/测试/删除保护可用，密码不出现在 JSON/日志。
 - 浏览与多选添加可用，重复/缺失有清晰提示。
 - 远程封面、时长、编码信息正确。
-- 播放缓存有进度、可取消、可清理。
+- 远程播放打开 OpenList 文件页；Muse 不保存视频内容。
 - 离线不误删、不把网络失败当 missing。
 - LAN 可播放远程收藏。
 - `go test ./...`、`golangci-lint run ./...`、`npm run lint`、`npm run build` 通过。
@@ -392,7 +396,7 @@ OpenVideo(id)
 | 2 | `Add WebDAV client for cloud sources` | `backend/cloud/webdav.go`、单测 |
 | 3 | `Add cloud connection service and secret storage` | `backend/secret`、连接 CRUD、健康 |
 | 4 | `Support remote videos in the library` | video 钩子、读模型、文件检测/卷/指纹排除 |
-| 5 | `Add cloud media proxy and cache playback` | 代理、缓存、播放、API |
+| 5 | `Add cloud media proxy and metadata resolution` | 代理、元数据；播放后续改为 OpenList |
 | 6 | `Stream cloud videos over the LAN server` | `handleStreamVideo` 远程分支 |
 | 7 | `Add cloud source settings and browser UI` | Settings、CloudBrowserDialog、卡片/菜单 |
 | 8 | `Add cloud source to add-source dialog` | 与 `add-video-source-dialog.md` 对接 |
@@ -402,7 +406,7 @@ OpenVideo(id)
 
 - **比特球私有 API 稳定性**：由 OpenList fork 承担；Muse 只依赖 WebDAV，驱动失效不影响本地功能。
 - **DPAPI 仅 Windows**：macOS 开发端无法保存密码；非 Windows 只支持匿名 WebDAV。是否要 macOS Keychain 支持，留到有实际需求时。
-- **缓存占用**：默认 10 GiB；是否需要按连接/全局配置，实现时再定。
+- **不保存视频内容**：Muse 只保留记录/封面/元数据；播放和文件管理归 OpenList。
 - **大文件预览**：依赖 OpenList Range；不支持时退化完整流，UI 提示可能较慢。
 - **远程批量检测**：v1 不做；如果用户需要「云端 200 个文件是否还在」，后续单独设计，避免启动时几百个 PROPFIND。
 - **OpenList 可选安装**：默认不随包分发；Muse 只连接外部 WebDAV，不依赖本机 OpenList。
@@ -412,10 +416,11 @@ OpenVideo(id)
 | 日期 | 里程碑 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- | --- |
 | 2026-11-05 | 计划 | Planned | 计划文档建立 | `9da1586` |
-| 2026-11-06 | M9 | Done（外部联调待做） | `docs/cloud-drive-setup.md`；本地 WebDAV 集成测试（ffmpeg/ffprobe/封面/缓存）；`golangci-lint` 2.5.0 0 issues；`go test ./...`、`go test -tags integration ./backend/cloud`、Windows 交叉编译、`wails build` 通过；README/PRODUCT 更新。 | `1492a37` / `2e030d6` |
-| 2026-11-06 | M8 | Done | LAN `/stream/video/{id}` 远程分支复用 Range 转发，`SourceOffline` 503；手机网格/详情/操作表增加网盘离线状态并禁用播放；`ServeVideo` Range/503 测试。 | `a58bb3b` |
+| 2026-11-06 | 产品修正 | 移除视频下载缓存和 LAN 远程串流，播放改为打开 OpenList；停用来源归档到回收站（`archived`，长期保留、可清空）；跨层同番号算「已备份」、同层仍查重。 | `3172b46` |
+| 2026-11-06 | M9 | Done（外部联调待做） | `docs/cloud-drive-setup.md`；本地 WebDAV 集成测试（ffmpeg/ffprobe/封面）；`golangci-lint` 2.5.0 0 issues；`go test ./...`、`go test -tags integration ./backend/cloud`、Windows 交叉编译、`wails build` 通过；README/PRODUCT 更新。 | `1492a37` / `2e030d6` |
+| 2026-11-06 | M8 | Superseded | 初版 LAN 远程 Range 转发；2026-11-06 产品修正后远程 `/stream/video` 返回 409，手机改为打开 OpenList；本地串流不变。 | `a58bb3b` |
 | 2026-11-06 | M7 | Done | 文件检测/卷协调/批量重连/指纹查询全部排除 `source_id>0`；文件检测增加 `Remote` 计数；远程 `RefreshStatus` 404 标 missing、网络/鉴权失败不改状态；离线来源读模型和启动回填跳过均有测试。 | `7973434` |
-| 2026-11-06 | M6 | Done（手测待做） | 下载缓存（Range 续传、`cloud:download` 进度、取消、3 秒重校验失败时回退已缓存副本）；10 GiB LRU、删除收藏清缓存、设置页缓存信息/清理；`OpenCloudPage` 与 `OpenContainingFolder` 远程分支；下载进度条。 | `ba947c0` |
+| 2026-11-06 | M6 | Superseded | 初版为下载缓存播放；2026-11-06 按产品决策移除，改为打开 OpenList，Muse 不保存视频内容。 | `ba947c0` |
 | 2026-11-06 | M5 | Done（手测待做） | 仅绑定 127.0.0.1 的随机 token 媒体代理，GET/HEAD、Range 206/200 降级、416；`Processor.SetMediaPathResolver` + 90 秒远程 ffprobe/ffmpeg 超时；自定义封面也走 resolver；代理单测覆盖。 | `b0b059a` |
 | 2026-11-06 | M4 | Done | 远程视频 `cloud://<id>/<sha1>` 合成路径、去重/复活；`BrowseCloud`/`AddCloudVideos` 与 Wails 绑定；`SourceName/SourceOffline` 读模型；设置「网盘（可选）」、`CloudBrowserDialog`、卡片/详情角标；headless Chromium 验证浏览/多选/设置表单。 | `edcb7a7` |
 | 2026-11-06 | M3 | Done | `backend/secret`（DPAPI / 非 Windows 拒绝）；连接 CRUD、密码保留/清空、删除保护、连接测试与 60 秒健康检查、`cloud:status`；服务层用 `httptest` 和 SQLite 覆盖。 | `efa5e34` |

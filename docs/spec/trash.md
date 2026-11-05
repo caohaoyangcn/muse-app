@@ -1,9 +1,9 @@
 # Muse 收藏回收站设计
 
-**Status:** Implemented (v1)
-**Scope:** 收藏的软删除、恢复、保留期与自动清理；只涉及数据库记录与 Muse 生成的图片/缓存，**绝不触碰源视频或网盘文件**
+**Status:** Implemented (v1; v26 增加网盘归档)
+**Scope:** 收藏的软删除、恢复、保留期与自动清理，以及网盘来源停用后的长期归档；只涉及数据库记录与 Muse 生成的图片，**绝不触碰源视频或网盘文件，也不保存视频内容**
 **Target:** 桌面端（Wails）、局域网移动端（共用 `api.Library` 门面）、LAN HTTP API
-**Version:** v1（schema v25）
+**Version:** v1（schema v25；v26 增加网盘归档字段）
 **依赖:** 无新增依赖
 
 ---
@@ -39,12 +39,13 @@ v1 非目标：
 
 ## 2. 数据模型
 
-`videos` 表新增两列（schema v25）：
+`videos` 表新增两列（schema v25）；v26 另加 `archive_source_name`，`cloud_connections` 加 `enabled` / `disabled_at`：
 
 | 列 | 含义 |
 | --- | --- |
 | `deleted_at INTEGER NULL` | 移入回收站的 unix 毫秒；`NULL` = 活动收藏 |
-| `delete_reason TEXT NOT NULL DEFAULT ''` | `user`（手动移除）或 `missing`（文件缺失自动移入） |
+| `delete_reason TEXT NOT NULL DEFAULT ''` | `user`（手动移除）、`missing`（文件缺失自动移入）或 `archived`（网盘来源停用归档） |
+| `archive_source_name TEXT NOT NULL DEFAULT ''` | 停用来源时的名称快照；连接删除后归档仍可显示来源 |
 
 新增索引 `idx_videos_deleted_at`。
 
@@ -79,9 +80,24 @@ v1 非目标：
 1. `GetAny` 读取（不存在 = 成功：过期卡片也能消失）；
 2. 已在回收站 = 幂等，不重置 `deleted_at`；
 3. 活动行写入 `deleted_at` / `delete_reason`，发 `video:trashed {id, reason}`；
-4. 门面额外删除该收藏的网盘下载缓存（生成副本，可重新下载）。
+4. 源视频、缩略图、封面、分组、点赞、刮削资料都不动；Muse 不保存视频内容。
 
-源视频、缩略图、封面、分组、点赞、刮削资料都不动。
+### 4.1.1 网盘归档（v26）
+
+停用网盘来源时，门面把该来源所有活动收藏在同一用户动作里转成回收站条目：
+
+```text
+deleted_at = now
+delete_reason = 'archived'
+archive_source_name = 连接名快照
+```
+
+- 归档条目长期保留，**不参与**普通回收站的保留期自动清理；
+- 「归档与回收站」入口分为「归档 / 回收站」两个 tab；
+- 重新启用连接不会自动恢复归档；
+- 归档可以单条恢复（来源必须已启用）、单条彻底删除、按来源清空或「清空归档」；
+- 普通「清空回收站」不包含归档；
+- 连接删除后，归档靠 `archive_source_name` 继续显示来源。
 
 ### 4.2 恢复
 
@@ -106,8 +122,7 @@ v1 非目标：
 1. `video.Service.Remove` 删除 `videos` 行并删除缩略图；
 2. 删除 `video_group_members` 中的归属；
 3. `jav.Delete` 删除 `video_jav` / `jav_scrape_tasks`；
-4. 删除网盘下载缓存；
-5. 发 `video:removed {id}`；图片清理把残留封面按「无记录」回收。
+4. 发 `video:removed {id}`；图片清理把残留封面按「无记录」回收。
 
 `videos` 行删除后，路径唯一键释放，用户可以重新添加同一个文件。
 
@@ -115,7 +130,7 @@ v1 非目标：
 
 - 默认：`api.DefaultTrashRetentionDays = 14`；
 - 范围：`1–365` 天；非法/损坏的设置回退默认值；
-- 过期判据：`deleted_at <= now - retentionDays * 24h`；
+- 过期判据：`deleted_at <= now - retentionDays * 24h`，且 `delete_reason <> 'archived'`；
 - 触发：
   - 应用启动后立即一次；
   - 运行中每小时一次（`api.Library.StartTrashPurge`）；
@@ -134,6 +149,7 @@ v1 非目标：
 | 事件 | 载荷 | 说明 |
 | --- | --- | --- |
 | `video:trashed` | `{id, reason}` | 收藏进入回收站；活动视图移除卡片 |
+| `cloud:source:archived` | `{sourceId, name, count}` | 网盘来源停用并批量归档 |
 | `video:restored` | `{id}` | 收藏从回收站恢复 |
 | `video:removed` | `{id}` | 记录被彻底删除（保留原有语义） |
 | `video:missing:swept` | `{root, removed, skipped}` | `removed` 现表示移入回收站的条数 |
@@ -171,8 +187,9 @@ SetTrashRetentionDays(days int) error
 
 ## 9. UI
 
-- 桌面侧边栏新增「回收站」，视图显示封面、名称、原因、移入时间、剩余天数、原分组与路径；
-- 每条提供「恢复」「彻底删除」，支持「清空回收站」；
+- 桌面侧边栏「归档与回收站」，视图分为「归档 / 回收站」两个 tab；
+- 回收站显示封面、名称、原因、移入时间、剩余天数、原分组与路径；每条提供「恢复」「彻底删除」，支持「清空回收站」；
+- 归档按来源分组，显示归档时间、长期保留和来源名；提供「恢复」「彻底删除」「清空归档」；
 - 设置 → 回收站可调整保留天数、恢复默认、立即清理超期条目；
 - 移动端新增「回收站」底部 tab，操作相同（不提供保留天数设置，遵守移动端不做设置的约束）；
 - 移除相关文案统一为「移入回收站」，并保留「源文件不会被删除」的提示。
@@ -183,5 +200,5 @@ SetTrashRetentionDays(days int) error
 - **不自动恢复回收站里的缺失项**：文件重新出现在原路径后，需要重新添加（会自动恢复）或手动恢复；这样用户主动移入回收站的条目不会因为磁盘事件被悄悄复活。
 - **保留期不是精确定时器**：应用关闭期间不会清理，下一次启动或后台 tick 才执行；到期条目在两次 tick 之间可能短暂仍可见。
 - **自动清理是启发式保护**：整卷全部缺失时仍然跳过（复用缺失自动移除的整卷保护），所以部分「文件真的没了」的收藏会停留在列表里标 ⚠，不会被自动移入回收站。
-- **网盘缓存**：移入回收站时删除已下载缓存以释放空间；恢复后播放会重新下载。源网盘文件始终只读。
+- **网盘归档**：归档只是记录状态，不是备份；网盘源文件仍由 OpenList 保存，Muse 不保存视频内容。
 - **无鉴权 LAN**：与现有写端点一致，同网段设备可以恢复或彻底删除回收站条目；README 的安全提示不变。
