@@ -1,11 +1,11 @@
 # Muse WebDAV 云盘片源实施计划
 
-**状态：** Proposed（未实现）
+**状态：** In progress（M1 已完成）
 **范围：** Muse Go 后端 `backend/cloud`、v24 schema、WebDAV 只读访问、云端片源的添加/元数据/封面/播放/局域网串流、桌面端设置与浏览弹窗
 **非范围：** OpenList BitQiu 驱动本身（见 [OpenList fork 与 BitQiu 驱动](openlist-bitqiu-driver.md)）、Muse 内重命名/移动/删除/上传网盘文件、远程目录监控、远程内容哈希去重
 **依赖：** 真实比特球联调依赖 [OpenList BitQiu 驱动](openlist-bitqiu-driver.md)；本地可先用 `httptest` WebDAV 或任意 OpenList/AList 实例开发
 **入口：** 桌面端的[添加来源弹窗](add-video-source-dialog.md)
-**最后更新：** 2026-11-05
+**最后更新：** 2026-11-06
 
 ---
 
@@ -277,9 +277,9 @@ OpenVideo(id)
 
 ### M1：schema 与仓储
 
-- [ ] v24 迁移、模型字段、仓储列/查询。
-- [ ] 迁移测试。
-- [ ] 现有 `go test ./...` 通过。
+- [x] v24 迁移、模型字段、仓储列/查询。
+- [x] 迁移测试。
+- [x] 现有 `go test ./...` 通过。
 
 ### M2：WebDAV 客户端
 
@@ -409,4 +409,5 @@ OpenVideo(id)
 
 | 日期 | 里程碑 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- | --- |
-| 2026-11-05 | 计划 | Planned | 计划文档建立 | `<pending>` |
+| 2026-11-05 | 计划 | Planned | 计划文档建立 | `9da1586` |
+| 2026-11-06 | M1 | Done | v24：`cloud_connections`、`videos.source_id/remote_path`、部分唯一索引；模型与 `GetByRemote`；本地指纹/重连查询排除远程；迁移与仓储测试。`go test ./...`、`go vet ./...` 通过。 | `6629ebc` |

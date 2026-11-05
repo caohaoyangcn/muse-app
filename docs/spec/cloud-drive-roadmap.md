@@ -1,8 +1,8 @@
 # 云盘片源与添加入口路线图
 
-**状态：** Active（计划阶段）
+**状态：** Active（实施中）
 **用途：** 把三块工作拆成可独立追踪、可分别提交的文档；进度以各文档的 checklist、提交表和本文的状态表为准。
-**最后更新：** 2026-11-05
+**最后更新：** 2026-11-06
 
 三份实施计划：
 
@@ -41,8 +41,8 @@ Muse WebDAV 客户端 ────┘
 
 | 工作流 | 文档 | 状态 | 当前里程碑 | 下一个提交 |
 | --- | --- | --- | --- | --- |
-| 添加来源弹窗 | [add-video-source-dialog.md](add-video-source-dialog.md) | In progress | 本地/扫描已接入；扫描=目录监控；网盘卡片待 WebDAV | 下一步：网盘 M1 schema |
-| WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | Proposed | M1 schema | `Add cloud source schema and repository` |
+| 添加来源弹窗 | [add-video-source-dialog.md](add-video-source-dialog.md) | In progress | 本地/扫描已接入；扫描=目录监控；网盘卡片待 WebDAV | 下一步：WebDAV 浏览/添加后接线 |
+| WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | In progress | M1 schema 完成 | `Add WebDAV client for cloud sources` |
 | OpenList BitQiu 驱动 | [openlist-bitqiu-driver.md](openlist-bitqiu-driver.md) | Proposed / Spike | Phase 1 最小可读驱动 | `Add BitQiu driver`（OpenList fork） |
 
 > 状态只在本表和各文档的「进度记录」中更新；不要用代码注释代替进度记录。
@@ -86,3 +86,4 @@ Muse WebDAV 客户端 ────┘
 | 2026-11-05 | 计划建立 | 三份实施计划与路线图写入 `docs/spec/` | `9da1586` |
 | 2026-11-05 | 本地/扫描入口 | 初版 `watch.ScanOnce` + `AddSourceDialog` + Library 接入；后收拢为目录监控 | `0800c72` / `d40a9ac` |
 | 2026-11-05 | 语义收拢 | 扫描文件夹改为 `pickWatchDir` + `addWatchDir`，删除一次性 `ScanOnce` | `e25c96c` |
+| 2026-11-06 | WebDAV M1 | v24 schema、远程视频字段、仓储查询与过滤、迁移/仓储测试 | `6629ebc` |
