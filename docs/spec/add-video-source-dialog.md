@@ -170,6 +170,7 @@ type ScanOnceResult struct {
     Added     int
     Relocated int
     Failed    int
+    Skipped   int   // 文件仍被其他程序占用，未导入
     Results   []video.AddVideoResult
 }
 
@@ -195,27 +196,27 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 
 ### Phase 1：一次性目录扫描后端
 
-- [ ] 抽出 `collectCandidates`，保证 `scanRoot` 行为不变。
-- [ ] 实现 `watch.Service.ScanOnce`。
-- [ ] `api.Library.ScanDirectoryOnce`。
-- [ ] `App.ScanDirectoryOnce` / `App.PickScanDir`。
-- [ ] 单测：添加、跳过已收藏、跳过隐藏/系统目录、失败计数、不创建监控项。
-- [ ] `go test ./backend/watch ./backend/api ./...`。
+- [x] 抽出 `collectCandidates`，保证 `scanRoot` 行为不变。
+- [x] 实现 `watch.Service.ScanOnce`（含 `Skipped`）。
+- [x] `api.Library.ScanDirectoryOnce`。
+- [x] `App.ScanDirectoryOnce` / `App.PickScanDir`。
+- [x] 单测：添加、跳过已收藏、跳过隐藏/系统目录、失败/占用计数、不创建监控项。
+- [x] `go test ./backend/watch ./backend/api ./...`。
 
 ### Phase 2：来源弹窗组件
 
-- [ ] 新建 `AddSourceDialog.tsx`，实现三张卡片、键盘、焦点、footer。
-- [ ] 接入 `Dialog` 原语，保持现有深色 token。
-- [ ] 网盘卡片的 loading/count/offline/error 四种描述。
-- [ ] 窄窗口检查。
+- [x] 新建 `AddSourceDialog.tsx`，实现本地/扫描卡片、键盘、焦点、footer。
+- [x] 接入 `Dialog` 原语，保持现有深色 token。
+- [ ] 网盘卡片：组件已预留 `onPickCloud` / `cloud` 与 loading/count/offline/error 文案，等网盘后端接入后启用。
+- [ ] 窄窗口手测。
 
 ### Phase 3：接入 Library
 
-- [ ] `addSourceOpen` 状态与打开/关闭逻辑。
-- [ ] 本地、扫描、网盘三个 handler。
-- [ ] 拖拽时关闭弹窗并继续添加。
-- [ ] 扫描中的状态提示与禁止重复扫描。
-- [ ] 空库 CTA 复用同一入口。
+- [x] `addSourceOpen` 状态与打开/关闭逻辑。
+- [x] 本地、扫描 handler；网盘 handler 等 Phase 4。
+- [x] 拖拽时关闭弹窗并继续添加。
+- [x] 扫描中的状态提示与禁止重复扫描。
+- [x] 空库 CTA 复用同一入口。
 
 ### Phase 4：网盘交接
 
@@ -225,16 +226,16 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 
 ### Phase 5：文案、无障碍、引导
 
-- [ ] 更新新手引导中「添加视频」的说明为「选择来源」。
-- [ ] 检查 `aria-describedby`、焦点环、Esc、键盘顺序。
-- [ ] 更新 `PRODUCT.md` 的能力清单（来源选择弹窗）。
+- [x] 更新新手引导中「添加视频」的说明为「选择来源」。
+- [x] 检查 `aria-describedby`、焦点环、Esc、键盘顺序。
+- [x] 更新 `PRODUCT.md` 的能力清单（来源选择弹窗）。
 
 ### Phase 6：验证
 
-- [ ] `cd frontend && npm run lint && npm run build`。
-- [ ] `go test ./...`。
+- [x] `cd frontend && npm run lint && npm run build`。
+- [x] `go test ./...`。
 - [ ] 手测矩阵见 §6。
-- [ ] 实现完成后运行一次 Impeccable 机械检测：`impeccable detect --json frontend/src/components/AddSourceDialog.tsx frontend/src/pages/Library.tsx`。
+- [x] 实现完成后运行一次 Impeccable 机械检测：`impeccable detect --json frontend/src/components/AddSourceDialog.tsx frontend/src/pages/Library.tsx`（结果为空）。
 
 ## 6. 测试与验收
 
@@ -285,4 +286,13 @@ func (s *Service) ScanOnce(path string) (ScanOnceResult, error)
 
 | 日期 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- |
-| 2026-11-05 | Planned | 计划文档建立 | `<pending>` |
+| 2026-11-05 | Planned | 计划文档建立 | `9da1586` |
+| 2026-11-05 | In progress | 一次性目录扫描、来源弹窗、Library 接入完成；网盘卡片等 WebDAV 后端后启用 | `<pending>` |
+
+## 10. 实现记录（2026-11-05）
+
+- 后端：`watch.ScanOnce` 与 `ScanOnceResult` 已实现；`Skipped` 记录被其他程序占用的文件；不写 `watched_dirs`、不发 `watch:scanned`、不调用 `AutoTagVideos`。
+- 前端：`AddSourceDialog` 当前只渲染本地/扫描两张卡片。网盘卡片代码已预留（`onPickCloud` / `cloud`），但 WebDAV 后端尚未实现，因此不渲染，避免出现点不开的死入口。等 `webdav-cloud-source.md` 的 M4/M7 完成后再接第三张卡片。
+- 入口：顶部 `＋ 添加视频` 和空库 CTA 都打开来源弹窗；拖拽仍直接添加，并在弹窗打开时先关闭弹窗。
+- 已完成：引导文案、`PRODUCT.md` 能力清单、`go test` / `go vet` / 前端 `lint` + `build`。
+- 尚未完成：网盘交接、窄窗口手测、真实窗口视觉检查。

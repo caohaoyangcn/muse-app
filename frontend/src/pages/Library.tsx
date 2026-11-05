@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EventsOn, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime";
 import ActorFilmsView from "../components/ActorFilmsView";
+import AddSourceDialog from "../components/AddSourceDialog";
 import ActorIndexView from "../components/ActorIndexView";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ContextMenu, { type MenuAction } from "../components/ContextMenu";
@@ -37,12 +38,14 @@ import {
   listVideos,
   openContainingFolder,
   openVideo,
+  pickScanDir,
   pickVideoFiles,
   refreshStatus,
   refreshVolumes,
   removeVideo,
   renameGroup,
   reorderGroups,
+  scanDirectoryOnce,
   searchVideos,
   setGroupParent,
   setVideoGroups,
@@ -151,6 +154,10 @@ export default function Library({
   >(null);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
   const [suggestFiles, setSuggestFiles] = useState<SuggestFile[] | null>(null);
+  const [addSourceOpen, setAddSourceOpen] = useState(false);
+  // The directory being scanned one-off, if any. Kept separate from the watch
+  // list: this scan never becomes a monitored root.
+  const [scanningDir, setScanningDir] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   // Grid ordering: field + direction, applied in the frontend over whatever
   // list the active view/search produced. Defaults match the backend order
@@ -783,6 +790,7 @@ export default function Library({
       // Clear the overlay at this boundary so success, empty drops, and
       // failures cannot leave the drop hint stuck on screen.
       setDragActive(false);
+      setAddSourceOpen(false);
       const validPaths = (paths ?? []).filter((path) => path.trim() !== "");
       if (validPaths.length === 0) return;
       try {
@@ -831,7 +839,11 @@ export default function Library({
     };
   }, []);
 
-  const handleAdd = async () => {
+  const handleAddLocal = async () => {
+    // Close the source router first: the native picker is the next layer, and
+    // a cancelled picker should leave the user on the library, not behind a
+    // now-irrelevant modal.
+    setAddSourceOpen(false);
     try {
       const paths = await pickVideoFiles();
       if (paths && paths.length > 0) {
@@ -842,6 +854,45 @@ export default function Library({
       }
     } catch (e) {
       pushToast({ kind: "error", message: "添加视频失败", details: [String(e)] });
+    }
+  };
+
+  const handleScanDirectory = async () => {
+    setAddSourceOpen(false);
+    let dir: string;
+    try {
+      dir = await pickScanDir();
+    } catch (e) {
+      pushToast({ kind: "error", message: "无法选择文件夹", details: [String(e)] });
+      return;
+    }
+    if (!dir) return;
+
+    setScanningDir(dir);
+    try {
+      const result = await scanDirectoryOnce(dir);
+      if (result.results.length > 0) {
+        showAddSummary(result.results);
+        void showGroupSuggestions(result.results);
+      } else if (result.skipped > 0) {
+        pushToast({
+          kind: "info",
+          message: `没有新增视频，${result.skipped} 个文件暂不可读`,
+        });
+      } else {
+        pushToast({ kind: "info", message: "未发现新视频" });
+      }
+      if (result.skipped > 0 && result.results.length > 0) {
+        pushToast({
+          kind: "info",
+          message: `${result.skipped} 个文件暂不可读，已跳过`,
+        });
+      }
+      invalidate();
+    } catch (e) {
+      pushToast({ kind: "error", message: "扫描文件夹失败", details: [String(e)] });
+    } finally {
+      setScanningDir(null);
     }
   };
 
@@ -1357,9 +1408,12 @@ export default function Library({
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-        <Button data-tour="add-video" variant="primary" onClick={() => void handleAdd()}>
+        <Button data-tour="add-video" variant="primary" onClick={() => setAddSourceOpen(true)}>
           + 添加视频
         </Button>
+        {scanningDir && (
+          <span className="max-w-[180px] truncate text-xs text-[var(--muted)]">正在扫描 {baseName(scanningDir)}…</span>
+        )}
         <div className="flex-1" />
         <ServerBar />
         {!actorView && !duplicateView && (
@@ -1553,7 +1607,7 @@ export default function Library({
               {loading ? (
                 <div className="flex min-h-[320px] h-full flex-col items-center justify-center text-center text-[var(--muted)]">加载中…</div>
               ) : videos.length === 0 ? (
-                <EmptyState keyword={keyword} onAdd={() => void handleAdd()} />
+                <EmptyState keyword={keyword} onAdd={() => setAddSourceOpen(true)} />
               ) : shownVideos.length === 0 ? (
                 <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
                   <div className="mb-1.5 text-xl text-[var(--text)]">无结果</div>
@@ -1577,6 +1631,15 @@ export default function Library({
       </div>
 
       {dragActive && <DropOverlay />}
+
+      <AddSourceDialog
+        open={addSourceOpen}
+        scanning={scanningDir !== null}
+        scanningLabel={scanningDir ? baseName(scanningDir) : undefined}
+        onPickLocal={() => void handleAddLocal()}
+        onPickFolder={() => void handleScanDirectory()}
+        onClose={() => setAddSourceOpen(false)}
+      />
 
       {menu && (
         <ContextMenu

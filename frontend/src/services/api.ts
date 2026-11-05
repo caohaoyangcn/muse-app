@@ -16,6 +16,7 @@ import {
   LikeVideo,
   OpenContainingFolder,
   OpenVideo,
+  PickScanDir,
   PickVideoFiles,
   PickWatchDir,
   ResetVideoCover,
@@ -26,6 +27,7 @@ import {
   RenameGroup,
   ReorderGroups,
   RescanWatchDirs,
+  ScanDirectoryOnce,
   RefreshVolumes,
   SearchVideos,
   ServerStatus,
@@ -81,6 +83,7 @@ import type {
   Video,
   VideoGroupSuggestion,
   WatchedDir,
+  ScanOnceResult,
   JavDetail,
   JavTask,
   JavTaskOverview,
@@ -304,5 +307,11 @@ export const addWatchDir = (path: string): Promise<WatchedDir> => AddWatchDir(pa
 export const removeWatchDir = (id: number): Promise<void> => RemoveWatchDir(id);
 
 export const pickWatchDir = (): Promise<string> => PickWatchDir();
+
+/** 一次性扫描目录（不加入目录监控）。 */
+export const pickScanDir = (): Promise<string> => PickScanDir();
+
+export const scanDirectoryOnce = (path: string): Promise<ScanOnceResult> =>
+  ScanDirectoryOnce(path);
 
 export const rescanWatchDirs = (): Promise<void> => RescanWatchDirs();

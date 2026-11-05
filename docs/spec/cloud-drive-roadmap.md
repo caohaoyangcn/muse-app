@@ -41,7 +41,7 @@ Muse WebDAV 客户端 ────┘
 
 | 工作流 | 文档 | 状态 | 当前里程碑 | 下一个提交 |
 | --- | --- | --- | --- | --- |
-| 添加来源弹窗 | [add-video-source-dialog.md](add-video-source-dialog.md) | Proposed | Phase 0 计划 | `Add one-off directory scan for add-source flow` |
+| 添加来源弹窗 | [add-video-source-dialog.md](add-video-source-dialog.md) | In progress | 本地/扫描已接入；网盘卡片待 WebDAV | `Add add-source chooser dialog` |
 | WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | Proposed | M1 schema | `Add cloud source schema and repository` |
 | OpenList BitQiu 驱动 | [openlist-bitqiu-driver.md](openlist-bitqiu-driver.md) | Proposed / Spike | Phase 1 最小可读驱动 | `Add BitQiu driver`（OpenList fork） |
 
@@ -83,4 +83,5 @@ Muse WebDAV 客户端 ────┘
 
 | 日期 | 事件 | 说明 |
 | --- | --- | --- |
-| 2026-11-05 | 计划建立 | 三份实施计划与路线图写入 `docs/spec/` |
+| 2026-11-05 | 计划建立 | 三份实施计划与路线图写入 `docs/spec/`（`9da1586`） |
+| 2026-11-05 | 本地/扫描入口 | `watch.ScanOnce` + `AddSourceDialog` + Library 接入；网盘卡片暂不渲染 | `<pending>` |
