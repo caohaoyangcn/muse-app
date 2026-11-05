@@ -71,9 +71,6 @@ func TestClientListParsesChineseEscapedHref(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	if !sawAuth {
-		// The request itself is made below; this assertion only runs after.
-	}
 	entries, err := client.List(context.Background(), "/媒体")
 	if err != nil {
 		t.Fatalf("list: %v", err)

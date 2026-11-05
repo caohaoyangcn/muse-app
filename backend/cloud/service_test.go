@@ -160,8 +160,7 @@ func TestServiceBrowseSortsAndMapsHealth(t *testing.T) {
 
 func TestServiceTestConnectionOfflineAndRecover(t *testing.T) {
 	healthy := false
-	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !healthy {
 			w.WriteHeader(http.StatusUnauthorized)
 			return

@@ -111,8 +111,7 @@ func (c *Cache) Ensure(
 	// changed, download again; if it cannot answer, play what is already here.
 	meta, hasMeta := c.readMeta(spec.VideoID)
 	cached := ""
-	if hasMeta && meta.SourceID == spec.SourceID && meta.RemotePath == spec.RemotePath &&
-		(spec.Size <= 0 || meta.Size == spec.Size) {
+	if hasMeta && meta.SourceID == spec.SourceID && meta.RemotePath == spec.RemotePath {
 		candidate := c.finalPath(CacheSpec{VideoID: spec.VideoID, FileName: meta.FileName})
 		if info, statErr := os.Stat(candidate); statErr == nil && info.Mode().IsRegular() {
 			cached = candidate
