@@ -1,0 +1,42 @@
+# Wails build output (exe + bundled ffmpeg tools, generated artifacts)
+/build/bin/
+
+# Windows release packages and their FFmpeg download cache
+/dist/
+/.cache/
+
+# Frontend build output
+/frontend/dist/
+
+# Node dependencies
+/frontend/node_modules/
+
+# Local tooling / session caches
+/.zcode/
+/.dsh/
+/.impeccable/
+
+# Local app data (db + generated media artifacts)
+/Muse/
+*.db
+*.db-wal
+*.db-shm
+/logs/
+
+# History-rewrite backups: never publish
+*.bundle
+
+# OS / editor
+*.exe
+Thumbs.db
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+
+# Python bytecode
+__pycache__/
+*.pyc
+

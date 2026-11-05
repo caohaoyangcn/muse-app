@@ -1,0 +1,22 @@
+Muse — third-party notices
+==========================
+
+FFmpeg (ffmpeg.exe, ffprobe.exe)
+--------------------------------
+This package bundles FFmpeg binaries built by the BtbN/FFmpeg-Builds project
+from FFmpeg master, in the LGPL configuration (no GPL-only components).
+Muse runs them as separate command-line processes to read video metadata and
+to extract thumbnail frames.
+
+  License:  GNU Lesser General Public License, version 3
+  Text:     FFmpeg-LICENSE.txt (shipped in this folder)
+  Upstream: https://ffmpeg.org/
+  Binaries: https://github.com/BtbN/FFmpeg-Builds
+  Source:   https://github.com/BtbN/FFmpeg-Builds (build scripts, which pin the
+            exact FFmpeg and dependency revisions used for these binaries)
+
+If you redistribute this folder, keep FFmpeg-LICENSE.txt next to the binaries
+and keep this notice. For the corresponding source code of the bundled
+binaries, use the links above or ask the person who gave you this folder.
+
+Everything else in this folder (Muse.exe, README.txt) is part of Muse.

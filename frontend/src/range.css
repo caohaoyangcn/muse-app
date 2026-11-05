@@ -1,0 +1,76 @@
+/* Shared continuous slider used by the desktop and mobile card-size controls.
+   Native range inputs need per-engine pseudo-element styling for the dark
+   theme; the input keeps a taller hit area than its 4px track so it stays easy
+   to grab with a mouse and a finger. */
+
+.muse-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.muse-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.muse-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 2px solid var(--panel-2);
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.muse-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.muse-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--panel-2);
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.muse-range:focus-visible {
+  outline: none;
+}
+
+.muse-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.35);
+}
+
+.muse-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.35);
+}
+
+@media (pointer: coarse) {
+  .muse-range {
+    height: 28px;
+  }
+
+  .muse-range::-webkit-slider-thumb {
+    width: 18px;
+    height: 18px;
+    margin-top: -7px;
+  }
+
+  .muse-range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+  }
+}

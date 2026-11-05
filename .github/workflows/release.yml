@@ -1,0 +1,183 @@
+name: Release (Windows x64)
+
+# 推一个 v 开头的 tag，或在 Actions 页面手动触发，都会完整跑一遍构建与打包，
+# 成功后创建（或更新）对应的 GitHub Release：
+#
+#   # 手动触发：按 wails.json 的 info.productVersion 发布 v<版本>
+#   # 若该 tag 尚不存在，自动创建在当前提交上
+#
+#   # 打 tag：先改 wails.json 的 info.productVersion 并提交，再推 tag
+#   # git tag v1.0.1 && git push origin v1.0.1
+#
+# 打包逻辑仍然是 scripts/package-windows.sh 一份，CI 不重复实现。
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # 所有发布运行串行化：手动触发与 tag 触发可能同时操作同一个 Release。
+  group: release-windows
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: package win64
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        # Git Bash 是 windows-latest 自带的；打包脚本是 bash（macOS 上也是它）。
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Wails CLI
+        run: |
+          set -euo pipefail
+          version="$(awk '$1 == "github.com/wailsapp/wails/v2" { print $2 }' go.mod | sed 's/^v//')"
+          echo "go.mod wants Wails v$version"
+          go install "github.com/wailsapp/wails/v2/cmd/wails@v${version}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Wails CLI
+        run: |
+          set -euo pipefail
+          command -v wails
+          wails version
+
+      - name: Read version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./wails.json").info.productVersion')"
+          echo "value=${version}" >> "$GITHUB_OUTPUT"
+          echo "Muse ${version}"
+
+      - name: Check the tag matches wails.json
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          version="${{ steps.version.outputs.value }}"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match wails.json productVersion ${version} — bump info.productVersion, commit, then re-tag."
+            exit 1
+          fi
+
+      - name: Frontend build and lint
+        # The root Go package embeds frontend/dist, so the frontend build has to
+        # run before `go test ./...` — a fresh checkout has no dist/.
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build:all
+          npm run lint
+
+      - name: Backend tests
+        run: go test ./...
+
+      - name: Cache FFmpeg
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/ffmpeg-win64-shared
+          # Bump the suffix to pull a newer BtbN build.
+          key: ffmpeg-win64-shared-v1
+
+      - name: Package
+        run: scripts/package-windows.sh
+
+      - name: Collect checksum
+        id: package
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.value }}"
+          zip="dist/Muse-${version}-win64.zip"
+          test -f "$zip"
+          sha="$(sha256sum "$zip" | awk '{print $1}')"
+          echo "zip=${zip}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "sha256: ${sha}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Muse-${{ steps.version.outputs.value }}-win64
+          path: ${{ steps.package.outputs.zip }}
+          if-no-files-found: error
+          # Release 已经保存正式产物；artifact 只留一天方便排查失败。
+          retention-days: 1
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.value }}"
+          zip="${{ steps.package.outputs.zip }}"
+          sha="${{ steps.package.outputs.sha }}"
+
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            tag="${GITHUB_REF_NAME}"
+          else
+            tag="v${version}"
+          fi
+
+          # 单引号 heredoc：正文原样写入，占位符随后替换（反引号不会被当成命令）。
+          cat > release-notes.md <<'EOF'
+          ## Muse __VERSION__ — Windows x64 便携版
+
+          - `Muse-__VERSION__-win64.zip`：解压后双击 `Muse.exe`，无需安装；FFmpeg 已随包。
+          - 数据目录是 `%LOCALAPPDATA%\Muse\`，升级时用新文件夹覆盖旧的即可，收藏库会自动迁移。
+          - 首次运行会被 SmartScreen 拦一次（未签名）：更多信息 → 仍要运行。
+          - 局域网手机访问需要以管理员身份运行一次放行防火墙；细节见包内 `README.txt`。
+
+          校验：
+
+          ```
+          certutil -hashfile Muse-__VERSION__-win64.zip SHA256
+          ```
+
+          sha256：`__SHA__`
+          EOF
+          sed -i "s/__VERSION__/${version}/g; s/__SHA__/${sha}/g" release-notes.md
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # 同一版本重跑：覆盖 zip、刷新说明，保留原来的 tag 指向。
+            gh release upload "$tag" "$zip" --clobber
+            gh release edit "$tag" --notes-file release-notes.md
+          elif gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1; then
+            # tag 已存在但还没有 Release：基于已有 tag 创建。
+            gh release create "$tag" "$zip" \
+              --title "Muse ${version}" \
+              --notes-file release-notes.md \
+              --verify-tag
+          else
+            # 手动触发且 tag 不存在：在当前提交上创建 tag 并发布。
+            gh release create "$tag" "$zip" \
+              --title "Muse ${version}" \
+              --notes-file release-notes.md \
+              --target "$GITHUB_SHA"
+          fi
+          echo "release: $(gh release view "$tag" --json url --jq .url)"

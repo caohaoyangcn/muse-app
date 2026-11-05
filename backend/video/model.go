@@ -1,0 +1,121 @@
+// Package video contains the favorite model, persistence and business logic.
+package video
+
+// Status values for the videos table.
+const (
+	StatusAvailable = "available"
+	StatusMissing   = "missing"
+)
+
+// Video is a single favorite. It only references the file on disk;
+// the app never owns the media itself (spec-v1.md §6, §41).
+type Video struct {
+	ID         int64   `json:"id"`
+	Path       string  `json:"path"`
+	FileName   string  `json:"fileName"`
+	FileSize   int64   `json:"fileSize"`
+	DurationMs int64   `json:"durationMs"`
+	Width      int     `json:"width"`
+	Height     int     `json:"height"`
+	FrameRate  float64 `json:"frameRate"` // frames per second; 0 when unknown
+	Bitrate    int64   `json:"bitrate"`   // bits per second; 0 when unknown
+	// VideoCodec / AudioCodec are the container's stream codec names (ffprobe
+	// codec_name), e.g. "h264"/"hevc" and "aac"/"ac3". They are displayed in the
+	// library and passed through to clients that choose their own playback stack.
+	// An empty AudioCodec is normal (no audio track);
+	// empty VideoCodec means "not probed yet".
+	VideoCodec    string `json:"videoCodec"`
+	AudioCodec    string `json:"audioCodec"`
+	ThumbnailPath string `json:"thumbnailPath"` // relative to data dir, e.g. "thumbnails/12.jpg"; empty while generating/failed
+	CreatedAt     int64  `json:"createdAt"`
+	UpdatedAt     int64  `json:"updatedAt"`
+	LastOpenedAt  int64  `json:"lastOpenedAt"`
+	Status        string `json:"status"`
+	// VolumeOffline reports that the volume holding Path is not attached right
+	// now (the user unplugged an external drive). The favorite is not missing:
+	// its file is on a disk that is not plugged in, so it keeps its thumbnail,
+	// metadata and place in the grid, and only carries a warning. Observed per
+	// volume, never persisted — see volume.go.
+	VolumeOffline bool `json:"volumeOffline"`
+	// VolumeRoot is the mount point Path lives on ("D:\", "\\server\share\",
+	// "/"). Read paths fill it; it names the disk VolumeOffline is about.
+	VolumeRoot string `json:"volumeRoot"`
+	// Editable info (spec §41 reserved fields). Display uses Title when set,
+	// then JavCode, falling back to FileName.
+	Title string `json:"title"`
+	Notes string `json:"notes"`
+	// JavCode is the authoritative 番号 the scraper recorded for this favorite
+	// (video_jav.code). It is a read-model projection filled by the shared
+	// façade, never a column on videos: empty until a scrape has produced a
+	// code. Once set, the UI presents the favorite under it instead of the file
+	// name, so a messy file name never stands in for the work's identity.
+	JavCode string `json:"javCode"`
+	// MosaicRestored reports membership in the 马赛克破解 group — the collection
+	// rule that tags restored/mosaic-removed works. It is a read-model
+	// projection filled by the shared façade (transitive membership included),
+	// never a column on videos; the UI shows it as a tag beside the name.
+	MosaicRestored bool `json:"mosaicRestored"`
+	// CustomCoverAt is the unix-milli moment the user picked a cover frame.
+	// 0 means the current cover is not a user-picked frame. A user-picked
+	// frame can still be replaced by a scraped cover when AllowScrapedCover is
+	// true.
+	CustomCoverAt int64 `json:"customCoverAt"`
+	// LikeCount is how many times the user has liked this favorite. Repeated
+	// likes stack (spec: likes are a property of the favorite, not the file).
+	LikeCount         int64  `json:"likeCount"`
+	CoverSource       string `json:"coverSource"`
+	ScrapedCoverPath  string `json:"scrapedCoverPath"`
+	AllowScrapedCover bool   `json:"allowScrapedCover"`
+	// ContentHash is the partial-hash fingerprint of the file (see
+	// docs/spec/content-hash-dedup.md): a digest over the file's size plus its
+	// first and last megabyte. It identifies byte-identical copies without
+	// reading whole multi-gigabyte files. Empty means "not computed yet".
+	ContentHash string `json:"contentHash"`
+	// HashVersion is the recipe that produced ContentHash; a value below
+	// FingerprintVersion is stale and has to be recomputed.
+	HashVersion int `json:"hashVersion"`
+	// HashState is the verification bookkeeping behind the fingerprint: the
+	// on-disk facts it was computed from, the last failure, and the optional
+	// full-file confirmation. Deliberately not serialized — clients only need to
+	// know whether a fingerprint exists, not how it was verified.
+	HashState FingerprintState `json:"-"`
+}
+
+// FingerprintState is the bookkeeping behind a content fingerprint.
+//
+// Size and Mtime are what make a fingerprint trustworthy. The database's
+// file_size is only written when a favorite is imported, so a file replaced
+// outside the app would otherwise keep a fingerprint that still correlates with
+// another copy — and the duplicate panel would offer to delete a file based on a
+// verdict about different bytes. Any mismatch against a fresh stat means the
+// verdict has to be re-established before it can be acted on.
+type FingerprintState struct {
+	// Size is the file size the fingerprint was computed from.
+	Size int64
+	// Mtime is the file modification time (unix nanoseconds) at that moment.
+	// Nanoseconds, not seconds: a replacement within the same second would
+	// otherwise look unchanged.
+	Mtime int64
+	// At is when the fingerprint was computed (unix millis).
+	At int64
+	// Error is the last failure reason; empty when a valid fingerprint exists.
+	Error string
+	// FullHash is the optional full-file SHA-256 confirmation (empty until the
+	// user asks for one).
+	FullHash string
+	// FullHashAt is when FullHash was computed (unix millis).
+	FullHashAt int64
+}
+
+// AddVideoResult reports the per-file outcome of a batch add (spec-v1.1.md §7).
+type AddVideoResult struct {
+	Path    string `json:"path"`
+	Success bool   `json:"success"`
+	VideoID int64  `json:"videoId,omitempty"`
+	Error   string `json:"error,omitempty"`
+	// Relocated is true when the file did not become a new favorite but
+	// re-pointed an existing one whose file had moved: the library already held
+	// these bytes under a path that no longer exists. The favorite kept its id,
+	// so the UI reports a reconnection rather than an addition.
+	Relocated bool `json:"relocated,omitempty"`
+}
