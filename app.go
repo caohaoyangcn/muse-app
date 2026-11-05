@@ -319,7 +319,11 @@ func (a *App) SetTrashRetentionDays(days int) error {
 	}
 	if a.lib != nil {
 		go func() {
-			if n, err := a.lib.PurgeExpiredTrash(); err != nil {
+			n, err := a.lib.PurgeExpiredTrash()
+			if a.log == nil {
+				return
+			}
+			if err != nil {
 				a.log.Warn("apply trash retention failed", "err", err)
 			} else if n > 0 {
 				a.log.Info("trash retention applied", "count", n)
