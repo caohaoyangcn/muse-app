@@ -552,3 +552,22 @@ func TestServiceRemoteOpenAndStatusHooks(t *testing.T) {
 		t.Error("remote page hook was not called")
 	}
 }
+
+func TestRemoteVideosKeepLocalVolumesEmpty(t *testing.T) {
+	svc, _ := newTestService(t)
+	v, _, err := svc.AddRemoteVideo(9, "/媒体/a.mp4", "a.mp4", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := svc.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range list {
+		if item.ID == v.ID {
+			if item.VolumeRoot != "" || item.VolumeOffline {
+				t.Errorf("remote row got local volume state: %+v", item)
+			}
+		}
+	}
+}

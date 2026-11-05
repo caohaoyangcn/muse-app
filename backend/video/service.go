@@ -559,6 +559,12 @@ func (s *Service) BackfillProcessing() int {
 		if !s.needsProcessing(v) {
 			continue
 		}
+		if v.IsRemote() && s.remoteOnline != nil && !s.remoteOnline(&v) {
+			// Do not park the only thumbnail worker on a 90-second remote probe
+			// while the user's OpenList is down; the next successful browse or
+			// health transition can enqueue it again.
+			continue
+		}
 		s.processor.Enqueue(v.ID)
 		count++
 	}

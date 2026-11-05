@@ -91,3 +91,57 @@ func TestAddCloudVideosAndReadModel(t *testing.T) {
 		t.Errorf("duplicate result = %+v", again)
 	}
 }
+
+func TestCloudSourceOfflineReadModel(t *testing.T) {
+	db, _, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	videoRepo := video.NewSQLiteRepository(db)
+	processor := video.NewProcessor(videoRepo, "", "", filepath.Join(t.TempDir(), "thumb"), nil, log, 1)
+	t.Cleanup(processor.Close)
+	videoSvc := video.NewService(videoRepo, processor, t.TempDir(), log, nil)
+	groupSvc := group.NewService(group.NewSQLiteRepository(db), log, nil)
+	lib := New(videoSvc, groupSvc, log)
+	cloudSvc := cloud.NewService(cloud.NewSQLiteRepository(db), nil, log)
+	lib.SetCloudService(cloudSvc)
+
+	healthy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusMultiStatus)
+		_, _ = io.WriteString(w, `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">`+
+			`<d:response><d:href>/dav/%E5%AA%92%E4%BD%93/a.mp4</d:href><d:propstat><d:prop>`+
+			`<d:displayname>a.mp4</d:displayname><d:getcontentlength>10</d:getcontentlength>`+
+			`<d:resourcetype/></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`+
+			`</d:multistatus>`)
+	}))
+	defer healthy.Close()
+	conn, err := cloudSvc.SaveConnection(cloud.ConnectionInput{Name: "dav", Endpoint: healthy.URL + "/dav", RootPath: "/", VerifyTLS: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res := lib.AddCloudVideos(conn.ID, []string{"/媒体/a.mp4"}); len(res) != 1 || !res[0].Success {
+		t.Fatalf("add = %+v", res)
+	}
+
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer bad.Close()
+	// Point the saved connection at an auth failure and let an ordinary browse
+	// observe it; the read model must then flag the remote favorite.
+	if _, err := cloudSvc.SaveConnection(cloud.ConnectionInput{
+		ID: conn.ID, Name: "dav", Endpoint: bad.URL + "/dav", RootPath: "/", VerifyTLS: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = cloudSvc.Browse(conn.ID, "/")
+	all, err := lib.ListVideos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 || !all[0].SourceOffline {
+		t.Errorf("read model after auth failure = %+v", all)
+	}
+}
