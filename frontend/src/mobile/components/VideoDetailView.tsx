@@ -140,8 +140,9 @@ export function VideoDetailView({
     ["比特率", formatBitrate(v.bitrate) || "未提供"],
     ["视频编码", v.videoCodec ? v.videoCodec.toUpperCase() : "未提供"],
     ["音频编码", v.audioCodec ? v.audioCodec.toUpperCase() : "无音轨"],
-    ["路径", v.path],
+    [v.sourceId > 0 ? "网盘路径" : "路径", v.sourceId > 0 ? v.remotePath : v.path],
   ];
+  if (v.sourceId > 0) fileRows.push(["网盘", v.sourceName || "已配置连接"]);
 
   return (
     <div className="flex h-full flex-col">
@@ -166,7 +167,7 @@ export function VideoDetailView({
           <div className="flex gap-2">
             <button
               className="flex-1 rounded-[var(--radius)] bg-[var(--accent)] py-3 font-medium text-white disabled:opacity-50"
-              disabled={v.status === "missing" || v.volumeOffline}
+              disabled={v.status === "missing" || v.volumeOffline || v.sourceOffline}
               onClick={() => onPlay(v)}
               type="button"
             >
@@ -185,10 +186,14 @@ export function VideoDetailView({
             <p className="mt-2 text-xs text-[var(--muted)]">
               磁盘 {v.volumeRoot || ""} 未接入，插回移动硬盘后即可播放。
             </p>
+          ) : v.sourceOffline ? (
+            <p className="mt-2 text-xs text-[var(--muted)]">
+              网盘「{v.sourceName || "连接"}」当前离线，恢复后即可播放。
+            </p>
           ) : null}
           <button
             className="mt-2 w-full py-1 text-xs text-[var(--muted)] active:text-[var(--text)]"
-            disabled={v.status === "missing" || v.volumeOffline}
+            disabled={v.status === "missing" || v.volumeOffline || v.sourceOffline}
             onClick={() => onChoosePlayer(v)}
             type="button"
           >

@@ -31,14 +31,15 @@ function Badges({ v }: { v: Video }) {
   // A detached drive is not a missing file: the card stays normal and carries
   // only the warning (see the desktop VideoCard).
   const offline = v.volumeOffline === true;
+  const sourceOffline = v.sourceId > 0 && v.sourceOffline === true;
   const missing = !offline && v.status === "missing";
   return (
     <>
-      {offline ? (
+      {offline || sourceOffline ? (
         // One chip only: the narrow mobile card has no room for the duration
         // beside the warning, and the warning is the more important of the two.
         <span className="absolute bottom-1.5 right-1.5 rounded bg-[var(--danger)]/90 px-2 py-0.5 text-[11px] text-white">
-          ⚠ 磁盘未接入
+          {offline ? "⚠ 磁盘未接入" : "⚠ 网盘离线"}
         </span>
       ) : duration ? (
         <span className="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[11px] text-white">

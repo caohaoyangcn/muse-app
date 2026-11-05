@@ -285,6 +285,7 @@ func main() {
 	// is only a warning: the desktop library must keep working and the toggle
 	// remains available for a retry.
 	lanServer := server.New(app.lib, dataDir, log)
+	lanServer.SetCloudService(cloudSvc)
 	app.SetServer(lanServer)
 	if info, err := app.StartServer(0); err != nil {
 		log.Warn("web server auto-start failed", "err", err)

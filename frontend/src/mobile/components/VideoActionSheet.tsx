@@ -31,8 +31,9 @@ export function VideoActionSheet({
   onClose: () => void;
 }) {
   const offline = video?.volumeOffline === true;
-  const missing = video?.status === "missing" && !offline;
-  const unavailable = missing || offline;
+  const sourceOffline = (video?.sourceId ?? 0) > 0 && video?.sourceOffline === true;
+  const missing = video?.status === "missing" && !offline && !sourceOffline;
+  const unavailable = missing || offline || sourceOffline;
   return (
     <BottomSheet onClose={onClose} open={open && !!video} title={video ? videoName(video) : undefined}>
       <SheetAction disabled={unavailable} label="播放" onClick={onPlay} />
@@ -48,6 +49,10 @@ export function VideoActionSheet({
       {offline ? (
         <p className="px-3 py-2 text-xs text-[var(--muted)]">
           磁盘 {video?.volumeRoot || ""} 未接入，插回移动硬盘后即可播放；移除只删除收藏记录与缩略图，不会删除原视频。
+        </p>
+      ) : sourceOffline ? (
+        <p className="px-3 py-2 text-xs text-[var(--muted)]">
+          网盘「{video?.sourceName || "连接"}」当前离线，恢复后即可播放；移除只删除收藏记录与缩略图，不会删除网盘文件。
         </p>
       ) : missing ? (
         <p className="px-3 py-2 text-xs text-[var(--muted)]">
