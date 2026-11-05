@@ -221,3 +221,120 @@ func TestRepositoryLikes(t *testing.T) {
 		t.Errorf("clear missing: err = %v, want ErrNotFound", err)
 	}
 }
+
+func TestRepositoryRemoteCRUDAndSearch(t *testing.T) {
+	repo := newTestRepo(t)
+	local := sampleVideo(`D:\V\local.mp4`)
+	if err := repo.Create(local); err != nil {
+		t.Fatal(err)
+	}
+	remote := sampleVideo("cloud://7/abc123")
+	remote.FileName = "远程影片.mp4"
+	remote.SourceID = 7
+	remote.RemotePath = "/媒体/远程影片.mp4"
+	if err := repo.Create(remote); err != nil {
+		t.Fatalf("create remote: %v", err)
+	}
+
+	got, err := repo.GetByRemote(7, "/媒体/远程影片.mp4")
+	if err != nil {
+		t.Fatalf("get by remote: %v", err)
+	}
+	if got.ID != remote.ID || got.SourceID != 7 || got.RemotePath != "/媒体/远程影片.mp4" {
+		t.Errorf("remote row roundtrip = %+v", got)
+	}
+	if _, err := repo.GetByRemote(7, "/媒体/REMOTE.mp4"); err != ErrNotFound {
+		t.Errorf("case-different remote path: err = %v, want ErrNotFound", err)
+	}
+	if _, err := repo.GetByRemote(8, "/媒体/远程影片.mp4"); err != ErrNotFound {
+		t.Errorf("other connection: err = %v, want ErrNotFound", err)
+	}
+
+	// Search matches both the display name and the remote path.
+	for _, keyword := range []string{"远程影片", "媒体"} {
+		hits, err := repo.Search(keyword)
+		if err != nil {
+			t.Fatalf("search %q: %v", keyword, err)
+		}
+		if len(hits) != 1 || hits[0].ID != remote.ID {
+			t.Errorf("search %q hits = %+v", keyword, hits)
+		}
+	}
+
+	// The same (source, path) is a duplicate; a case-different path is not.
+	dup := sampleVideo("cloud://7/other")
+	dup.SourceID = 7
+	dup.RemotePath = "/媒体/远程影片.mp4"
+	if err := repo.Create(dup); err == nil {
+		t.Error("exact duplicate remote path must fail")
+	}
+	caseTwin := sampleVideo("cloud://7/def456")
+	caseTwin.SourceID = 7
+	caseTwin.RemotePath = "/媒体/远程影片.MP4"
+	if err := repo.Create(caseTwin); err != nil {
+		t.Errorf("case-different remote path must be allowed: %v", err)
+	}
+}
+
+func TestRepositoryRemoteExcludedFromLocalScans(t *testing.T) {
+	repo := newTestRepo(t)
+
+	local := sampleVideo(`D:\V\local.mp4`)
+	if err := repo.Create(local); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpdateFingerprint(local.ID, "samehash", 1, local.FileSize, 99, 100); err != nil {
+		t.Fatal(err)
+	}
+
+	remote := sampleVideo("cloud://7/remote")
+	remote.FileName = "remote.mp4"
+	remote.SourceID = 7
+	remote.RemotePath = "/Media/remote.mp4"
+	if err := repo.Create(remote); err != nil {
+		t.Fatal(err)
+	}
+	// Deliberately give the remote row a fingerprint-shaped hash: even if one
+	// leaked in through an older build, every local-only query must ignore it.
+	if err := repo.UpdateFingerprint(remote.ID, "samehash", 1, remote.FileSize, 1, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	need, err := repo.ListNeedingFingerprint(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(need) != 0 {
+		t.Errorf("ListNeedingFingerprint included remote/local rows: %v", need)
+	}
+	peers, err := repo.ListSameSizePeers(remote.FileSize, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range peers {
+		if id == remote.ID {
+			t.Errorf("ListSameSizePeers included remote id %d", id)
+		}
+	}
+	candidates, err := repo.ListRelocationCandidates(remote.FileSize, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 1 || candidates[0].ID != local.ID {
+		t.Errorf("relocation candidates = %+v, want only local id %d", candidates, local.ID)
+	}
+	fingerprinted, err := repo.ListFingerprinted()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fingerprinted) != 1 || fingerprinted[0].ID != local.ID {
+		t.Errorf("ListFingerprinted = %+v, want only local id %d", fingerprinted, local.ID)
+	}
+	byHash, err := repo.ListByContentHash("samehash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byHash) != 1 || byHash[0].ID != local.ID {
+		t.Errorf("ListByContentHash = %+v, want only local id %d", byHash, local.ID)
+	}
+}

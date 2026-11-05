@@ -11,6 +11,9 @@ type VideoRepository interface {
 	Create(video *Video) error
 	Get(id int64) (*Video, error)
 	GetByPath(path string) (*Video, error)
+	// GetByRemote finds a favorite by its cloud connection and WebDAV path.
+	// The comparison is BINARY: remote paths are case-sensitive.
+	GetByRemote(sourceID int64, remotePath string) (*Video, error)
 	List() ([]Video, error)
 	Search(keyword string) ([]Video, error)
 	Delete(id int64) error
@@ -91,7 +94,7 @@ func NewSQLiteRepository(db *sql.DB) VideoRepository {
 	return &sqliteRepository{db: db}
 }
 
-const videoColumns = "id, path, file_name, file_size, duration_ms, width, height, frame_rate, bit_rate, video_codec, audio_codec, thumbnail_path, created_at, updated_at, last_opened_at, status, title, notes, custom_cover_at, like_count, cover_source, scraped_cover_path, allow_scraped_cover, content_hash, hash_version, hash_size, hash_mtime, hash_at, hash_error, full_hash, full_hash_at"
+const videoColumns = "id, path, file_name, file_size, duration_ms, width, height, frame_rate, bit_rate, video_codec, audio_codec, thumbnail_path, created_at, updated_at, last_opened_at, status, title, notes, custom_cover_at, like_count, cover_source, scraped_cover_path, allow_scraped_cover, content_hash, hash_version, hash_size, hash_mtime, hash_at, hash_error, full_hash, full_hash_at, source_id, remote_path"
 
 func scanVideo(scan func(dest ...any) error) (*Video, error) {
 	var v Video
@@ -99,11 +102,12 @@ func scanVideo(scan func(dest ...any) error) (*Video, error) {
 	var hashVersion, hashSize, hashMtime, hashAt, fullHashAt sql.NullInt64
 	var frameRate sql.NullFloat64
 	var videoCodec, audioCodec, thumbnailPath, title, notes, coverSource, scrapedCoverPath sql.NullString
-	var contentHash, hashError, fullHash sql.NullString
+	var contentHash, hashError, fullHash, remotePath sql.NullString
 	err := scan(&v.ID, &v.Path, &v.FileName, &v.FileSize, &durationMs, &width, &height,
 		&frameRate, &bitrate, &videoCodec, &audioCodec, &thumbnailPath, &v.CreatedAt, &v.UpdatedAt, &lastOpened, &v.Status,
 		&title, &notes, &customCoverAt, &v.LikeCount, &coverSource, &scrapedCoverPath, &allowScrapedCover,
-		&contentHash, &hashVersion, &hashSize, &hashMtime, &hashAt, &hashError, &fullHash, &fullHashAt)
+		&contentHash, &hashVersion, &hashSize, &hashMtime, &hashAt, &hashError, &fullHash, &fullHashAt,
+		&v.SourceID, &remotePath)
 	if err != nil {
 		return nil, err
 	}
@@ -123,6 +127,7 @@ func scanVideo(scan func(dest ...any) error) (*Video, error) {
 	v.ScrapedCoverPath = scrapedCoverPath.String
 	v.AllowScrapedCover = allowScrapedCover.Int64 != 0
 	v.ContentHash = contentHash.String
+	v.RemotePath = remotePath.String
 	v.HashVersion = int(hashVersion.Int64)
 	v.HashState = FingerprintState{
 		Size:       hashSize.Int64,
@@ -137,9 +142,9 @@ func scanVideo(scan func(dest ...any) error) (*Video, error) {
 
 func (r *sqliteRepository) Create(v *Video) error {
 	res, err := r.db.Exec(
-		`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		v.Path, v.FileName, v.FileSize, v.CreatedAt, v.UpdatedAt, v.Status,
+		`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status, source_id, remote_path)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		v.Path, v.FileName, v.FileSize, v.CreatedAt, v.UpdatedAt, v.Status, v.SourceID, v.RemotePath,
 	)
 	if err != nil {
 		return fmt.Errorf("insert video: %w", err)
@@ -178,6 +183,18 @@ func (r *sqliteRepository) GetByPath(path string) (*Video, error) {
 	return v, nil
 }
 
+func (r *sqliteRepository) GetByRemote(sourceID int64, remotePath string) (*Video, error) {
+	row := r.db.QueryRow(`SELECT `+videoColumns+` FROM videos WHERE source_id = ? AND remote_path = ?`, sourceID, remotePath)
+	v, err := scanVideo(row.Scan)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get video by remote path: %w", err)
+	}
+	return v, nil
+}
+
 func (r *sqliteRepository) List() ([]Video, error) {
 	return r.query(`SELECT ` + videoColumns + ` FROM videos ORDER BY created_at DESC, id DESC`)
 }
@@ -186,9 +203,9 @@ func (r *sqliteRepository) Search(keyword string) ([]Video, error) {
 	pattern := "%" + escapeLike(strings.TrimSpace(keyword)) + "%"
 	return r.query(
 		`SELECT `+videoColumns+` FROM videos
-		 WHERE file_name LIKE ? ESCAPE '\' OR path LIKE ? ESCAPE '\'
+		 WHERE file_name LIKE ? ESCAPE '\' OR path LIKE ? ESCAPE '\' OR remote_path LIKE ? ESCAPE '\'
 		 ORDER BY created_at DESC, id DESC`,
-		pattern, pattern,
+		pattern, pattern, pattern,
 	)
 }
 
@@ -459,7 +476,7 @@ func (r *sqliteRepository) UpdateFullHash(id int64, hash string, at int64) error
 func (r *sqliteRepository) ListNeedingFingerprint(version int) ([]int64, error) {
 	rows, err := r.db.Query(
 		`SELECT id FROM videos
-		 WHERE status = ?
+		 WHERE source_id = 0 AND status = ?
 		   AND (content_hash IS NULL OR content_hash = '' OR hash_version IS NULL OR hash_version <> ?)
 		 ORDER BY id`, StatusAvailable, version,
 	)
@@ -484,7 +501,7 @@ func (r *sqliteRepository) ListNeedingFingerprint(version int) ([]int64, error) 
 // query simple and the skip decision in one place.
 func (r *sqliteRepository) ListSameSizePeers(size int64, excludeID int64) ([]int64, error) {
 	rows, err := r.db.Query(
-		`SELECT id FROM videos WHERE file_size = ? AND id <> ? AND status = ? ORDER BY id`,
+		`SELECT id FROM videos WHERE source_id = 0 AND file_size = ? AND id <> ? AND status = ? ORDER BY id`,
 		size, excludeID, StatusAvailable,
 	)
 	if err != nil {
@@ -508,7 +525,7 @@ func (r *sqliteRepository) ListSameSizePeers(size int64, excludeID int64) ([]int
 // which is a question about the disk and not about the row.
 func (r *sqliteRepository) ListRelocationCandidates(size int64, version int) ([]Video, error) {
 	return r.query(`SELECT `+videoColumns+` FROM videos
-		WHERE file_size = ? AND content_hash IS NOT NULL AND content_hash <> '' AND hash_version = ?
+		WHERE source_id = 0 AND file_size = ? AND content_hash IS NOT NULL AND content_hash <> '' AND hash_version = ?
 		ORDER BY created_at ASC, id ASC`, size, version)
 }
 
@@ -541,14 +558,14 @@ func (r *sqliteRepository) RelinkPath(id int64, path, fileName, hash string, ver
 // members as full rows.
 func (r *sqliteRepository) ListFingerprinted() ([]Video, error) {
 	return r.query(`SELECT `+videoColumns+` FROM videos
-		WHERE status = ? AND content_hash IS NOT NULL AND content_hash <> ''
+		WHERE source_id = 0 AND status = ? AND content_hash IS NOT NULL AND content_hash <> ''
 		ORDER BY created_at DESC, id DESC`, StatusAvailable)
 }
 
 // ListByContentHash returns the available favorites carrying one digest.
 func (r *sqliteRepository) ListByContentHash(hash string) ([]Video, error) {
 	return r.query(`SELECT `+videoColumns+` FROM videos
-		WHERE content_hash = ? AND status = ?
+		WHERE source_id = 0 AND content_hash = ? AND status = ?
 		ORDER BY created_at DESC, id DESC`, hash, StatusAvailable)
 }
 

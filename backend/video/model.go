@@ -79,7 +79,25 @@ type Video struct {
 	// full-file confirmation. Deliberately not serialized — clients only need to
 	// know whether a fingerprint exists, not how it was verified.
 	HashState FingerprintState `json:"-"`
+
+	// SourceID is the cloud_connections row this favorite lives on. 0 means a
+	// local file; >0 means a read-only WebDAV source. Remote videos never
+	// participate in local disk scanning, relocation or content fingerprints.
+	SourceID int64 `json:"sourceId"`
+	// RemotePath is the absolute, percent-decoded WebDAV path. It is the
+	// authoritative location for a remote favorite; Path only carries a
+	// synthetic stable key (see remotePathKey) and must not be opened.
+	RemotePath string `json:"remotePath"`
+	// SourceName is a read-model projection: the connection's display name.
+	// Empty for local favorites.
+	SourceName string `json:"sourceName"`
+	// SourceOffline is a read-model projection: the connection failed its most
+	// recent health probe. It is never persisted on the video row.
+	SourceOffline bool `json:"sourceOffline"`
 }
+
+// IsRemote reports whether the favorite lives on a cloud connection.
+func (v *Video) IsRemote() bool { return v != nil && v.SourceID > 0 }
 
 // FingerprintState is the bookkeeping behind a content fingerprint.
 //

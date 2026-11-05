@@ -686,3 +686,85 @@ func TestV21RepairsStaleJavTaskAttemptBudget(t *testing.T) {
 		t.Errorf("re-migrate changed the stored default to %q", got)
 	}
 }
+
+// TestV24AddsCloudSourceSchema verifies the WebDAV source storage: the
+// connection table, the two remote-reference columns, their indexes, and the
+// local-row defaults that keep every existing favorite local. It also proves
+// the partial unique index is BINARY (remote paths are case-sensitive).
+func TestV24AddsCloudSourceSchema(t *testing.T) {
+	db := openMigrated(t)
+	if _, err := db.Exec(schemaV1); err != nil {
+		t.Fatalf("exec v1: %v", err)
+	}
+	if _, err := db.Exec(`PRAGMA user_version = 23`); err != nil {
+		t.Fatalf("stamp v23: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status)
+		 VALUES ('C:\v\a.mp4','a.mp4',10,1,1,'available')`); err != nil {
+		t.Fatalf("insert video: %v", err)
+	}
+
+	res, err := Migrate(db)
+	if err != nil {
+		t.Fatalf("migrate v23 -> v24: %v", err)
+	}
+	if res.SchemaVersion != currentSchemaVersion {
+		t.Errorf("schema version = %d, want %d", res.SchemaVersion, currentSchemaVersion)
+	}
+	if res.BackfillVideoMetadata || res.BackfillFingerprints {
+		t.Errorf("v24 is additive and must not request a backfill: %+v", res)
+	}
+	for _, col := range []string{
+		"id", "name", "kind", "endpoint", "web_url", "username", "password_enc",
+		"root_path", "verify_tls", "created_at", "updated_at", "last_ok_at", "last_error",
+	} {
+		if !hasColumn(db, "cloud_connections", col) {
+			t.Errorf("cloud_connections.%s missing", col)
+		}
+	}
+	for _, col := range []string{"source_id", "remote_path"} {
+		if !hasColumn(db, "videos", col) {
+			t.Errorf("videos.%s missing", col)
+		}
+	}
+	var sourceID int
+	var remotePath string
+	if err := db.QueryRow(`SELECT source_id, remote_path FROM videos WHERE file_name='a.mp4'`).Scan(&sourceID, &remotePath); err != nil {
+		t.Fatalf("read local row defaults: %v", err)
+	}
+	if sourceID != 0 || remotePath != "" {
+		t.Errorf("local row defaults = (%d, %q), want (0, \"\")", sourceID, remotePath)
+	}
+	for _, idx := range []string{"idx_videos_remote", "idx_videos_source"} {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?`, idx).Scan(&n); err != nil {
+			t.Fatalf("check index %s: %v", idx, err)
+		}
+		if n != 1 {
+			t.Errorf("%s count = %d, want 1", idx, n)
+		}
+	}
+
+	// The remote key is BINARY: two paths differing only in case coexist.
+	insert := `INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status, source_id, remote_path)
+		VALUES (?, ?, 1, 1, 1, 'available', 7, ?)`
+	if _, err := db.Exec(insert, "cloud://7/a", "a.mp4", "/Media/A.mp4"); err != nil {
+		t.Fatalf("insert first remote row: %v", err)
+	}
+	if _, err := db.Exec(insert, "cloud://7/b", "b.mp4", "/Media/a.mp4"); err != nil {
+		t.Fatalf("case-different remote path must be allowed: %v", err)
+	}
+	if _, err := db.Exec(insert, "cloud://7/c", "c.mp4", "/Media/A.mp4"); err == nil {
+		t.Error("exact duplicate (source_id, remote_path) must violate the unique index")
+	}
+
+	// Re-running migrate is a no-op.
+	res2, err := Migrate(db)
+	if err != nil {
+		t.Fatalf("re-migrate: %v", err)
+	}
+	if res2.SchemaVersion != currentSchemaVersion {
+		t.Errorf("re-migrate version = %d", res2.SchemaVersion)
+	}
+}

@@ -38,7 +38,15 @@ func (r *memVideoRepo) Get(id int64) (*video.Video, error) {
 	}
 	return nil, video.ErrNotFound
 }
-func (r *memVideoRepo) GetByPath(path string) (*video.Video, error)  { return nil, video.ErrNotFound }
+func (r *memVideoRepo) GetByPath(path string) (*video.Video, error) { return nil, video.ErrNotFound }
+func (r *memVideoRepo) GetByRemote(sourceID int64, remotePath string) (*video.Video, error) {
+	for i := range r.all {
+		if r.all[i].SourceID == sourceID && r.all[i].RemotePath == remotePath {
+			return &r.all[i], nil
+		}
+	}
+	return nil, video.ErrNotFound
+}
 func (r *memVideoRepo) List() ([]video.Video, error)                 { return r.all, nil }
 func (r *memVideoRepo) Search(keyword string) ([]video.Video, error) { return r.all, nil }
 func (r *memVideoRepo) Delete(id int64) error                        { return nil }
@@ -126,7 +134,7 @@ func (r *memVideoRepo) UpdateFullHash(id int64, hash string, at int64) error {
 func (r *memVideoRepo) ListNeedingFingerprint(version int) ([]int64, error) {
 	ids := make([]int64, 0, len(r.all))
 	for i := range r.all {
-		if r.all[i].ContentHash == "" || r.all[i].HashVersion != version {
+		if r.all[i].SourceID == 0 && (r.all[i].ContentHash == "" || r.all[i].HashVersion != version) {
 			ids = append(ids, r.all[i].ID)
 		}
 	}
@@ -135,7 +143,7 @@ func (r *memVideoRepo) ListNeedingFingerprint(version int) ([]int64, error) {
 func (r *memVideoRepo) ListSameSizePeers(size int64, excludeID int64) ([]int64, error) {
 	ids := make([]int64, 0, 4)
 	for i := range r.all {
-		if r.all[i].ID != excludeID && r.all[i].FileSize == size {
+		if r.all[i].SourceID == 0 && r.all[i].ID != excludeID && r.all[i].FileSize == size {
 			ids = append(ids, r.all[i].ID)
 		}
 	}
@@ -144,7 +152,7 @@ func (r *memVideoRepo) ListSameSizePeers(size int64, excludeID int64) ([]int64, 
 func (r *memVideoRepo) ListRelocationCandidates(size int64, version int) ([]video.Video, error) {
 	out := make([]video.Video, 0, 2)
 	for i := range r.all {
-		if r.all[i].FileSize == size && r.all[i].ContentHash != "" && r.all[i].HashVersion == version {
+		if r.all[i].SourceID == 0 && r.all[i].FileSize == size && r.all[i].ContentHash != "" && r.all[i].HashVersion == version {
 			out = append(out, r.all[i])
 		}
 	}
@@ -163,7 +171,7 @@ func (r *memVideoRepo) RelinkPath(id int64, path, fileName, hash string, version
 func (r *memVideoRepo) ListFingerprinted() ([]video.Video, error) {
 	out := make([]video.Video, 0, len(r.all))
 	for i := range r.all {
-		if r.all[i].ContentHash != "" {
+		if r.all[i].SourceID == 0 && r.all[i].ContentHash != "" {
 			out = append(out, r.all[i])
 		}
 	}
@@ -172,7 +180,7 @@ func (r *memVideoRepo) ListFingerprinted() ([]video.Video, error) {
 func (r *memVideoRepo) ListByContentHash(hash string) ([]video.Video, error) {
 	out := make([]video.Video, 0, 2)
 	for i := range r.all {
-		if r.all[i].ContentHash == hash {
+		if r.all[i].SourceID == 0 && r.all[i].ContentHash == hash {
 			out = append(out, r.all[i])
 		}
 	}

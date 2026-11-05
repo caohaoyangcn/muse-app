@@ -8,7 +8,7 @@ import (
 // currentSchemaVersion is the highest applied schema version. It is tracked in
 // PRAGMA user_version. Bump it whenever a migration adds a column/table that
 // requires (or could benefit from) re-extracting data for pre-existing rows.
-const currentSchemaVersion = 23
+const currentSchemaVersion = 24
 
 // MigrationResult reports what happened during Migrate so callers can trigger
 // one-off backfills (e.g. re-probing ffprobe for videos created before a new
@@ -351,6 +351,32 @@ func Migrate(db *sql.DB) (MigrationResult, error) {
 		version = 23
 	}
 
+	if version < 24 {
+		// v24 adds cloud (WebDAV) sources: a connection table plus the two
+		// columns that turn a favorite into a remote reference. A remote row
+		// keeps source_id > 0 and the real WebDAV path in remote_path; its
+		// synthetic path is a stable, case-sensitive key that cannot collide
+		// with a local Windows path. Local rows default to 0/'' and keep every
+		// existing behaviour. Additive, no backfill: there are no remote rows
+		// to migrate, and existing library rows are already local.
+		if _, err := db.Exec(schemaV24); err != nil {
+			return res, fmt.Errorf("migrate database v24: %w", err)
+		}
+		for _, col := range []struct{ name, alter string }{
+			{"source_id", `ALTER TABLE videos ADD COLUMN source_id INTEGER NOT NULL DEFAULT 0`},
+			{"remote_path", `ALTER TABLE videos ADD COLUMN remote_path TEXT NOT NULL DEFAULT ''`},
+		} {
+			if err := addColumnIfMissing(db, "videos", col.name, col.alter); err != nil {
+				return res, fmt.Errorf("migrate database v24 %s: %w", col.name, err)
+			}
+		}
+		// Indexes run after the columns exist.
+		if _, err := db.Exec(schemaV24Indexes); err != nil {
+			return res, fmt.Errorf("migrate database v24 indexes: %w", err)
+		}
+		version = 24
+	}
+
 	res.SchemaVersion = version
 	if err := setUserVersion(db, version); err != nil {
 		return res, err
@@ -430,6 +456,39 @@ CREATE TABLE IF NOT EXISTS watched_dirs (
     created_at   INTEGER NOT NULL,
     last_scan_at INTEGER
 );
+`
+
+// schemaV24 stores cloud-drive connections. A connection is read-only for
+// Muse: it names one WebDAV endpoint (usually an OpenList/AList mount) and
+// holds the credentials needed to browse and stream it. password_enc is a
+// platform-protected secret (DPAPI on Windows); it is never exposed by the
+// read model. root_path scopes every path the user can browse, and verify_tls
+// is the per-connection self-signed-certificate switch.
+const schemaV24 = `
+CREATE TABLE IF NOT EXISTS cloud_connections (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT NOT NULL,
+    kind         TEXT NOT NULL DEFAULT 'webdav',
+    endpoint     TEXT NOT NULL,
+    web_url      TEXT NOT NULL DEFAULT '',
+    username     TEXT NOT NULL DEFAULT '',
+    password_enc TEXT NOT NULL DEFAULT '',
+    root_path    TEXT NOT NULL DEFAULT '/',
+    verify_tls   INTEGER NOT NULL DEFAULT 1,
+    created_at   INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL,
+    last_ok_at   INTEGER,
+    last_error   TEXT NOT NULL DEFAULT ''
+);
+`
+
+// schemaV24Indexes adds the remote-reference columns' indexes. The partial
+// unique index is BINARY on purpose: WebDAV paths are case-sensitive, unlike
+// local Windows paths, so two remote files that differ only in case are two
+// different favorites. Local rows (source_id = 0) are outside the index.
+const schemaV24Indexes = `
+CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_remote ON videos(source_id, remote_path) WHERE source_id > 0;
+CREATE INDEX IF NOT EXISTS idx_videos_source ON videos(source_id);
 `
 
 // userVersion reads PRAGMA user_version.
