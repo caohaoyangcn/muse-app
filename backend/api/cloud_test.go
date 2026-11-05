@@ -84,6 +84,9 @@ func TestAddCloudVideosAndReadModel(t *testing.T) {
 	if got.RemotePath != "/媒体/a.mp4" || got.Path == got.RemotePath {
 		t.Errorf("remote path = %q synthetic = %q", got.RemotePath, got.Path)
 	}
+	if got.CloudURL != srv.URL+"/%E5%AA%92%E4%BD%93/a.mp4" {
+		t.Errorf("OpenList file URL = %q", got.CloudURL)
+	}
 
 	// A second add is a duplicate with the familiar message.
 	again := lib.AddCloudVideos(view.ID, []string{"/媒体/a.mp4"})
