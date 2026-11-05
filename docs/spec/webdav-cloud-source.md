@@ -120,6 +120,18 @@ CREATE INDEX idx_videos_source ON videos(source_id);
 - `ListNeedingFingerprint`、`ListSameSizePeers`、`ListRelocationCandidates`、`ListFingerprinted`、`ListByContentHash` 增加 `source_id = 0` 过滤。
 - 迁移测试覆盖新表、列、索引和旧库升级。
 
+v26 增加来源生命周期与归档快照：
+
+```sql
+ALTER TABLE cloud_connections ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE cloud_connections ADD COLUMN disabled_at INTEGER;
+ALTER TABLE videos ADD COLUMN archive_source_name TEXT NOT NULL DEFAULT '';
+CREATE INDEX idx_videos_delete_reason ON videos(delete_reason);
+```
+
+归档复用 v25 的回收站字段：`deleted_at` + `delete_reason='archived'`；不新建归档表，也不新增生命周期状态。
+`LogAudit` 的语义不变：本机持久化内容仍只有记录、封面与元数据。
+
 ### 3.3 WebDAV 客户端
 
 标准库实现，不引入第三方依赖：
