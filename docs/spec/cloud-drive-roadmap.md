@@ -42,7 +42,7 @@ Muse WebDAV 客户端 ────┘
 | 工作流 | 文档 | 状态 | 当前里程碑 | 下一个提交 |
 | --- | --- | --- | --- | --- |
 | 添加来源弹窗 | [add-video-source-dialog.md](add-video-source-dialog.md) | In progress | 三来源已接通；仅剩 Windows 原生窗口检查 | 文档收尾 |
-| WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | In progress | M6 缓存播放完成 | `Exclude cloud favorites from local scans` |
+| WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | In progress | M7 离线语义完成 | `Stream cloud videos over the LAN server` |
 | OpenList BitQiu 驱动 | [openlist-bitqiu-driver.md](openlist-bitqiu-driver.md) | Proposed / Spike | Phase 1 最小可读驱动 | `Add BitQiu driver`（OpenList fork） |
 
 > 状态只在本表和各文档的「进度记录」中更新；不要用代码注释代替进度记录。
@@ -92,3 +92,4 @@ Muse WebDAV 客户端 ────┘
 | 2026-11-06 | WebDAV M4 | 远程收藏、浏览/添加 API、设置与网盘浏览弹窗 | `edcb7a7` |
 | 2026-11-06 | WebDAV M5 | 127.0.0.1 媒体代理、远程元数据/封面 resolver | `b0b059a` |
 | 2026-11-06 | WebDAV M6 | 下载缓存、LRU、OpenList 管理页、播放进度 | `ba947c0` |
+| 2026-11-06 | WebDAV M7 | 本地文件检测/卷/指纹/重连排除远程；404 与网络失败分流 | `7973434` |

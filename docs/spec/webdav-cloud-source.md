@@ -1,6 +1,6 @@
 # Muse WebDAV 云盘片源实施计划
 
-**状态：** In progress（M6 已完成）
+**状态：** In progress（M7 已完成）
 **范围：** Muse Go 后端 `backend/cloud`、v24 schema、WebDAV 只读访问、云端片源的添加/元数据/封面/播放/局域网串流、桌面端设置与浏览弹窗
 **非范围：** OpenList BitQiu 驱动本身（见 [OpenList fork 与 BitQiu 驱动](openlist-bitqiu-driver.md)）、Muse 内重命名/移动/删除/上传网盘文件、远程目录监控、远程内容哈希去重
 **依赖：** 真实比特球联调依赖 [OpenList BitQiu 驱动](openlist-bitqiu-driver.md)；本地可先用 `httptest` WebDAV 或任意 OpenList/AList 实例开发
@@ -320,10 +320,10 @@ OpenVideo(id)
 
 ### M7：离线与检测语义
 
-- [ ] 文件检测跳过远程，增加 `Remote` 计数。
-- [ ] 卷逻辑跳过远程。
-- [ ] 指纹/查重/重连排除远程。
-- [ ] 404 vs 网络失败行为测试。
+- [x] 文件检测跳过远程，增加 `Remote` 计数。
+- [x] 卷逻辑跳过远程。
+- [x] 指纹/查重/重连排除远程。
+- [x] 404 vs 网络失败行为测试。
 
 ### M8：LAN 与移动端
 
@@ -410,6 +410,7 @@ OpenVideo(id)
 | 日期 | 里程碑 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- | --- |
 | 2026-11-05 | 计划 | Planned | 计划文档建立 | `9da1586` |
+| 2026-11-06 | M7 | Done | 文件检测/卷协调/批量重连/指纹查询全部排除 `source_id>0`；文件检测增加 `Remote` 计数；远程 `RefreshStatus` 404 标 missing、网络/鉴权失败不改状态；离线来源读模型和启动回填跳过均有测试。 | `7973434` |
 | 2026-11-06 | M6 | Done（手测待做） | 下载缓存（Range 续传、`cloud:download` 进度、取消、3 秒重校验失败时回退已缓存副本）；10 GiB LRU、删除收藏清缓存、设置页缓存信息/清理；`OpenCloudPage` 与 `OpenContainingFolder` 远程分支；下载进度条。 | `ba947c0` |
 | 2026-11-06 | M5 | Done（手测待做） | 仅绑定 127.0.0.1 的随机 token 媒体代理，GET/HEAD、Range 206/200 降级、416；`Processor.SetMediaPathResolver` + 90 秒远程 ffprobe/ffmpeg 超时；自定义封面也走 resolver；代理单测覆盖。 | `b0b059a` |
 | 2026-11-06 | M4 | Done | 远程视频 `cloud://<id>/<sha1>` 合成路径、去重/复活；`BrowseCloud`/`AddCloudVideos` 与 Wails 绑定；`SourceName/SourceOffline` 读模型；设置「网盘（可选）」、`CloudBrowserDialog`、卡片/详情角标；headless Chromium 验证浏览/多选/设置表单。 | `edcb7a7` |
