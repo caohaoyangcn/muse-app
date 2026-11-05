@@ -1,6 +1,6 @@
 # Muse WebDAV 云盘片源实施计划
 
-**状态：** In progress（M8 已完成）
+**状态：** In progress（M1–M8 完成；M9 本地端到端完成，真实 OpenList/BitQiu 待联调）
 **范围：** Muse Go 后端 `backend/cloud`、v24 schema、WebDAV 只读访问、云端片源的添加/元数据/封面/播放/局域网串流、桌面端设置与浏览弹窗
 **非范围：** OpenList BitQiu 驱动本身（见 [OpenList fork 与 BitQiu 驱动](openlist-bitqiu-driver.md)）、Muse 内重命名/移动/删除/上传网盘文件、远程目录监控、远程内容哈希去重
 **依赖：** 真实比特球联调依赖 [OpenList BitQiu 驱动](openlist-bitqiu-driver.md)；本地可先用 `httptest` WebDAV 或任意 OpenList/AList 实例开发
@@ -333,9 +333,11 @@ OpenVideo(id)
 
 ### M9：文档与端到端
 
-- [ ] `docs/cloud-drive-setup.md`。
-- [ ] OpenList fork 联调。
-- [ ] 全套静态检查。
+- [x] `docs/cloud-drive-setup.md`。
+- [ ] OpenList fork 联调（需要真实比特球账号与 OpenList fork 构建）。
+- [x] 全套静态检查。
+
+> 2026-11-06 补充：已用 `golang.org/x/net/webdav` + 真实 ffmpeg/ffprobe 跑通本地 WebDAV 端到端（浏览 → 代理 Range → 元数据/封面 → 缓存），并完成 Windows 交叉编译与 `wails build`（macOS 本机产物）。真实 OpenList/BitQiu 仅剩外部环境联调，Muse 侧 WebDAV 链路已完整。
 
 ## 6. 边界与失败模式
 
@@ -410,6 +412,7 @@ OpenVideo(id)
 | 日期 | 里程碑 | 状态 | 说明 | 提交 |
 | --- | --- | --- | --- | --- |
 | 2026-11-05 | 计划 | Planned | 计划文档建立 | `9da1586` |
+| 2026-11-06 | M9 | Done（外部联调待做） | `docs/cloud-drive-setup.md`；本地 WebDAV 集成测试（ffmpeg/ffprobe/封面/缓存）；`golangci-lint` 2.5.0 0 issues；`go test ./...`、`go test -tags integration ./backend/cloud`、Windows 交叉编译、`wails build` 通过；README/PRODUCT 更新。 | `1492a37` / `2e030d6` |
 | 2026-11-06 | M8 | Done | LAN `/stream/video/{id}` 远程分支复用 Range 转发，`SourceOffline` 503；手机网格/详情/操作表增加网盘离线状态并禁用播放；`ServeVideo` Range/503 测试。 | `a58bb3b` |
 | 2026-11-06 | M7 | Done | 文件检测/卷协调/批量重连/指纹查询全部排除 `source_id>0`；文件检测增加 `Remote` 计数；远程 `RefreshStatus` 404 标 missing、网络/鉴权失败不改状态；离线来源读模型和启动回填跳过均有测试。 | `7973434` |
 | 2026-11-06 | M6 | Done（手测待做） | 下载缓存（Range 续传、`cloud:download` 进度、取消、3 秒重校验失败时回退已缓存副本）；10 GiB LRU、删除收藏清缓存、设置页缓存信息/清理；`OpenCloudPage` 与 `OpenContainingFolder` 远程分支；下载进度条。 | `ba947c0` |
