@@ -85,4 +85,4 @@ Muse WebDAV 客户端 ────┘
 | --- | --- | --- | --- |
 | 2026-11-05 | 计划建立 | 三份实施计划与路线图写入 `docs/spec/` | `9da1586` |
 | 2026-11-05 | 本地/扫描入口 | 初版 `watch.ScanOnce` + `AddSourceDialog` + Library 接入；后收拢为目录监控 | `0800c72` / `d40a9ac` |
-| 2026-11-05 | 语义收拢 | 扫描文件夹改为 `pickWatchDir` + `addWatchDir`，删除一次性 `ScanOnce` | 本次提交 |
+| 2026-11-05 | 语义收拢 | 扫描文件夹改为 `pickWatchDir` + `addWatchDir`，删除一次性 `ScanOnce` | `e25c96c` |

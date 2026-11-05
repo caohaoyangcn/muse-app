@@ -252,7 +252,7 @@ interface AddSourceDialogProps {
 | 1 | `Add one-off directory scan for add-source flow` | 初版 `watch.ScanOnce`（已被下一步替代） | `0800c72` |
 | 2 | `Add add-source chooser dialog` | `AddSourceDialog.tsx`、Library 接入 | `d40a9ac` |
 | 3 | `Record add-source implementation progress` | 文档进度 | `4c63d61` |
-| 4 | `Unify scan folder with folder watch` | 删除一次性扫描，改用 `addWatchDir` | 本次提交 |
+| 4 | `Unify scan folder with folder watch` | 删除一次性扫描，改用 `addWatchDir` | `e25c96c` |
 
 ## 8. 风险与取舍
 
@@ -268,7 +268,7 @@ interface AddSourceDialogProps {
 | --- | --- | --- | --- |
 | 2026-11-05 | Planned | 计划文档建立 | `9da1586` |
 | 2026-11-05 | In progress | 一次性扫描 + 来源弹窗 + Library 接入 | `0800c72` / `d40a9ac` |
-| 2026-11-05 | Revised | 扫描文件夹改为添加目录监控，删除一次性扫描路径 | 本次提交 |
+| 2026-11-05 | Revised | 扫描文件夹改为添加目录监控，删除一次性扫描路径 | `e25c96c` |
 
 ## 10. 实现记录（2026-11-05）
 
