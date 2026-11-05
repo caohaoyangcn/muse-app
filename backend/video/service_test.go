@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"muse-app/backend/database"
@@ -435,5 +436,44 @@ func TestServiceBackfillProcessingIncludesMissingThumbnail(t *testing.T) {
 
 	if got := svc.BackfillProcessing(); got != 1 {
 		t.Fatalf("backfill count = %d, want 1", got)
+	}
+}
+
+func TestServiceAddRemoteVideo(t *testing.T) {
+	svc, _ := newTestService(t)
+	v, created, err := svc.AddRemoteVideo(7, "/媒体/a.mp4", "a.mp4", 2048)
+	if err != nil {
+		t.Fatalf("add remote: %v", err)
+	}
+	if !created || v.SourceID != 7 || v.RemotePath != "/媒体/a.mp4" || v.FileName != "a.mp4" {
+		t.Errorf("remote video = %+v created=%v", v, created)
+	}
+	if v.Path != RemotePathKey(7, "/媒体/a.mp4") || !strings.HasPrefix(v.Path, "cloud://7/") {
+		t.Errorf("synthetic path = %q", v.Path)
+	}
+	// Same path is a duplicate; a case-different WebDAV path is another file.
+	if _, _, err := svc.AddRemoteVideo(7, "/媒体/a.mp4", "a.mp4", 2048); err != ErrAlreadyAdded {
+		t.Errorf("duplicate err = %v, want ErrAlreadyAdded", err)
+	}
+	if _, _, err := svc.AddRemoteVideo(7, "/媒体/A.MP4", "A.MP4", 10); err != nil {
+		t.Errorf("case-different remote path: %v", err)
+	}
+	if _, _, err := svc.AddRemoteVideo(7, "relative.mp4", "relative.mp4", 10); err != ErrInvalidRemotePath {
+		t.Errorf("relative path err = %v", err)
+	}
+	if _, _, err := svc.AddRemoteVideo(7, "/媒体/readme.txt", "readme.txt", 10); err != ErrUnsupportedType {
+		t.Errorf("unsupported type err = %v", err)
+	}
+
+	// A remote favorite marked missing is revived at its recorded remote path.
+	if err := svc.repo.UpdateStatus(v.ID, StatusMissing); err != nil {
+		t.Fatal(err)
+	}
+	revived, created, err := svc.AddRemoteVideo(7, "/媒体/a.mp4", "a.mp4", 2048)
+	if err != nil {
+		t.Fatalf("revive: %v", err)
+	}
+	if created || revived.ID != v.ID || revived.Status != StatusAvailable {
+		t.Errorf("revived = %+v created=%v", revived, created)
 	}
 }

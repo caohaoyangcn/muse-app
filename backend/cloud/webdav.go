@@ -206,7 +206,7 @@ func (c *Client) Head(ctx context.Context, raw string) (*Entry, error) {
 		Name:        pathBase(p),
 		Path:        p,
 		Size:        size,
-		Modified:    modified,
+		Modified:    modified.UnixMilli(),
 		ContentType: resp.Header.Get("Content-Type"),
 	}, nil
 }
@@ -351,7 +351,7 @@ func (c *Client) entryFromResponse(basePath, requestPath string, response davRes
 		}
 		entry.IsDir = len(prop.ResourceType.Collection) > 0
 		entry.Size = parseSize(prop.ContentLength)
-		entry.Modified = parseDAVTime(prop.LastModified)
+		entry.Modified = parseDAVTime(prop.LastModified).UnixMilli()
 		entry.ContentType = strings.TrimSpace(prop.ContentType)
 	}
 	return entry, true

@@ -1,19 +1,17 @@
 package cloud
 
-import "time"
-
 // Entry is one WebDAV resource as PROPFIND described it. Path is an absolute,
 // percent-decoded path relative to the connection's endpoint (not including the
 // endpoint URL's own path and not including root_path). That makes it stable
 // when the OpenList address changes and keeps it independent of the connection
 // scope.
 type Entry struct {
-	Name        string    `json:"name"`
-	Path        string    `json:"path"`
-	IsDir       bool      `json:"isDir"`
-	Size        int64     `json:"size"`
-	Modified    time.Time `json:"modified"`
-	ContentType string    `json:"contentType"`
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	IsDir       bool   `json:"isDir"`
+	Size        int64  `json:"size"`
+	Modified    int64  `json:"modified"` // unix milliseconds; 0 when the server omits it
+	ContentType string `json:"contentType"`
 }
 
 // Connection is one persisted WebDAV source. PasswordEnc is the platform-
@@ -99,4 +97,12 @@ type TestResult struct {
 	OK        bool   `json:"ok"`
 	LatencyMs int64  `json:"latencyMs"`
 	Error     string `json:"error"`
+}
+
+// SourceState is the tiny projection the library read model needs: the name
+// shown on a remote card and whether the source is currently reachable. It
+// avoids loading favorite counts for every library read.
+type SourceState struct {
+	Name   string
+	Online bool
 }

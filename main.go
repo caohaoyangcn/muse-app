@@ -21,6 +21,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	"muse-app/backend/api"
+	"muse-app/backend/cloud"
 	"muse-app/backend/database"
 	"muse-app/backend/group"
 	"muse-app/backend/jav"
@@ -156,6 +157,8 @@ func main() {
 	// Single business façade shared by the desktop bindings and the LAN server.
 	lib := api.New(videoSvc, groupSvc, log)
 	app.SetLibrary(lib)
+	cloudSvc := cloud.NewService(cloud.NewSQLiteRepository(db), app.Emit, log)
+	lib.SetCloudService(cloudSvc)
 	settingsStore := settings.New(db)
 	app.SetSettings(settingsStore)
 	// The window placement is needed by both OnStartup and shutdown; build it
@@ -220,6 +223,11 @@ func main() {
 	watchSvc := watch.New(watch.NewSQLiteRepository(db), lib, app.Emit, log)
 	lib.SetWatchService(watchSvc)
 	watchSvc.Start()
+	// Cloud sources (WebDAV): probe every configured connection in the
+	// background so remote favorites can show an offline badge without any read
+	// path waiting on the network. Local-only users have no connections, so this
+	// is a no-op for them.
+	stopCloudHealth := cloudSvc.StartHealthCheck(0)
 	// Volume presence (磁盘未接入): a background poll notices an external drive
 	// being unplugged or plugged back in. A returning drive is reconciled as a
 	// whole: files that came back are revived, and files confirmed gone are
@@ -239,6 +247,7 @@ func main() {
 				log.Warn("web server shutdown failed", "err", err)
 			}
 		}},
+		shutdownStep{"cloud health", stopCloudHealth},
 		shutdownStep{"folder watch", watchSvc.Stop},
 		shutdownStep{"volume watch", stopVolumeWatch},
 		shutdownStep{"image sweep", stopImageSweep},

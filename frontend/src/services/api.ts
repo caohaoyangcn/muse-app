@@ -2,7 +2,11 @@ import {
   AddVideoToGroup,
   AddVideos,
   AddWatchDir,
+  AddCloudVideos,
+  BrowseCloud,
   ClearVideoLikes,
+  CloudStorageAvailable,
+  DeleteCloudConnection,
   CopyPath,
   CreateGroup,
   DeleteGroup,
@@ -10,6 +14,9 @@ import {
   GetServerPort,
   GetScrapeProxy,
   GetTourSeen,
+  ListCloudConnections,
+  SaveCloudConnection,
+  TestCloudConnection,
   ListGroups,
   ListVideos,
   ListWatchDirs,
@@ -86,6 +93,10 @@ import type {
   JavTaskOverview,
   JavBusCookieStatus,
   FC2CookieStatus,
+  CloudConnection,
+  CloudConnectionInput,
+  CloudEntry,
+  CloudTestResult,
   JavDuplicateGroup,
   ContentDuplicateGroup,
   ContentScanStatus,
@@ -306,3 +317,32 @@ export const removeWatchDir = (id: number): Promise<void> => RemoveWatchDir(id);
 export const pickWatchDir = (): Promise<string> => PickWatchDir();
 
 export const rescanWatchDirs = (): Promise<void> => RescanWatchDirs();
+
+// ---- Cloud sources (WebDAV 网盘) ----
+
+/** 已配置的网盘连接。此读取不访问网络，只返回最后一次观测到的在线状态。 */
+export const listCloudConnections = (): Promise<CloudConnection[]> => ListCloudConnections();
+
+export const saveCloudConnection = (
+  input: CloudConnectionInput,
+): Promise<CloudConnection> => SaveCloudConnection(input);
+
+export const deleteCloudConnection = (id: number): Promise<void> => DeleteCloudConnection(id);
+
+/** 测试地址与凭据；预期失败通过 result.error 返回，而不是抛异常。 */
+export const testCloudConnection = (
+  input: CloudConnectionInput,
+): Promise<CloudTestResult> => TestCloudConnection(input);
+
+/** 浏览一个远程目录（目录在前，文件按名称排序）。 */
+export const browseCloud = (id: number, path: string): Promise<CloudEntry[]> =>
+  BrowseCloud(id, path);
+
+/** 把选中的远程文件加入收藏。 */
+export const addCloudVideos = (
+  sourceId: number,
+  paths: string[],
+): Promise<AddVideoResult[]> => AddCloudVideos(sourceId, paths);
+
+/** 当前平台是否能安全保存密码（Windows DPAPI）。 */
+export const cloudStorageAvailable = (): Promise<boolean> => CloudStorageAvailable();

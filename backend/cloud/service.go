@@ -547,3 +547,23 @@ func userMessage(err error) string {
 		return err.Error()
 	}
 }
+
+// SourceStates returns the projection the video read model attaches. It does
+// not count favorites and does not touch the network.
+func (s *Service) SourceStates() (map[int64]SourceState, error) {
+	connections, err := s.repo.ListConnections()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]SourceState, len(connections))
+	for i := range connections {
+		out[connections[i].ID] = SourceState{
+			Name:   connections[i].Name,
+			Online: s.Online(connections[i].ID),
+		}
+	}
+	return out, nil
+}
+
+// UserMessage maps a cloud failure to the Chinese text shown to the user.
+func UserMessage(err error) string { return userMessage(err) }

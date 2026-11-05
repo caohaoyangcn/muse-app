@@ -26,9 +26,10 @@ export default function MetadataPopup({
   show: boolean;
   anchorEl: HTMLElement | null;
 }) {
+  const remote = video.sourceId > 0;
   const rows: [string, string][] = (
     [
-      ["路径", video.path],
+      [remote ? "网盘" : "路径", remote ? `${video.sourceName || "网盘"} · ${video.remotePath}` : video.path],
       ["时长", formatDuration(video.durationMs)],
       ["分辨率", videoResolution(video)],
       ["帧率", formatFrameRate(video.frameRate)],

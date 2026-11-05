@@ -14,6 +14,9 @@ var (
 	ErrUnsupportedType    = errors.New("unsupported file type")
 	ErrAlreadyAdded       = errors.New("this video is already in favorites")
 	ErrNotFound           = errors.New("video not found")
+	// ErrInvalidRemotePath is returned for a cloud favorite whose WebDAV path
+	// is not absolute. It is a programming/API error, never a disk condition.
+	ErrInvalidRemotePath = errors.New("remote path must be absolute")
 	// ErrFingerprinterUnavailable is returned when content dedup is asked for
 	// before the fingerprint worker has been wired up.
 	ErrFingerprinterUnavailable = errors.New("content fingerprinting is not available")
@@ -38,6 +41,8 @@ func UserMessage(err error) string {
 		return "已在收藏中"
 	case errors.Is(err, ErrNotFound):
 		return "找不到视频"
+	case errors.Is(err, ErrInvalidRemotePath):
+		return "网盘路径格式无效"
 	default:
 		return err.Error()
 	}

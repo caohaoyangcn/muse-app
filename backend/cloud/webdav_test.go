@@ -88,7 +88,7 @@ func TestClientListParsesChineseEscapedHref(t *testing.T) {
 	if file.Name != "a b.mp4" || file.Path != "/媒体/a b.mp4" || file.IsDir || file.Size != 123 {
 		t.Errorf("file entry = %+v", file)
 	}
-	if file.ContentType != "video/mp4" || file.Modified.IsZero() {
+	if file.ContentType != "video/mp4" || file.Modified == 0 {
 		t.Errorf("file metadata = %+v", file)
 	}
 	dir := entries[1]
@@ -288,7 +288,7 @@ func TestClientHeadAndRangeNotSatisfiable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("head: %v", err)
 	}
-	if entry.Size != 4096 || entry.Name != "a.mp4" || entry.Modified.IsZero() {
+	if entry.Size != 4096 || entry.Name != "a.mp4" || entry.Modified == 0 {
 		t.Errorf("head entry = %+v", entry)
 	}
 	if _, err := client.OpenRange(context.Background(), "/媒体/a.mp4", 9999, 10); !errors.Is(err, ErrRangeNotSatisfiable) {

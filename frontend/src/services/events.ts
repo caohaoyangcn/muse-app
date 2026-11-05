@@ -23,6 +23,7 @@ const EVENTS = [
   "video:removed", // a favorite left the library
   "group:changed",
   "watch:scanned", // a folder-watch pass imported or relinked files
+  "cloud:status", // a WebDAV source became reachable or went offline
 ];
 
 /** Subscribes every backend event to the live-data revision. */

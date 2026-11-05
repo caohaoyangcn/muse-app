@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"muse-app/backend/cloud"
 	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/video"
@@ -33,6 +34,7 @@ type Library struct {
 	groups *group.Service
 	watch  *watch.Service
 	jav    *jav.Service
+	cloud  *cloud.Service
 	log    *slog.Logger
 }
 
@@ -51,6 +53,9 @@ func New(videos *video.Service, groups *group.Service, log *slog.Logger) *Librar
 
 // SetJavService wires optional JAV metadata enrichment into the façade.
 func (l *Library) SetJavService(svc *jav.Service) { l.jav = svc }
+
+// SetCloudService wires optional WebDAV sources into the façade.
+func (l *Library) SetCloudService(svc *cloud.Service) { l.cloud = svc }
 
 // scrapedCodes loads the authoritative 番号 per favorite for the video read
 // model. It is deliberately best effort: a scrape result that cannot be read
@@ -90,9 +95,30 @@ func (l *Library) restoredVideoIDs() map[int64]struct{} {
 // applyReadModel fills the fields a Video carries only for reading: the
 // authoritative 番号 from the scrape result and the 马赛克破解 tag from group
 // membership. Both maps are loaded once per batch by the caller.
-func applyReadModel(v *video.Video, codes map[int64]string, restored map[int64]struct{}) {
+func applyReadModel(v *video.Video, codes map[int64]string, restored map[int64]struct{}, sources map[int64]cloud.SourceState) {
 	v.JavCode = codes[v.ID]
 	_, v.MosaicRestored = restored[v.ID]
+	if v.SourceID > 0 {
+		if source, ok := sources[v.SourceID]; ok {
+			v.SourceName = source.Name
+			v.SourceOffline = !source.Online
+		}
+	}
+}
+
+// cloudSources loads the connection names/health the read model needs. It is
+// best effort like the scrape read: a source that cannot be listed must not
+// fail the library, it only leaves the badge/name empty.
+func (l *Library) cloudSources() map[int64]cloud.SourceState {
+	if l.cloud == nil {
+		return nil
+	}
+	sources, err := l.cloud.SourceStates()
+	if err != nil {
+		l.log.Warn("load cloud source states failed", "err", err)
+		return nil
+	}
+	return sources
 }
 
 // attachReadModel fills the read-model fields on a list of favorites. The two
@@ -102,9 +128,9 @@ func (l *Library) attachReadModel(videos []video.Video) {
 	if len(videos) == 0 {
 		return
 	}
-	codes, restored := l.scrapedCodes(), l.restoredVideoIDs()
+	codes, restored, sources := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources()
 	for i := range videos {
-		applyReadModel(&videos[i], codes, restored)
+		applyReadModel(&videos[i], codes, restored, sources)
 	}
 }
 
@@ -113,7 +139,7 @@ func (l *Library) attachReadModelOne(v *video.Video) {
 	if v == nil {
 		return
 	}
-	applyReadModel(v, l.scrapedCodes(), l.restoredVideoIDs())
+	applyReadModel(v, l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources())
 }
 
 // ---- Reads (shared read model for both transports) ----
@@ -298,9 +324,9 @@ func (l *Library) ListJavTaskOverviews() ([]jav.TaskOverview, error) {
 	if err != nil {
 		return nil, err
 	}
-	codes, restored := l.scrapedCodes(), l.restoredVideoIDs()
+	codes, restored, sources := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources()
 	for i := range overviews {
-		applyReadModel(&overviews[i].Video, codes, restored)
+		applyReadModel(&overviews[i].Video, codes, restored, sources)
 	}
 	return overviews, nil
 }
@@ -350,10 +376,10 @@ func (l *Library) attachDuplicateReadModel(groups []jav.DuplicateGroup) {
 	if len(groups) == 0 {
 		return
 	}
-	codes, restored := l.scrapedCodes(), l.restoredVideoIDs()
+	codes, restored, sources := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources()
 	for i := range groups {
 		for j := range groups[i].Videos {
-			applyReadModel(&groups[i].Videos[j], codes, restored)
+			applyReadModel(&groups[i].Videos[j], codes, restored, sources)
 		}
 	}
 }
@@ -395,10 +421,10 @@ func (l *Library) ListContentDuplicates(includeIgnored bool) ([]video.ContentDup
 		return nil, err
 	}
 	if len(groups) > 0 {
-		codes, restored := l.scrapedCodes(), l.restoredVideoIDs()
+		codes, restored, sources := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources()
 		for i := range groups {
 			for j := range groups[i].Members {
-				applyReadModel(&groups[i].Members[j].Video, codes, restored)
+				applyReadModel(&groups[i].Members[j].Video, codes, restored, sources)
 			}
 		}
 	}
@@ -659,6 +685,98 @@ func (l *Library) SetVideoScrapedCoverAllowed(id int64, allowed bool) (*video.Vi
 	}
 	l.attachReadModelOne(v)
 	return v, nil
+}
+
+// ---- Cloud sources (WebDAV) ----
+
+// ListCloudConnections returns the configured sources. It never touches the
+// network; the settings page can open instantly and the list shows the last
+// observed health.
+func (l *Library) ListCloudConnections() ([]cloud.ConnectionView, error) {
+	if l.cloud == nil {
+		return []cloud.ConnectionView{}, nil
+	}
+	return l.cloud.ListConnections()
+}
+
+// SaveCloudConnection creates or updates a source. The password is protected
+// before it reaches SQLite; the returned view never contains it.
+func (l *Library) SaveCloudConnection(input cloud.ConnectionInput) (*cloud.ConnectionView, error) {
+	if l.cloud == nil {
+		return nil, fmt.Errorf("网盘服务未初始化")
+	}
+	return l.cloud.SaveConnection(input)
+}
+
+// DeleteCloudConnection removes a source and refuses while favorites still
+// point at it.
+func (l *Library) DeleteCloudConnection(id int64) error {
+	if l.cloud == nil {
+		return fmt.Errorf("网盘服务未初始化")
+	}
+	return l.cloud.DeleteConnection(id)
+}
+
+// TestCloudConnection probes the form values (or the stored row) and reports a
+// readable result instead of throwing for the expected failures.
+func (l *Library) TestCloudConnection(input cloud.ConnectionInput) (cloud.TestResult, error) {
+	if l.cloud == nil {
+		return cloud.TestResult{Error: "网盘服务未初始化"}, nil
+	}
+	return l.cloud.TestConnection(input)
+}
+
+// BrowseCloud lists one remote collection (directories first).
+func (l *Library) BrowseCloud(id int64, path string) ([]cloud.Entry, error) {
+	if l.cloud == nil {
+		return nil, fmt.Errorf("网盘服务未初始化")
+	}
+	return l.cloud.Browse(id, path)
+}
+
+// CloudStorageAvailable reports whether a WebDAV password can be protected on
+// this platform. Anonymous sources remain usable when it cannot.
+func (l *Library) CloudStorageAvailable() bool {
+	return l.cloud != nil && l.cloud.StorageAvailable()
+}
+
+// AddCloudVideos validates each selected remote path and adds it as a
+// read-only favorite. Stat is the authoritative source of the display name and
+// size; the browser's snapshot may be stale. One failure never blocks the rest.
+func (l *Library) AddCloudVideos(sourceID int64, paths []string) []video.AddVideoResult {
+	results := make([]video.AddVideoResult, 0, len(paths))
+	for _, p := range paths {
+		result := video.AddVideoResult{Path: p}
+		if l.cloud == nil {
+			result.Error = "网盘服务未初始化"
+			results = append(results, result)
+			continue
+		}
+		entry, err := l.cloud.Stat(sourceID, p)
+		if err != nil {
+			result.Error = cloud.UserMessage(err)
+			results = append(results, result)
+			continue
+		}
+		if entry.IsDir {
+			result.Error = "文件夹不能直接加入收藏"
+			results = append(results, result)
+			continue
+		}
+		v, _, err := l.videos.AddRemoteVideo(sourceID, entry.Path, entry.Name, entry.Size)
+		if err != nil {
+			result.Error = video.UserMessage(err)
+			results = append(results, result)
+			continue
+		}
+		result.Success = true
+		result.VideoID = v.ID
+		if l.jav != nil {
+			l.jav.Enqueue(v.ID)
+		}
+		results = append(results, result)
+	}
+	return results
 }
 
 // ---- Group suggestions (auto-detected after adding videos) ----

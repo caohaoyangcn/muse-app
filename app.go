@@ -9,6 +9,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"muse-app/backend/api"
+	"muse-app/backend/cloud"
 	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/netproxy"
@@ -403,8 +404,14 @@ func (a *App) CopyPath(id int64) error {
 	if err != nil {
 		return err
 	}
-	if err := runtime.ClipboardSetText(a.EventContext(), v.Path); err != nil {
-		if err := platform.CopyText(v.Path); err != nil {
+	path := v.Path
+	if v.IsRemote() {
+		// The synthetic cloud:// key is an implementation detail; a user copying
+		// a remote path wants the WebDAV path.
+		path = v.RemotePath
+	}
+	if err := runtime.ClipboardSetText(a.EventContext(), path); err != nil {
+		if err := platform.CopyText(path); err != nil {
 			return fmt.Errorf("copy path failed: %w", err)
 		}
 	}
@@ -605,6 +612,44 @@ func (a *App) RemoveWatchDir(id int64) error {
 func (a *App) RescanWatchDirs() {
 	a.lib.RescanWatchDirs()
 }
+
+// ---- Cloud sources (WebDAV) ----
+
+// ListCloudConnections returns the configured WebDAV sources and their last
+// observed health. Local-only users see an empty list.
+func (a *App) ListCloudConnections() ([]cloud.ConnectionView, error) {
+	return a.lib.ListCloudConnections()
+}
+
+// SaveCloudConnection creates or updates a source; the password is protected
+// before it is written and never returned.
+func (a *App) SaveCloudConnection(input cloud.ConnectionInput) (*cloud.ConnectionView, error) {
+	return a.lib.SaveCloudConnection(input)
+}
+
+// DeleteCloudConnection removes a source, refusing while favorites still use it.
+func (a *App) DeleteCloudConnection(id int64) error {
+	return a.lib.DeleteCloudConnection(id)
+}
+
+// TestCloudConnection checks the address/credentials before saving.
+func (a *App) TestCloudConnection(input cloud.ConnectionInput) (cloud.TestResult, error) {
+	return a.lib.TestCloudConnection(input)
+}
+
+// BrowseCloud lists one remote collection for the browser dialog.
+func (a *App) BrowseCloud(id int64, path string) ([]cloud.Entry, error) {
+	return a.lib.BrowseCloud(id, path)
+}
+
+// AddCloudVideos adds the selected remote files to the library.
+func (a *App) AddCloudVideos(sourceID int64, paths []string) []video.AddVideoResult {
+	return a.lib.AddCloudVideos(sourceID, paths)
+}
+
+// CloudStorageAvailable reports whether a password can be protected on this
+// platform (DPAPI on Windows).
+func (a *App) CloudStorageAvailable() bool { return a.lib.CloudStorageAvailable() }
 
 // ---- Guided tour (新手引导) ----
 

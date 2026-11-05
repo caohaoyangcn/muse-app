@@ -63,6 +63,115 @@ export namespace api {
 
 }
 
+export namespace cloud {
+	
+	export class ConnectionInput {
+	    id: number;
+	    name: string;
+	    kind: string;
+	    endpoint: string;
+	    webUrl: string;
+	    username: string;
+	    password: string;
+	    clearPassword: boolean;
+	    rootPath: string;
+	    verifyTls: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConnectionInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.endpoint = source["endpoint"];
+	        this.webUrl = source["webUrl"];
+	        this.username = source["username"];
+	        this.password = source["password"];
+	        this.clearPassword = source["clearPassword"];
+	        this.rootPath = source["rootPath"];
+	        this.verifyTls = source["verifyTls"];
+	    }
+	}
+	export class ConnectionView {
+	    id: number;
+	    name: string;
+	    kind: string;
+	    endpoint: string;
+	    webUrl: string;
+	    username: string;
+	    rootPath: string;
+	    verifyTls: boolean;
+	    hasPassword: boolean;
+	    online: boolean;
+	    lastError: string;
+	    lastOkAt: number;
+	    videoCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConnectionView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.kind = source["kind"];
+	        this.endpoint = source["endpoint"];
+	        this.webUrl = source["webUrl"];
+	        this.username = source["username"];
+	        this.rootPath = source["rootPath"];
+	        this.verifyTls = source["verifyTls"];
+	        this.hasPassword = source["hasPassword"];
+	        this.online = source["online"];
+	        this.lastError = source["lastError"];
+	        this.lastOkAt = source["lastOkAt"];
+	        this.videoCount = source["videoCount"];
+	    }
+	}
+	export class Entry {
+	    name: string;
+	    path: string;
+	    isDir: boolean;
+	    size: number;
+	    modified: number;
+	    contentType: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Entry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.isDir = source["isDir"];
+	        this.size = source["size"];
+	        this.modified = source["modified"];
+	        this.contentType = source["contentType"];
+	    }
+	}
+	export class TestResult {
+	    ok: boolean;
+	    latencyMs: number;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.latencyMs = source["latencyMs"];
+	        this.error = source["error"];
+	    }
+	}
+
+}
+
 export namespace group {
 	
 	export class Group {
@@ -534,6 +643,10 @@ export namespace video {
 	    allowScrapedCover: boolean;
 	    contentHash: string;
 	    hashVersion: number;
+	    sourceId: number;
+	    remotePath: string;
+	    sourceName: string;
+	    sourceOffline: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Video(source);
@@ -570,6 +683,10 @@ export namespace video {
 	        this.allowScrapedCover = source["allowScrapedCover"];
 	        this.contentHash = source["contentHash"];
 	        this.hashVersion = source["hashVersion"];
+	        this.sourceId = source["sourceId"];
+	        this.remotePath = source["remotePath"];
+	        this.sourceName = source["sourceName"];
+	        this.sourceOffline = source["sourceOffline"];
 	    }
 	}
 	export class ContentDuplicateMember {

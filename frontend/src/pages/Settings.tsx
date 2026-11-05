@@ -17,15 +17,21 @@ import {
   getScrapeProxy,
   setScrapeProxy,
   scrapeVideosJav,
+  listCloudConnections,
+  saveCloudConnection,
+  deleteCloudConnection,
+  testCloudConnection,
+  cloudStorageAvailable,
 } from "../services/api";
-import type { WatchedDir } from "../types";
+import type { CloudConnection, CloudConnectionInput, CloudTestResult, WatchedDir } from "../types";
+import { BrowserOpenURL } from "../../wailsjs/runtime";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { cn } from "../lib/utils";
-import { ArrowRight, Keyboard } from "lucide-react";
+import { ArrowRight, Cloud, Keyboard } from "lucide-react";
 
-type SectionKey = "guide" | "server" | "watch" | "proxy" | "javbus" | "fc2";
+type SectionKey = "guide" | "server" | "watch" | "cloud" | "proxy" | "javbus" | "fc2";
 
 const DEFAULT_PORT = 8899;
 
@@ -35,6 +41,7 @@ const NAV: { key: SectionKey; label: string }[] = [
   { key: "guide", label: "新手引导" },
   { key: "server", label: "服务器" },
   { key: "watch", label: "目录监控" },
+  { key: "cloud", label: "网盘（可选）" },
   { key: "proxy", label: "网络代理" },
   { key: "javbus", label: "JavBus" },
   { key: "fc2", label: "FC2CMADB" },
@@ -100,6 +107,7 @@ export default function Settings({
           {active === "guide" && <GuideSection onStartTour={onStartTour} />}
           {active === "server" && <ServerSection />}
           {active === "watch" && <WatchSection />}
+          {active === "cloud" && <CloudSection />}
           {active === "proxy" && <ProxySection />}
           {active === "javbus" && <JavBusSection />}
           {active === "fc2" && <FC2Section />}
@@ -796,4 +804,468 @@ function WatchSection() {
       )}
     </section>
   );
+}
+
+// ---- WebDAV 网盘 ---------------------------------------------------------
+
+type ConnectionDraft = {
+  id: number;
+  name: string;
+  endpoint: string;
+  webUrl: string;
+  username: string;
+  password: string;
+  clearPassword: boolean;
+  rootPath: string;
+  verifyTls: boolean;
+};
+
+function blankDraft(): ConnectionDraft {
+  return {
+    id: 0,
+    name: "",
+    endpoint: "",
+    webUrl: "",
+    username: "",
+    password: "",
+    clearPassword: false,
+    rootPath: "/",
+    verifyTls: true,
+  };
+}
+
+function draftFrom(c: CloudConnection): ConnectionDraft {
+  return {
+    id: c.id,
+    name: c.name,
+    endpoint: c.endpoint,
+    webUrl: c.webUrl,
+    username: c.username,
+    password: "",
+    clearPassword: false,
+    rootPath: c.rootPath || "/",
+    verifyTls: c.verifyTls,
+  };
+}
+
+/**
+ * 网盘（可选）: 只读 WebDAV 连接管理。Local-only users never need this page;
+ * BitQiu users connect through OpenList's WebDAV endpoint here. Passwords are
+ * write-only from the UI's point of view: the backend returns HasPassword, never
+ * the secret.
+ */
+function CloudSection() {
+  const [connections, setConnections] = useState<CloudConnection[]>([]);
+  const [storageAvailable, setStorageAvailable] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState<ConnectionDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [draftResult, setDraftResult] = useState<CloudTestResult | null>(null);
+  const [rowTesting, setRowTesting] = useState<number | null>(null);
+  const [rowResults, setRowResults] = useState<Record<number, CloudTestResult>>({});
+  const [deleteTarget, setDeleteTarget] = useState<CloudConnection | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [list, storage] = await Promise.all([listCloudConnections(), cloudStorageAvailable()]);
+      setConnections(list);
+      setStorageAvailable(storage);
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const updateDraft = (patch: Partial<ConnectionDraft>) => {
+    setDraft((current) => (current ? { ...current, ...patch } : current));
+    setDraftResult(null);
+  };
+
+  const toInput = (value: ConnectionDraft): CloudConnectionInput => ({
+    id: value.id,
+    name: value.name,
+    kind: "webdav",
+    endpoint: value.endpoint,
+    webUrl: value.webUrl,
+    username: value.username,
+    password: value.password,
+    clearPassword: value.clearPassword,
+    rootPath: value.rootPath,
+    verifyTls: value.verifyTls,
+  });
+
+  const testDraft = async () => {
+    if (!draft || testing || saving) return;
+    setTesting(true);
+    setDraftResult(null);
+    try {
+      setDraftResult(await testCloudConnection(toInput(draft)));
+    } catch (e) {
+      setDraftResult({ ok: false, latencyMs: 0, error: String(e) });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const saveDraft = async () => {
+    if (!draft || saving || testing) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await saveCloudConnection(toInput(draft));
+      setDraft(null);
+      setDraftResult(null);
+      await load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const testExisting = async (connection: CloudConnection) => {
+    if (rowTesting != null) return;
+    setRowTesting(connection.id);
+    try {
+      const result = await testCloudConnection({
+        id: connection.id,
+        name: connection.name,
+        kind: "webdav",
+        endpoint: connection.endpoint,
+        webUrl: connection.webUrl,
+        username: connection.username,
+        password: "",
+        clearPassword: false,
+        rootPath: connection.rootPath,
+        verifyTls: connection.verifyTls,
+      });
+      setRowResults((prev) => ({ ...prev, [connection.id]: result }));
+      await load();
+    } catch (e) {
+      setRowResults((prev) => ({
+        ...prev,
+        [connection.id]: { ok: false, latencyMs: 0, error: String(e) },
+      }));
+    } finally {
+      setRowTesting(null);
+    }
+  };
+
+  const remove = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteCloudConnection(deleteTarget.id);
+      setDeleteTarget(null);
+      await load();
+    } catch (e) {
+      setError(String(e));
+      setDeleteTarget(null);
+    }
+  };
+
+  return (
+    <section className="max-w-[720px]">
+      <h2 className="mb-1.5 text-base font-semibold">网盘（可选）</h2>
+      <p className="mb-4 max-w-[620px] leading-relaxed text-[var(--muted)]">
+        Muse 只读浏览标准 WebDAV，不改名、不移动、不删除网盘文件。比特球没有公开
+        WebDAV，需要先由 OpenList 挂载，再填写 OpenList 的 WebDAV 地址（通常以
+        <code className="mx-1">/dav</code> 结尾）。不用网盘的用户可以完全忽略这一页。
+      </p>
+
+      {loading ? (
+        <div className="flex min-h-[260px] items-center justify-center text-[var(--muted)]">加载中…</div>
+      ) : draft ? (
+        <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="m-0 text-sm font-semibold">{draft.id > 0 ? "编辑网盘连接" : "添加网盘连接"}</h3>
+            <Button size="sm" variant="ghost" onClick={() => setDraft(null)} disabled={saving || testing}>
+              取消
+            </Button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="名称" htmlFor="cloud-name">
+              <Input
+                id="cloud-name"
+                value={draft.name}
+                onChange={(e) => updateDraft({ name: e.target.value })}
+                placeholder="例如：比特球"
+                autoFocus
+              />
+            </Field>
+            <Field label="根目录" htmlFor="cloud-root">
+              <Input
+                id="cloud-root"
+                value={draft.rootPath}
+                onChange={(e) => updateDraft({ rootPath: e.target.value })}
+                placeholder="/"
+                spellCheck={false}
+              />
+            </Field>
+          </div>
+
+          <div className="mt-3">
+            <Field label="WebDAV 地址" htmlFor="cloud-endpoint">
+              <Input
+                id="cloud-endpoint"
+                value={draft.endpoint}
+                onChange={(e) => updateDraft({ endpoint: e.target.value })}
+                placeholder="http://127.0.0.1:5244/dav"
+                spellCheck={false}
+                autoComplete="url"
+              />
+            </Field>
+          </div>
+
+          <div className="mt-3">
+            <Field label="OpenList 网页地址（可选）" htmlFor="cloud-web">
+              <Input
+                id="cloud-web"
+                value={draft.webUrl}
+                onChange={(e) => updateDraft({ webUrl: e.target.value })}
+                placeholder="http://127.0.0.1:5244"
+                spellCheck={false}
+                autoComplete="url"
+              />
+            </Field>
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
+              留空时从 WebDAV 地址推导；用于「在 OpenList 中打开」。
+            </p>
+          </div>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Field label="用户名（可选）" htmlFor="cloud-user">
+              <Input
+                id="cloud-user"
+                value={draft.username}
+                onChange={(e) => updateDraft({ username: e.target.value })}
+                autoComplete="username"
+                spellCheck={false}
+              />
+            </Field>
+            <Field label="密码（可选）" htmlFor="cloud-password">
+              <Input
+                id="cloud-password"
+                type="password"
+                value={draft.password}
+                onChange={(e) => updateDraft({ password: e.target.value })}
+                placeholder={
+                  !storageAvailable
+                    ? "当前平台不支持安全保存密码"
+                    : draft.id > 0
+                      ? "留空保持原密码"
+                      : "留空表示匿名访问"
+                }
+                disabled={!storageAvailable}
+                autoComplete="new-password"
+              />
+            </Field>
+          </div>
+
+          <label className="mt-3 flex items-start gap-2 text-[13px] leading-relaxed">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
+              checked={draft.verifyTls}
+              onChange={(e) => updateDraft({ verifyTls: e.target.checked })}
+            />
+            <span>
+              校验 HTTPS 证书
+              <span className="ml-1 text-[var(--muted)]">（默认开启；仅自签名 OpenList 才需要关闭）</span>
+            </span>
+          </label>
+
+          {draft.id > 0 && connections.find((c) => c.id === draft.id)?.hasPassword && (
+            <label className="mt-2 flex items-start gap-2 text-[13px] leading-relaxed">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
+                checked={draft.clearPassword}
+                onChange={(e) => updateDraft({ clearPassword: e.target.checked, password: "" })}
+              />
+              <span>清除已保存的密码（改为匿名访问）</span>
+            </label>
+          )}
+
+          {!storageAvailable && (
+            <p className="mt-2 rounded-[var(--radius)] border border-[#e0b64f]/40 bg-[#e0b64f]/10 px-3 py-2 text-xs leading-relaxed text-[#e0b64f]">
+              当前平台不能安全保存密码，只能使用匿名 WebDAV。Windows 版支持 DPAPI 加密保存。
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            <Button variant="primary" onClick={() => void saveDraft()} disabled={saving || testing}>
+              {saving ? "保存中…" : "保存连接"}
+            </Button>
+            <Button onClick={() => void testDraft()} disabled={saving || testing || !draft.endpoint.trim()}>
+              {testing ? "测试中…" : "测试连接"}
+            </Button>
+            {draftResult && <TestBadge result={draftResult} />}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-2.5">
+            <Button variant="primary" onClick={() => { setDraft(blankDraft()); setDraftResult(null); }}>
+              + 添加网盘连接
+            </Button>
+            <Button onClick={() => void load()}>刷新状态</Button>
+          </div>
+
+          {connections.length === 0 ? (
+            <div className="mt-4 rounded-[var(--radius)] border border-dashed border-[var(--border)] px-4 py-8 text-center">
+              <Cloud className="mx-auto mb-2 h-6 w-6 text-[var(--muted)]" aria-hidden />
+              <p className="m-0 text-sm">还没有网盘连接</p>
+              <p className="m-0 mt-1 text-xs text-[var(--muted)]">
+                只用本地硬盘的话不需要配置；需要比特球时先启动 OpenList。
+              </p>
+            </div>
+          ) : (
+            <ul className="mt-4 flex list-none flex-col gap-2 p-0">
+              {connections.map((connection) => {
+                const result = rowResults[connection.id];
+                const webURL = managementURL(connection);
+                return (
+                  <li
+                    key={connection.id}
+                    className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] px-3.5 py-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={cn(
+                          "h-2 w-2 shrink-0 rounded-full",
+                          connection.online ? "bg-[#7ad9a2]" : "bg-[#e0b64f]",
+                        )}
+                        aria-hidden
+                      />
+                      <span className="text-sm font-medium">{connection.name}</span>
+                      <span className={cn("text-[11px]", connection.online ? "text-[#7ad9a2]" : "text-[#e0b64f]")}>
+                        {connection.online ? "在线" : "离线"}
+                      </span>
+                      <span className="text-[11px] text-[var(--muted)]">
+                        {connection.videoCount} 个收藏
+                      </span>
+                      <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                        {webURL && (
+                          <Button size="sm" variant="ghost" onClick={() => BrowserOpenURL(webURL)}>
+                            打开管理页
+                          </Button>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => void testExisting(connection)} disabled={rowTesting != null}>
+                          {rowTesting === connection.id ? "测试中…" : "测试"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setDraft(draftFrom(connection));
+                            setDraftResult(null);
+                          }}
+                        >
+                          编辑
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(connection)}>
+                          删除
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-1 break-all text-xs text-[var(--muted)]" title={connection.endpoint}>
+                      {connection.endpoint}
+                      {connection.rootPath && connection.rootPath !== "/" && (
+                        <span className="ml-2 text-[var(--muted)]">根目录 {connection.rootPath}</span>
+                      )}
+                    </div>
+                    {(result || connection.lastError) && (
+                      <div className="mt-1.5 text-[11px] leading-relaxed">
+                        {result ? (
+                          <TestBadge result={result} />
+                        ) : (
+                          <span className="text-[#e0b64f]">{connection.lastError}</span>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <p className="mt-4 max-w-[620px] text-xs leading-relaxed text-[var(--muted)]">
+            OpenList 是可选组件，不随 Muse 安装包分发。Muse 只连接它提供的 WebDAV 地址；挂载、改名、移动等管理操作请在 OpenList 网页完成。
+          </p>
+        </>
+      )}
+
+      {error && <p className="mt-3 text-[13px] text-[var(--danger)]">{error}</p>}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="删除网盘连接"
+          message={
+            deleteTarget.videoCount > 0
+              ? `「${deleteTarget.name}」下还有 ${deleteTarget.videoCount} 个收藏，请先移除这些收藏。`
+              : `删除「${deleteTarget.name}」？只会删除连接配置，不会删除网盘上的任何文件。`
+          }
+          confirmLabel="删除"
+          cancelLabel="取消"
+          danger
+          onConfirm={() => void remove()}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+    </section>
+  );
+}
+
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-[13px] text-[var(--muted)]" htmlFor={htmlFor}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function TestBadge({ result }: { result: CloudTestResult }) {
+  if (result.ok) {
+    return (
+      <span className="text-[#7ad9a2]">
+        连接成功 ✓ {result.latencyMs > 0 ? `${result.latencyMs} ms` : ""}
+      </span>
+    );
+  }
+  return <span className="text-[var(--danger)]">{result.error || "连接失败"}</span>;
+}
+
+/** Derive the OpenList management page from the WebDAV endpoint when web_url
+ *  is empty, mirroring the backend rule (strip a trailing /dav). */
+function managementURL(connection: CloudConnection): string {
+  const explicit = connection.webUrl.trim();
+  if (explicit) return explicit;
+  try {
+    const url = new URL(connection.endpoint);
+    url.pathname = url.pathname.replace(/\/dav\/?$/i, "") || "/";
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return "";
+  }
 }

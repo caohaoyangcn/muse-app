@@ -133,6 +133,8 @@ export default function VideoDetailPanel({
   // replace the whole window with a stack trace.
   const actors = detail?.actors ?? [];
   const tags = detail?.tags ?? [];
+  const remote = video.sourceId > 0;
+  const sourceOffline = remote && video.sourceOffline === true;
   const metadataRows = useMemo<[string, string][]>(() => {
     // 路径 is rendered separately so it can be clicked to reveal the file.
     const rows: [string, string][] = [
@@ -142,10 +144,20 @@ export default function VideoDetailPanel({
       ["分辨率", videoResolution(video) || "未提供"],
       ["帧率", formatFrameRate(video.frameRate) || "未提供"],
       ["比特率", formatBitrate(video.bitrate) || "未提供"],
-      ["文件状态", video.volumeOffline ? "磁盘未接入" : video.status === "missing" ? "文件缺失" : "可用"],
+      [
+        "文件状态",
+        video.volumeOffline
+          ? "磁盘未接入"
+          : remote && video.sourceOffline
+            ? "网盘离线"
+            : video.status === "missing"
+              ? "文件缺失"
+              : "可用",
+      ],
     ];
+    if (remote) rows.push(["网盘", video.sourceName || "已配置连接"]);
     return rows;
-  }, [video]);
+  }, [remote, video]);
 
   const saveOverride = async () => {
     if (mode === "manual" && !code.trim()) {
@@ -195,13 +207,17 @@ export default function VideoDetailPanel({
             <Button
               variant="primary"
               onClick={onPlay}
-              disabled={video.status === "missing" || video.volumeOffline}
+              disabled={video.status === "missing" || video.volumeOffline || sourceOffline}
               title={
-                video.volumeOffline
-                  ? `磁盘 ${video.volumeRoot || ""} 未接入，插回后即可播放`
-                  : video.status === "missing"
-                    ? "文件缺失，无法播放"
-                    : "用系统默认播放器播放"
+                sourceOffline
+                  ? `网盘「${video.sourceName || ""}」当前离线，恢复后即可播放`
+                  : video.volumeOffline
+                    ? `磁盘 ${video.volumeRoot || ""} 未接入，插回后即可播放`
+                    : video.status === "missing"
+                      ? "文件缺失，无法播放"
+                      : remote
+                        ? "缓存到本地后播放"
+                        : "用系统默认播放器播放"
               }
             >
               ▶ 播放
@@ -350,19 +366,19 @@ export default function VideoDetailPanel({
             <h3 className="mb-3 text-sm font-semibold">文件信息</h3>
             <dl className="grid gap-x-5 gap-y-2 sm:grid-cols-2">
               <div className="min-w-0 sm:col-span-2">
-                <dt className="text-xs text-[var(--muted)]">路径</dt>
+                <dt className="text-xs text-[var(--muted)]">{remote ? "网盘路径" : "路径"}</dt>
                 <dd className="mt-0.5 break-all text-sm">
                   {onRevealPath ? (
                     <button
                       type="button"
                       className="text-left underline-offset-2 hover:text-[var(--accent)] hover:underline"
                       onClick={onRevealPath}
-                      title="在文件管理器中定位该文件"
+                      title={remote ? "在 OpenList 网页中打开" : "在文件管理器中定位该文件"}
                     >
-                      {video.path}
+                      {remote ? video.remotePath : video.path}
                     </button>
                   ) : (
-                    video.path
+                    remote ? video.remotePath : video.path
                   )}
                 </dd>
               </div>
@@ -374,7 +390,9 @@ export default function VideoDetailPanel({
               ))}
             </dl>
             {onRevealPath && (
-              <p className="mt-2 text-xs text-[var(--muted)]">点击路径可在文件管理器中定位该文件</p>
+              <p className="mt-2 text-xs text-[var(--muted)]">
+                {remote ? "点击路径可在 OpenList 网页中打开" : "点击路径可在文件管理器中定位该文件"}
+              </p>
             )}
           </section>
         </>

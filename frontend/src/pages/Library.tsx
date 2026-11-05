@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EventsOn, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime";
 import ActorFilmsView from "../components/ActorFilmsView";
 import AddSourceDialog from "../components/AddSourceDialog";
+import CloudBrowserDialog from "../components/CloudBrowserDialog";
 import ActorIndexView from "../components/ActorIndexView";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ContextMenu, { type MenuAction } from "../components/ContextMenu";
@@ -35,6 +36,7 @@ import {
   createGroup,
   deleteGroup,
   likeVideo,
+  listCloudConnections,
   listGroups,
   listVideos,
   openContainingFolder,
@@ -155,6 +157,7 @@ export default function Library({
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
   const [suggestFiles, setSuggestFiles] = useState<SuggestFile[] | null>(null);
   const [addSourceOpen, setAddSourceOpen] = useState(false);
+  const [cloudBrowserOpen, setCloudBrowserOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   // Grid ordering: field + direction, applied in the frontend over whatever
   // list the active view/search produced. Defaults match the backend order
@@ -218,6 +221,11 @@ export default function Library({
   const groupsQuery = useLiveQuery(listGroups, "groups", {
     onError: (e) => pushToast({ kind: "error", message: "加载分组失败", details: [String(e)] }),
   });
+
+  // Only the add-source dialog needs this summary. It is a local read (the
+  // backend never touches the network here), so it is cheap enough to keep
+  // mounted and refresh after cloud:status invalidations.
+  const cloudQuery = useLiveQuery(listCloudConnections, "cloud-connections");
 
   const videos = library.data ?? NO_VIDEOS;
   const groups = groupsQuery.data ?? NO_GROUPS;
@@ -887,6 +895,17 @@ export default function Library({
         pushToast({ kind: "error", message: "添加监控目录失败", details: [message] });
       }
     }
+  };
+
+  const handleAddCloud = () => {
+    setAddSourceOpen(false);
+    setCloudBrowserOpen(true);
+  };
+
+  const handleCloudAdded = (results: AddVideoResult[]) => {
+    showAddSummary(results);
+    void showGroupSuggestions(results);
+    invalidate();
   };
 
   const handleOpen = useCallback(async (video: Video) => {
@@ -1626,7 +1645,21 @@ export default function Library({
         open={addSourceOpen}
         onPickLocal={() => void handleAddLocal()}
         onPickFolder={() => void handleAddFolder()}
+        onPickCloud={handleAddCloud}
+        cloud={{
+          count: cloudQuery.data?.length ?? 0,
+          onlineCount: cloudQuery.data?.filter((c) => c.online).length ?? 0,
+          loading: cloudQuery.loading,
+          error: cloudQuery.error,
+        }}
         onClose={() => setAddSourceOpen(false)}
+      />
+
+      <CloudBrowserDialog
+        open={cloudBrowserOpen}
+        onClose={() => setCloudBrowserOpen(false)}
+        onOpenSettings={() => onOpenSettings("cloud")}
+        onAdded={handleCloudAdded}
       />
 
       {menu && (

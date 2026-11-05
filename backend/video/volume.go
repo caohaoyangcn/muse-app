@@ -114,7 +114,11 @@ func (v *volumeState) stampVideo(video *Video) {
 }
 
 func (v *volumeState) stampLocked(video *Video) {
-	if video.Path == "" {
+	if video.Path == "" || video.SourceID > 0 {
+		// A remote favorite has no local volume. Its synthetic cloud:// path
+		// must never be probed as if it were a disk.
+		video.VolumeRoot = ""
+		video.VolumeOffline = false
 		return
 	}
 	root := VolumeRoot(video.Path)

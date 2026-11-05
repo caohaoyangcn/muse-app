@@ -3,6 +3,7 @@
 import {jav} from '../models';
 import {video} from '../models';
 import {watch} from '../models';
+import {cloud} from '../models';
 import {group} from '../models';
 import {context} from '../models';
 import {main} from '../models';
@@ -14,6 +15,8 @@ export function ActorFillStatus():Promise<jav.ActorFillStatus>;
 
 export function ActorProfile(arg1:string):Promise<jav.ActorProfile>;
 
+export function AddCloudVideos(arg1:number,arg2:Array<string>):Promise<Array<video.AddVideoResult>>;
+
 export function AddVideo(arg1:string):Promise<video.Video>;
 
 export function AddVideoToGroup(arg1:number,arg2:number):Promise<void>;
@@ -22,11 +25,15 @@ export function AddVideos(arg1:Array<string>):Promise<Array<video.AddVideoResult
 
 export function AddWatchDir(arg1:string):Promise<watch.WatchedDir>;
 
+export function BrowseCloud(arg1:number,arg2:string):Promise<Array<cloud.Entry>>;
+
 export function ClearFC2Cookie():Promise<void>;
 
 export function ClearJavBusCookie():Promise<void>;
 
 export function ClearVideoLikes(arg1:number):Promise<video.Video>;
+
+export function CloudStorageAvailable():Promise<boolean>;
 
 export function ConfirmContentDuplicate(arg1:string):Promise<void>;
 
@@ -35,6 +42,8 @@ export function ContentScanStatus():Promise<video.ContentScanStatus>;
 export function CopyPath(arg1:number):Promise<void>;
 
 export function CreateGroup(arg1:string):Promise<group.Group>;
+
+export function DeleteCloudConnection(arg1:number):Promise<void>;
 
 export function DeleteGroup(arg1:number):Promise<void>;
 
@@ -63,6 +72,8 @@ export function IgnoreJavDuplicate(arg1:string):Promise<void>;
 export function LikeVideo(arg1:number):Promise<video.Video>;
 
 export function ListActors():Promise<Array<jav.ActorSummary>>;
+
+export function ListCloudConnections():Promise<Array<cloud.ConnectionView>>;
 
 export function ListContentDuplicates(arg1:boolean):Promise<Array<video.ContentDuplicateGroup>>;
 
@@ -103,6 +114,8 @@ export function RescanWatchDirs():Promise<void>;
 export function ResetVideoCover(arg1:number):Promise<video.Video>;
 
 export function ReverifyContentDuplicate(arg1:string):Promise<void>;
+
+export function SaveCloudConnection(arg1:cloud.ConnectionInput):Promise<cloud.ConnectionView>;
 
 export function ScanContentDuplicates():Promise<video.ContentScanStatus>;
 
@@ -151,6 +164,8 @@ export function StartServer(arg1:number):Promise<server.StartInfo>;
 export function StopServer():Promise<void>;
 
 export function SuggestGroupsForVideos(arg1:Array<string>):Promise<Array<api.VideoGroupSuggestion>>;
+
+export function TestCloudConnection(arg1:cloud.ConnectionInput):Promise<cloud.TestResult>;
 
 export function UnmergeActor(arg1:string):Promise<void>;
 

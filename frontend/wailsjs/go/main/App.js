@@ -10,6 +10,10 @@ export function ActorProfile(arg1) {
   return window['go']['main']['App']['ActorProfile'](arg1);
 }
 
+export function AddCloudVideos(arg1, arg2) {
+  return window['go']['main']['App']['AddCloudVideos'](arg1, arg2);
+}
+
 export function AddVideo(arg1) {
   return window['go']['main']['App']['AddVideo'](arg1);
 }
@@ -26,6 +30,10 @@ export function AddWatchDir(arg1) {
   return window['go']['main']['App']['AddWatchDir'](arg1);
 }
 
+export function BrowseCloud(arg1, arg2) {
+  return window['go']['main']['App']['BrowseCloud'](arg1, arg2);
+}
+
 export function ClearFC2Cookie() {
   return window['go']['main']['App']['ClearFC2Cookie']();
 }
@@ -36,6 +44,10 @@ export function ClearJavBusCookie() {
 
 export function ClearVideoLikes(arg1) {
   return window['go']['main']['App']['ClearVideoLikes'](arg1);
+}
+
+export function CloudStorageAvailable() {
+  return window['go']['main']['App']['CloudStorageAvailable']();
 }
 
 export function ConfirmContentDuplicate(arg1) {
@@ -52,6 +64,10 @@ export function CopyPath(arg1) {
 
 export function CreateGroup(arg1) {
   return window['go']['main']['App']['CreateGroup'](arg1);
+}
+
+export function DeleteCloudConnection(arg1) {
+  return window['go']['main']['App']['DeleteCloudConnection'](arg1);
 }
 
 export function DeleteGroup(arg1) {
@@ -108,6 +124,10 @@ export function LikeVideo(arg1) {
 
 export function ListActors() {
   return window['go']['main']['App']['ListActors']();
+}
+
+export function ListCloudConnections() {
+  return window['go']['main']['App']['ListCloudConnections']();
 }
 
 export function ListContentDuplicates(arg1) {
@@ -188,6 +208,10 @@ export function ResetVideoCover(arg1) {
 
 export function ReverifyContentDuplicate(arg1) {
   return window['go']['main']['App']['ReverifyContentDuplicate'](arg1);
+}
+
+export function SaveCloudConnection(arg1) {
+  return window['go']['main']['App']['SaveCloudConnection'](arg1);
 }
 
 export function ScanContentDuplicates() {
@@ -284,6 +308,10 @@ export function StopServer() {
 
 export function SuggestGroupsForVideos(arg1) {
   return window['go']['main']['App']['SuggestGroupsForVideos'](arg1);
+}
+
+export function TestCloudConnection(arg1) {
+  return window['go']['main']['App']['TestCloudConnection'](arg1);
 }
 
 export function UnmergeActor(arg1) {

@@ -31,6 +31,8 @@ export default function VideoCard({
   // thumbnail and metadata, and the only addition is the warning badge. The
   // detached volume takes precedence over a stale "missing" status.
   const offline = video.volumeOffline === true;
+  const remote = video.sourceId > 0;
+  const sourceOffline = remote && video.sourceOffline === true;
   const missing = !offline && video.status === "missing";
   const hasThumb = !missing && video.thumbnailPath !== "";
   const duration = formatDuration(video.durationMs);
@@ -117,6 +119,18 @@ export default function VideoCard({
           </div>
         )}
         {missing && <span className="absolute left-1.5 top-1.5 rounded bg-[rgba(229,83,75,0.9)] px-2 py-0.5 text-[11px] text-white">⚠ 文件缺失</span>}
+        {remote && (
+          <span
+            className={cn(
+              "absolute bottom-1.5 left-1.5 max-w-[calc(100%-16px)] truncate rounded px-2 py-0.5 text-[11px] text-white",
+              sourceOffline ? "bg-[rgba(224,182,79,0.92)] text-black" : "bg-black/70",
+            )}
+            title={`${video.sourceName || "网盘"}${sourceOffline ? "（离线）" : ""}
+${video.remotePath}`}
+          >
+            {sourceOffline ? "⚠ 网盘离线" : `☁ ${video.sourceName || "网盘"}`}
+          </span>
+        )}
       </div>
       <div className="px-3 pb-3 pt-2.5">
         <div className="flex min-w-0 items-center gap-1.5">

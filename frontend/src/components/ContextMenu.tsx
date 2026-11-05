@@ -131,7 +131,11 @@ export default function ContextMenu({
             onClose();
           }}
         >
-          {item.label}
+          {item.action === "openFolder" && video.sourceId > 0
+            ? "在 OpenList 中打开"
+            : item.action === "copyPath" && video.sourceId > 0
+              ? "复制网盘路径"
+              : item.label}
         </Button>
       ))}
       <Button

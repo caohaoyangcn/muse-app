@@ -1,6 +1,6 @@
 // Types re-export the Wails-generated models so the bindings stay the single
 // source of truth for backend shapes.
-import { api, group, jav, server, video, watch } from "../wailsjs/go/models";
+import { api, cloud, group, jav, server, video, watch } from "../wailsjs/go/models";
 
 export type Video = video.Video;
 export type AddVideoResult = video.AddVideoResult;
@@ -9,6 +9,11 @@ export type ServerStartInfo = server.StartInfo;
 export type GroupSuggestion = api.GroupSuggestion;
 export type VideoGroupSuggestion = api.VideoGroupSuggestion;
 export type WatchedDir = watch.WatchedDir;
+/** 一个只读 WebDAV 网盘连接（不含密码）。 */
+export type CloudConnection = cloud.ConnectionView;
+export type CloudConnectionInput = cloud.ConnectionInput;
+export type CloudEntry = cloud.Entry;
+export type CloudTestResult = cloud.TestResult;
 export type JavDetail = jav.Detail;
 export type JavTask = jav.Task;
 export type ActorSummary = jav.ActorSummary;

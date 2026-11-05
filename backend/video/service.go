@@ -1,10 +1,12 @@
 package video
 
 import (
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -236,6 +238,61 @@ func (s *Service) AddVideos(paths []string) []AddVideoResult {
 		results = append(results, result)
 	}
 	return results
+}
+
+// RemotePathKey builds the synthetic, stable path stored in videos.path for a
+// WebDAV favorite. It is case-sensitive and cannot collide with a local path:
+// the real remote path lives in remote_path, and the local UNIQUE COLLATE NOCASE
+// path index must never decide that two remote spellings are one file.
+func RemotePathKey(sourceID int64, remotePath string) string {
+	sum := sha1.Sum([]byte(remotePath))
+	return fmt.Sprintf("cloud://%d/%x", sourceID, sum)
+}
+
+// AddRemoteVideo records a favorite that lives on a WebDAV connection. It
+// deliberately does not stat the path: the caller has already done a PROPFIND
+// and passes the name/size it observed, so adding a remote file costs no second
+// round trip. created is false when the favorite already existed and was
+// revived after being marked missing.
+func (s *Service) AddRemoteVideo(sourceID int64, remotePath, name string, size int64) (*Video, bool, error) {
+	if sourceID <= 0 {
+		return nil, false, ErrInvalidRemotePath
+	}
+	if remotePath == "" || !strings.HasPrefix(remotePath, "/") {
+		return nil, false, ErrInvalidRemotePath
+	}
+	if name == "" {
+		name = pathpkg.Base(remotePath)
+	}
+	if !IsSupportedVideoFile(name) {
+		return nil, false, ErrUnsupportedType
+	}
+	if existing, err := s.repo.GetByRemote(sourceID, remotePath); err == nil {
+		if existing.Status == StatusMissing {
+			return s.reviveFavorite(existing), false, nil
+		}
+		return nil, false, ErrAlreadyAdded
+	} else if err != ErrNotFound {
+		return nil, false, err
+	}
+
+	now := nowMillis()
+	v := &Video{
+		Path:       RemotePathKey(sourceID, remotePath),
+		FileName:   name,
+		FileSize:   size,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+		Status:     StatusAvailable,
+		SourceID:   sourceID,
+		RemotePath: remotePath,
+	}
+	if err := s.repo.Create(v); err != nil {
+		return nil, false, err
+	}
+	s.log.Info("remote video added", "id", v.ID, "source", sourceID, "path", remotePath)
+	s.processor.Enqueue(v.ID)
+	return v, true, nil
 }
 
 // Remove deletes only the database record and the generated thumbnail file.

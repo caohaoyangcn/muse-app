@@ -71,6 +71,8 @@ export default function VideoList({
           // A detached volume is not a missing file: the row stays normal and
           // carries only the warning (see VideoCard).
           const offline = v.volumeOffline === true;
+          const remote = v.sourceId > 0;
+          const sourceOffline = remote && v.sourceOffline === true;
           const missing = !offline && v.status === "missing";
           const isSelected = selectedIds.has(v.id);
           const hasThumb = !missing && v.thumbnailPath !== "";
@@ -97,7 +99,7 @@ export default function VideoList({
               onDoubleClick={() => onPlay(v)}
               onContextMenu={(e) => onContextMenu(e, v)}
               onDragStart={handleRowDragStart}
-              title={v.path}
+              title={remote ? `${v.sourceName} · ${v.remotePath}` : v.path}
             >
               <button
                 type="button"
@@ -152,6 +154,19 @@ export default function VideoList({
                     {videoDisplayName(v)}
                   </div>
                   {v.mosaicRestored && <RestoredBadge />}
+                  {remote && (
+                    <span
+                      className={cn(
+                        "shrink-0 rounded border px-1.5 py-0.5 text-[10px] leading-none",
+                        sourceOffline
+                          ? "border-[#e0b64f]/50 text-[#e0b64f]"
+                          : "border-[var(--border)] text-[var(--muted)]",
+                      )}
+                      title={v.remotePath}
+                    >
+                      {sourceOffline ? "网盘离线" : `☁ ${v.sourceName || "网盘"}`}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="shrink-0 whitespace-nowrap text-xs text-[var(--muted)]">
