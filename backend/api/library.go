@@ -358,16 +358,16 @@ func (l *Library) RestoreVideo(id int64) error {
 	if err != nil {
 		return err
 	}
-	if v.DeleteReason == video.TrashReasonArchived && v.IsRemote() {
+	if v.IsRemote() {
 		if l.cloud == nil {
 			return fmt.Errorf("网盘服务未初始化")
 		}
 		conn, err := l.cloud.Connection(v.SourceID)
 		if err != nil {
-			return fmt.Errorf("原网盘连接已删除，无法恢复这条归档")
+			return fmt.Errorf("原网盘连接已删除，无法恢复这条收藏")
 		}
 		if !conn.Enabled {
-			return fmt.Errorf("请先在设置中启用该网盘，再恢复这条归档")
+			return fmt.Errorf("请先在设置中启用该网盘，再恢复这条收藏")
 		}
 	}
 	return l.videos.Restore(id)

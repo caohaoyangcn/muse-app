@@ -326,7 +326,7 @@ function TrashRow({
   const groupNames = video.trashGroupNames ?? [];
   const deletedAt = video.deletedAt > 0 ? formatDateTime(video.deletedAt) : "未知时间";
   const remaining = remainingDays(video.deletedAt, retentionDays);
-  const restoreBlocked = archived && !video.sourceEnabled;
+  const restoreBlocked = video.sourceId > 0 && !video.sourceEnabled;
   return (
     <div className="flex items-center gap-4 border-b border-[var(--border)] bg-[var(--panel)] p-3 last:border-b-0">
       <div className="relative h-[64px] w-[112px] shrink-0 overflow-hidden rounded-[6px] bg-[#111114]">
