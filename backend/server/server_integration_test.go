@@ -72,6 +72,27 @@ func (r *stubVideoRepo) GetByRemote(sourceID int64, remotePath string) (*video.V
 	}
 	return nil, video.ErrNotFound
 }
+func (r *stubVideoRepo) ArchiveBySource(sourceID int64, sourceName string, at int64) (int, error) {
+	n := 0
+	for i := range r.all {
+		if r.all[i].SourceID == sourceID && r.all[i].DeletedAt == 0 {
+			r.all[i].DeletedAt = at
+			r.all[i].DeleteReason = video.TrashReasonArchived
+			r.all[i].ArchiveSourceName = sourceName
+			n++
+		}
+	}
+	return n, nil
+}
+func (r *stubVideoRepo) ListArchived() ([]video.Video, error) {
+	out := make([]video.Video, 0)
+	for _, v := range r.all {
+		if v.DeletedAt > 0 && v.DeleteReason == video.TrashReasonArchived {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
 func (r *stubVideoRepo) List() ([]video.Video, error) {
 	out := make([]video.Video, 0, len(r.all))
 	for _, v := range r.all {
@@ -105,7 +126,7 @@ func (r *stubVideoRepo) Restore(id int64, at int64) error {
 func (r *stubVideoRepo) ListTrashed() ([]video.Video, error) {
 	out := make([]video.Video, 0)
 	for _, v := range r.all {
-		if v.DeletedAt > 0 {
+		if v.DeletedAt > 0 && v.DeleteReason != video.TrashReasonArchived {
 			out = append(out, v)
 		}
 	}
@@ -832,6 +853,14 @@ func TestAPITrashRoutes(t *testing.T) {
 	_, body = doJSON(t, http.MethodGet, base+"/api/trash", "")
 	if !bytes.Contains(body, []byte(`"videos":[]`)) {
 		t.Errorf("trash should be empty, body=%s", body)
+	}
+	res, body = doJSON(t, http.MethodGet, base+"/api/archive", "")
+	if res.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`[]`)) {
+		t.Errorf("archive empty = %d %s", res.StatusCode, body)
+	}
+	res, body = doJSON(t, http.MethodDelete, base+"/api/archive", "")
+	if res.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`"count":0`)) {
+		t.Errorf("clear archive = %d %s", res.StatusCode, body)
 	}
 
 	// Empty-trash and maintenance routes answer with a count; use a fresh

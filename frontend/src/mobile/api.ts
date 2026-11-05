@@ -155,7 +155,7 @@ export function restoreVideo(id: number): Promise<void> {
   return request<void>(`${API}/trash/${id}/restore`, { method: "POST" });
 }
 
-/** 彻底删除一条回收站收藏；只清除 Muse 的记录与生成图片/缓存。 */
+/** 彻底删除一条回收站收藏；只清除 Muse 的记录与生成图片。 */
 export function deleteVideoPermanently(id: number): Promise<void> {
   return request<void>(`${API}/trash/${id}`, { method: "DELETE" });
 }
@@ -163,6 +163,16 @@ export function deleteVideoPermanently(id: number): Promise<void> {
 /** 清空回收站，返回彻底删除的条目数。 */
 export function emptyTrash(): Promise<number> {
   return jsonRequest<{ count: number }>(`${API}/trash`, "DELETE").then((r) => r.count);
+}
+
+/** 长期保留的网盘归档。 */
+export function listArchived(): Promise<Video[]> {
+  return request<Video[]>(`${API}/archive`);
+}
+
+/** 清空全部归档，返回彻底删除的条目数。 */
+export function clearArchivedVideos(): Promise<number> {
+  return jsonRequest<{ count: number }>(`${API}/archive`, "DELETE").then((r) => r.count);
 }
 
 /** 保留重复分组的全部版本（等价于忽略重复提示）。 */

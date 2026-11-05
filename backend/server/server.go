@@ -195,6 +195,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/trash", s.handleEmptyTrash)
 	mux.HandleFunc("POST /api/trash/{id}/restore", s.handleRestoreTrash)
 	mux.HandleFunc("DELETE /api/trash/{id}", s.handleDeleteTrash)
+	mux.HandleFunc("GET /api/archive", s.handleListArchive)
+	mux.HandleFunc("DELETE /api/archive", s.handleClearArchive)
 	mux.HandleFunc("GET /api/videos/{id}", s.handleGetVideo)
 	mux.HandleFunc("GET /api/videos/{id}/jav", s.handleVideoJav)
 	mux.HandleFunc("GET /api/videos/{id}/jav/task", s.handleVideoJavTask)
@@ -574,6 +576,30 @@ func (s *Server) handleListTrash(w http.ResponseWriter, r *http.Request) {
 		snapshot.Videos = []video.Video{}
 	}
 	writeJSON(w, snapshot)
+}
+
+// handleListArchive returns the long-lived archived part of the recycle bin.
+func (s *Server) handleListArchive(w http.ResponseWriter, r *http.Request) {
+	videos, err := s.lib.ListArchived()
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "归档不可用")
+		return
+	}
+	if videos == nil {
+		videos = []video.Video{}
+	}
+	writeJSON(w, videos)
+}
+
+// handleClearArchive permanently deletes every archived entry. Source video and
+// WebDAV files are never touched.
+func (s *Server) handleClearArchive(w http.ResponseWriter, r *http.Request) {
+	count, err := s.lib.ClearArchivedVideos()
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "清空归档失败")
+		return
+	}
+	writeJSON(w, map[string]int{"count": count})
 }
 
 // handleRestoreTrash brings one trashed favorite back into the library.
