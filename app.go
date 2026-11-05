@@ -584,6 +584,22 @@ func (a *App) PickWatchDir() (string, error) {
 	})
 }
 
+// PickScanDir opens the native directory picker for a one-off import scan. It
+// is deliberately separate from PickWatchDir: the two actions have different
+// titles and different consequences (scan once vs. keep watching).
+func (a *App) PickScanDir() (string, error) {
+	return runtime.OpenDirectoryDialog(a.EventContext(), runtime.OpenDialogOptions{
+		Title: "选择要扫描的目录",
+	})
+}
+
+// ScanDirectoryOnce imports a directory's videos once without adding it to the
+// folder-watch list. The per-file results feed the same add summary and group
+// suggestions as a manual batch add.
+func (a *App) ScanDirectoryOnce(path string) (watch.ScanOnceResult, error) {
+	return a.lib.ScanDirectoryOnce(path)
+}
+
 // ListWatchDirs returns the auto-monitored directory list.
 func (a *App) ListWatchDirs() ([]watch.WatchedDir, error) {
 	return a.lib.ListWatchDirs()

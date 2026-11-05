@@ -4,7 +4,11 @@
 // domain it only extends the favorite catalog; it never moves or deletes media.
 package watch
 
-import "time"
+import (
+	"time"
+
+	"muse-app/backend/video"
+)
 
 // WatchedDir is one auto-monitored directory.
 type WatchedDir struct {
@@ -27,6 +31,30 @@ type ScanSummary struct {
 	Failed int `json:"failed"`
 	// Dirs is the number of watched roots included in the pass.
 	Dirs int `json:"dirs"`
+}
+
+// ScanOnceResult reports one user-picked directory scan (扫描文件夹). It is
+// deliberately separate from ScanSummary: this pass is not a watched root, so
+// Dirs and last_scan_at have no meaning here. Results is the per-file outcome,
+// which lets the UI reuse the same add summary and group suggestions as a
+// manual batch add.
+type ScanOnceResult struct {
+	// Path is the absolute directory the user picked.
+	Path string `json:"path"`
+	// Added is the number of new favorites created by this pass.
+	Added int `json:"added"`
+	// Relocated is the number of candidates that re-pointed an existing
+	// favorite whose file had moved, instead of creating a duplicate.
+	Relocated int `json:"relocated"`
+	// Failed is the number of candidates AddVideos rejected.
+	Failed int `json:"failed"`
+	// Skipped is the number of video files the pass could not read yet (a
+	// download client still holds them). They are not favorites and are not
+	// retried by this one-off pass.
+	Skipped int `json:"skipped"`
+	// Results is the per-file outcome, one entry per candidate handed to the
+	// library. It is always non-nil so the UI never has to special-case null.
+	Results []video.AddVideoResult `json:"results"`
 }
 
 // scanDebounce waits for the filesystem to go quiet after a burst of fsnotify

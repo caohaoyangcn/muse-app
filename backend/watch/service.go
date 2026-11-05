@@ -50,6 +50,10 @@ type Service struct {
 	// scans serializes scan passes: one worker consumes root rows, so two
 	// passes never race the favorites dedup check with the same candidate.
 	scans chan *WatchedDir
+	// scanOnceMu serializes user-picked one-off scans. They run on the caller's
+	// goroutine (the Wails binding), not the watched-root worker, so a double
+	// click must not walk the same tree twice.
+	scanOnceMu sync.Mutex
 	// debounce holds one timer per root; bursts of fsnotify events collapse
 	// into a single scan once the filesystem goes quiet.
 	debounceMu sync.Mutex
@@ -166,30 +170,75 @@ func (s *Service) ScanAllAsync() {
 	}
 }
 
-// scanRoot walks one watched root, diffs the supported video files against the
-// favorites and imports the missing ones through the shared façade. It is
-// idempotent: already-added paths produce no side effects.
-func (s *Service) scanRoot(d *WatchedDir) ScanSummary {
-	summary := ScanSummary{Dirs: 1}
-	// The root may have been removed while its scan sat queued; skip silently.
-	if _, err := s.repo.Get(d.ID); err != nil {
-		return summary
-	}
-	existing, err := s.existingPaths()
+// ScanOnce imports the video files under a user-picked directory once. It is
+// the "扫描文件夹" entry in the add-source dialog, not a watched directory:
+// nothing is persisted, fsnotify is not involved, and no watch:scanned event is
+// emitted. The caller gets the per-file results so the UI can summarize the
+// batch and offer group suggestions exactly like a manual add.
+//
+// The pass is serialized: a double click must not walk the same tree twice.
+// Files another process still holds exclusively are counted as Skipped instead
+// of being added; a one-off pass has no retry timer, so the user can run it
+// again later.
+func (s *Service) ScanOnce(path string) (ScanOnceResult, error) {
+	abs, err := normalizeDir(path)
 	if err != nil {
-		s.log.Error("watch scan: list videos failed", "root", d.Path, "err", err)
-		return summary
+		return ScanOnceResult{}, err
 	}
 
+	s.scanOnceMu.Lock()
+	defer s.scanOnceMu.Unlock()
+
+	existing, err := s.existingPaths()
+	if err != nil {
+		s.log.Error("one-off scan: list videos failed", "root", abs, "err", err)
+		return ScanOnceResult{}, err
+	}
+
+	candidates, skipped := s.collectCandidates(abs, existing)
+	result := ScanOnceResult{
+		Path:    abs,
+		Skipped: skipped,
+		Results: make([]video.AddVideoResult, 0, len(candidates)),
+	}
+	if len(candidates) == 0 {
+		s.log.Info("one-off scan finished", "root", abs, "added", 0, "skipped", skipped)
+		return result, nil
+	}
+
+	results := s.lib.AddVideos(candidates)
+	result.Results = results
+	for _, r := range results {
+		switch {
+		case !r.Success:
+			result.Failed++
+			s.log.Warn("one-off scan: add failed", "path", r.Path, "err", r.Error)
+		case r.Relocated:
+			result.Relocated++
+		default:
+			result.Added++
+		}
+	}
+	s.log.Info("one-off scan finished", "root", abs,
+		"added", result.Added, "relocated", result.Relocated,
+		"failed", result.Failed, "skipped", result.Skipped)
+	return result, nil
+}
+
+// collectCandidates walks root and returns the supported video files that are
+// not already favorites. The second return value counts files that exist but
+// are still locked by another process; the watched-root scan retries those,
+// while ScanOnce reports them as skipped.
+func (s *Service) collectCandidates(root string, existing map[string]struct{}) ([]string, int) {
 	var candidates []string
 	unreadable := 0
-	walkErr := filepath.WalkDir(d.Path, func(p string, entry fs.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(root, func(p string, entry fs.DirEntry, err error) error {
 		if err != nil {
-			s.log.Warn("watch scan: entry unavailable", "path", p, "err", err)
+			s.log.Warn("scan: entry unavailable", "path", p, "err", err)
 			return nil // one unreadable entry never aborts the walk
 		}
 		if entry.IsDir() {
-			if p != d.Path && skipDir(entry.Name()) {
+			if p != root && skipDir(entry.Name()) {
 				return fs.SkipDir
 			}
 			return nil
@@ -205,17 +254,36 @@ func (s *Service) scanRoot(d *WatchedDir) ScanSummary {
 			// download client writing or verifying it). Importing it now would
 			// record a reference the fingerprint pass cannot identify, and the
 			// next rename of that file would become a second favorite for the
-			// same bytes. Wait: the next scan imports it once the writer lets go.
+			// same bytes.
 			unreadable++
-			s.log.Debug("watch scan: file not readable yet, will retry", "path", p)
+			s.log.Debug("scan: file not readable yet", "path", p)
 			return nil
 		}
 		candidates = append(candidates, p)
 		return nil
 	})
 	if walkErr != nil {
-		s.log.Warn("watch scan: walk failed", "root", d.Path, "err", walkErr)
+		s.log.Warn("scan: walk failed", "root", root, "err", walkErr)
 	}
+	return candidates, unreadable
+}
+
+// scanRoot walks one watched root, diffs the supported video files against the
+// favorites and imports the missing ones through the shared façade. It is
+// idempotent: already-added paths produce no side effects.
+func (s *Service) scanRoot(d *WatchedDir) ScanSummary {
+	summary := ScanSummary{Dirs: 1}
+	// The root may have been removed while its scan sat queued; skip silently.
+	if _, err := s.repo.Get(d.ID); err != nil {
+		return summary
+	}
+	existing, err := s.existingPaths()
+	if err != nil {
+		s.log.Error("watch scan: list videos failed", "root", d.Path, "err", err)
+		return summary
+	}
+
+	candidates, unreadable := s.collectCandidates(d.Path, existing)
 	if unreadable > 0 {
 		s.scheduleImportRetry(d)
 	}
