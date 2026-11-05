@@ -79,7 +79,7 @@ api.Library ──► video.Service / group.Service ──► SQLite
 
 - 新业务逻辑一律经由 `api.Library`，避免桌面端与 HTTP 行为漂移。
 - 平台专属能力保留在各自分层（`backend/platform/`、`backend/server/`）。
-- 删除收藏只删除数据库记录与生成的图片，绝不触碰底层视频文件。
+- 移除收藏只把记录移入回收站；彻底清理只删除数据库记录与生成的图片，绝不触碰底层视频文件。
 - 前端取数一律走 `useLiveQuery`（`frontend/src/hooks/useLiveQuery.ts`）；写操作成功后调用一次 `invalidate()`（`frontend/src/services/live.ts`），所有已挂载视图会自行静默重读。
 - 桌面端数据类后端事件只在 `services/events.ts` 统一订阅，视图不要直接 `EventsOn`。
 

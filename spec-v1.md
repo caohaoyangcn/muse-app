@@ -233,7 +233,7 @@ App：
           └── reference ──→ 原文件
 ```
 
-删除收藏只删除数据库记录，不删除真实视频。
+删除收藏只把记录移入回收站；彻底清理也只删除数据库记录与生成的图片，不删除真实视频。
 
 这是整个系统非常重要的安全原则。
 
@@ -470,18 +470,15 @@ Remove from Favorites
 执行：
 
 ```text
-DELETE FROM videos WHERE id = ?
+UPDATE videos SET deleted_at = ?, delete_reason = 'user', updated_at = ? WHERE id = ?
 ```
 
-同时删除：
-
-```text
-thumbnail
-```
+记录进入**回收站**，保留缩略图、分组归属、点赞与刮削资料；默认 14 天后自动彻底清理，
+期间用户可以恢复。彻底删除、清空回收站或超期清理时才删除数据库行与生成图片。
 
 **绝对禁止删除原视频。**
 
-移除只看数据库记录，不看磁盘：原文件不存在、甚至这条记录已经被删掉了，移除都应当成功
+移除只看数据库记录，不看磁盘：原文件不存在、甚至这条记录已经被彻底清理了，移入回收站都应当成功
 （记录不存在 = 目标状态已达成）。界面永远不会因此卡在一条删不掉的卡片上——列表过期时，
 后端返回成功、前端照常刷新并对齐真实数据。
 
@@ -775,6 +772,9 @@ AddVideo(path string) (*Video, error)
 ```go
 RemoveVideo(id int64) error
 ```
+
+`RemoveVideo` 现在把收藏移入回收站（软删除），保留记录、缩略图/封面、分组归属与刮削资料。
+新增 `ListTrash` / `RestoreVideo` / `DeleteVideoPermanently` / `EmptyTrash` 等回收站 API。
 
 ### Open
 

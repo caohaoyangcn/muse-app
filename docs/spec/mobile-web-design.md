@@ -105,19 +105,23 @@ npm run build:mobile      # frontend/ 下
 | `GET /api/jav/duplicates` | `ListJavDuplicates` | 查重；`?includeIgnored=1` 显示已忽略 |
 | `GET /api/actors` | `ListActors` | 含合并别名 |
 | `GET /api/actors/videos?name=` | `VideosByActor` | 演员名走 query，见下 |
+| `GET /api/trash` | `ListTrash` | `{videos, retentionDays}`；回收站 |
 
 **写**
 
 | 端点 | 门面方法 |
 |---|---|
 | `POST /api/videos` | `AddVideos` |
-| `DELETE /api/videos/{id}` | `RemoveVideo` |
+| `DELETE /api/videos/{id}` | `RemoveVideo`（移入回收站） |
 | `PUT /api/videos/{id}/info` | `UpdateVideoInfo` |
 | `POST /api/videos/{id}/likes` | `LikeVideo` |
 | `DELETE /api/videos/{id}/likes` | `ClearVideoLikes` |
 | `POST /api/groups` / `PUT /api/groups/{id}` / `DELETE /api/groups/{id}` | `CreateGroup` / `RenameGroup` / `DeleteGroup` |
 | `POST /api/groups/{id}/videos` | `AddVideoToGroup` |
 | `POST /api/jav/duplicates/ignore` | `IgnoreJavDuplicate` |
+| `POST /api/trash/{id}/restore` | `RestoreVideo` |
+| `DELETE /api/trash/{id}` | `DeleteVideoPermanently` |
+| `DELETE /api/trash` | `EmptyTrash`（返回 `{count}`） |
 
 **媒体**
 
