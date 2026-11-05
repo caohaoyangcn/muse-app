@@ -1,6 +1,7 @@
 package video
 
 import (
+	"context"
 	"crypto/sha1"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"muse-app/backend/platform"
 	"muse-app/backend/thumbnail"
@@ -75,6 +77,12 @@ func NewService(repo VideoRepository, processor *Processor, dataDir string, log 
 	// alike.
 	s.volumes = newVolumeState(func(path string) (os.FileInfo, error) { return s.stat(path) })
 	return s
+}
+
+// SetMediaPathResolver wires how ffprobe/ffmpeg reach a favorite's bytes. Local
+// favorites keep using Path; remote favorites use the loopback media proxy.
+func (s *Service) SetMediaPathResolver(fn func(*Video) (string, error)) {
+	s.processor.SetMediaPathResolver(fn)
 }
 
 // SetFingerprinter wires the background content-fingerprint worker. Called
@@ -593,8 +601,17 @@ func (s *Service) SetCover(id int64, atSec float64) (*Video, error) {
 			atSec = 0
 		}
 	}
+	mediaPath, err := s.processor.MediaPath(v)
+	if err != nil {
+		return nil, err
+	}
 	thumbDir := filepath.Join(s.dataDir, thumbnail.RelativeDir)
-	rel, err := thumbnail.ExtractAt(s.processor.FFmpegBin(), v.Path, atSec, thumbDir, v.ID)
+	var rel string
+	if v.IsRemote() {
+		rel, err = thumbnail.ExtractAtContextWithTimeout(context.Background(), s.processor.FFmpegBin(), mediaPath, atSec, thumbDir, v.ID, 90*time.Second)
+	} else {
+		rel, err = thumbnail.ExtractAt(s.processor.FFmpegBin(), mediaPath, atSec, thumbDir, v.ID)
+	}
 	if err != nil {
 		return nil, err
 	}

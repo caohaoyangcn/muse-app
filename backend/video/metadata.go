@@ -58,10 +58,16 @@ func Probe(ffprobeBin, videoPath string) (*Metadata, error) {
 // shutdown context here so closing the window kills a probe that is waiting on
 // a slow disk instead of keeping the process alive for its 30-second bound.
 func ProbeContext(parent context.Context, ffprobeBin, videoPath string) (*Metadata, error) {
+	return ProbeContextWithTimeout(parent, ffprobeBin, videoPath, 30*time.Second)
+}
+
+// ProbeContextWithTimeout is ProbeContext with an explicit bound. A remote
+// source gets a longer one because ffprobe may read across the network.
+func ProbeContextWithTimeout(parent context.Context, ffprobeBin, videoPath string, timeout time.Duration) (*Metadata, error) {
 	if ffprobeBin == "" {
 		return nil, errors.New("ffprobe is not available")
 	}
-	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
 	cmd := platform.CommandContext(ctx, ffprobeBin,

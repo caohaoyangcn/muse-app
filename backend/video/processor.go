@@ -2,6 +2,7 @@ package video
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -11,6 +12,13 @@ import (
 
 const thumbnailAttempts = 3
 const thumbnailRetryDelay = 2 * time.Second
+
+// Remote sources need more patience than a local disk: ffprobe/ffmpeg may wait
+// on an HTTP range read whose first byte comes from an OpenList/WebDAV backend.
+const (
+	remoteProbeTimeout     = 90 * time.Second
+	remoteThumbnailTimeout = 90 * time.Second
+)
 
 // Processor is a bounded worker pool that extracts metadata and thumbnails
 // in the background. Two workers cap concurrent ffmpeg processes when large
@@ -24,13 +32,20 @@ type Processor struct {
 	ffmpegBin         string
 	thumbDir          string
 	generateThumbnail func(context.Context, string, string, int64, string, int64) (string, error)
-	sleep             func(time.Duration)
-	emit              func(name string, data ...any)
-	log               *slog.Logger
-	wg                sync.WaitGroup
-	closeOnce         sync.Once
-	jobsMu            sync.RWMutex
-	closed            bool
+	// generateRemoteThumbnail is generateThumbnail with the longer remote
+	// timeout. Nil falls back to generateThumbnail.
+	generateRemoteThumbnail func(context.Context, string, string, int64, string, int64) (string, error)
+	sleep                   func(time.Duration)
+	// mediaPath resolves what ffprobe/ffmpeg should read. Local videos use
+	// Path; remote favorites use the loopback media proxy URL so credentials
+	// never appear on a command line.
+	mediaPath func(*Video) (string, error)
+	emit      func(name string, data ...any)
+	log       *slog.Logger
+	wg        sync.WaitGroup
+	closeOnce sync.Once
+	jobsMu    sync.RWMutex
+	closed    bool
 	// autoGroup4K, when set, is invoked after metadata extraction for a video
 	// confirmed to be 3840×2160 so the orchestrator can auto-assign it to the
 	// "4K" group (creating it on first use). Set by the caller (wiring) — kept
@@ -45,6 +60,32 @@ func (p *Processor) SetAutoGroup4K(fn func(videoID int64)) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.autoGroup4K = fn
+}
+
+// SetMediaPathResolver wires the local/remote media URL decision. It is called
+// once at startup, before any favorite can be processed.
+func (p *Processor) SetMediaPathResolver(fn func(*Video) (string, error)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.mediaPath = fn
+}
+
+// MediaPath returns what a media tool should open for this favorite. A local
+// row always uses its path; a remote row requires the resolver.
+func (p *Processor) MediaPath(v *Video) (string, error) {
+	if v == nil {
+		return "", errors.New("video is nil")
+	}
+	if !v.IsRemote() {
+		return v.Path, nil
+	}
+	p.mu.RLock()
+	fn := p.mediaPath
+	p.mu.RUnlock()
+	if fn == nil {
+		return "", errors.New("remote media resolver is not configured")
+	}
+	return fn(v)
 }
 
 // FFmpegBin exposes the resolved ffmpeg path for callers that need to run a
@@ -66,9 +107,12 @@ func NewProcessor(repo VideoRepository, ffprobeBin, ffmpegBin, thumbDir string,
 		ffmpegBin:         ffmpegBin,
 		thumbDir:          thumbDir,
 		generateThumbnail: thumbnail.GenerateContext,
-		sleep:             time.Sleep,
-		emit:              emit,
-		log:               log,
+		generateRemoteThumbnail: func(ctx context.Context, ffmpegBin, mediaPath string, durationMs int64, thumbDir string, id int64) (string, error) {
+			return thumbnail.GenerateContextWithTimeout(ctx, ffmpegBin, mediaPath, durationMs, thumbDir, id, remoteThumbnailTimeout)
+		},
+		sleep: time.Sleep,
+		emit:  emit,
+		log:   log,
 	}
 	for i := 0; i < workers; i++ {
 		p.wg.Add(1)
@@ -129,14 +173,24 @@ func (p *Processor) process(id int64) {
 		return
 	}
 
+	mediaPath, pathErr := p.MediaPath(v)
+	if pathErr != nil {
+		p.log.Warn("media path unavailable", "id", id, "err", pathErr)
+		return
+	}
+
 	var durationMs int64
-	md, err := ProbeContext(p.ctx, p.ffprobeBin, v.Path)
+	probeTimeout := 30 * time.Second
+	if v.IsRemote() {
+		probeTimeout = remoteProbeTimeout
+	}
+	md, err := ProbeContextWithTimeout(p.ctx, p.ffprobeBin, mediaPath, probeTimeout)
 	if err != nil {
 		if p.ctx.Err() != nil {
 			return // shutdown canceled the probe; not a metadata failure
 		}
 		// Metadata is optional for a favorite (spec-v1.md §29 non-critical).
-		p.log.Warn("ffprobe failed", "id", id, "path", v.Path, "err", err)
+		p.log.Warn("ffprobe failed", "id", id, "path", v.Path, "media", mediaPath, "err", err)
 	} else {
 		durationMs = md.DurationMs
 		if err := p.repo.UpdateMetadata(id, md.DurationMs, md.Width, md.Height, md.FrameRate, md.Bitrate, md.VideoCodec, md.AudioCodec); err != nil {
@@ -157,11 +211,18 @@ func (p *Processor) process(id int64) {
 		}
 	}
 
-	p.processThumbnail(v, durationMs)
+	p.processThumbnailAt(v, durationMs, mediaPath)
 }
 
-// processThumbnail generates the automatic cover for the video and records it.
+// processThumbnail is retained for tests and callers that already know the
+// media is local.
 func (p *Processor) processThumbnail(v *Video, durationMs int64) {
+	p.processThumbnailAt(v, durationMs, v.Path)
+}
+
+// processThumbnailAt generates the automatic cover from the resolved media URL
+// and records it.
+func (p *Processor) processThumbnailAt(v *Video, durationMs int64, mediaPath string) {
 	// The user picked this cover by hand; never let an automatic run overwrite
 	// it (the metadata refresh above is still fine).
 	if v.CustomCoverAt > 0 {
@@ -169,6 +230,9 @@ func (p *Processor) processThumbnail(v *Video, durationMs int64) {
 	}
 
 	generate := p.generateThumbnail
+	if v.IsRemote() && p.generateRemoteThumbnail != nil {
+		generate = p.generateRemoteThumbnail
+	}
 	if generate == nil {
 		generate = thumbnail.GenerateContext
 	}
@@ -182,7 +246,7 @@ func (p *Processor) processThumbnail(v *Video, durationMs int64) {
 		if p.ctx.Err() != nil {
 			return // shutdown: do not start another extraction or retry
 		}
-		rel, err = generate(p.ctx, p.ffmpegBin, v.Path, durationMs, p.thumbDir, v.ID)
+		rel, err = generate(p.ctx, p.ffmpegBin, mediaPath, durationMs, p.thumbDir, v.ID)
 		if err == nil {
 			break
 		}
@@ -197,7 +261,7 @@ func (p *Processor) processThumbnail(v *Video, durationMs int64) {
 		}
 	}
 	if err != nil {
-		p.log.Warn("thumbnail failed", "id", v.ID, "path", v.Path, "attempts", thumbnailAttempts, "err", err)
+		p.log.Warn("thumbnail failed", "id", v.ID, "path", v.Path, "media", mediaPath, "attempts", thumbnailAttempts, "err", err)
 		return
 	}
 	if _, err := p.repo.UpdateThumbnailIfAuto(v.ID, rel); err != nil {

@@ -159,6 +159,43 @@ func main() {
 	app.SetLibrary(lib)
 	cloudSvc := cloud.NewService(cloud.NewSQLiteRepository(db), app.Emit, log)
 	lib.SetCloudService(cloudSvc)
+	// The loopback media proxy is what lets ffprobe/ffmpeg read a remote
+	// favorite without WebDAV credentials appearing on a command line. It only
+	// binds 127.0.0.1 and is addressed by a per-process random token.
+	mediaProxy, proxyErr := cloud.NewMediaProxy(
+		func(id int64) (cloud.MediaInfo, error) {
+			v, err := videoSvc.Get(id)
+			if err != nil {
+				return cloud.MediaInfo{}, err
+			}
+			return cloud.MediaInfo{SourceID: v.SourceID, Path: v.RemotePath, FileName: v.FileName, Size: v.FileSize}, nil
+		},
+		cloudSvc.OpenRange,
+		func(_ context.Context, id int64, path string) (*cloud.Entry, error) {
+			return cloudSvc.Stat(id, path)
+		},
+		log,
+	)
+	if proxyErr != nil {
+		log.Warn("media proxy not available", "err", proxyErr)
+		mediaProxy = nil
+	} else if err := mediaProxy.Start(); err != nil {
+		log.Warn("media proxy start failed", "err", err)
+		mediaProxy = nil
+	}
+	videoSvc.SetMediaPathResolver(func(v *video.Video) (string, error) {
+		if !v.IsRemote() {
+			return v.Path, nil
+		}
+		if mediaProxy == nil {
+			return "", fmt.Errorf("网盘媒体代理未启动")
+		}
+		url := mediaProxy.URL(v.ID)
+		if url == "" {
+			return "", fmt.Errorf("网盘媒体代理未就绪")
+		}
+		return url, nil
+	})
 	settingsStore := settings.New(db)
 	app.SetSettings(settingsStore)
 	// The window placement is needed by both OnStartup and shutdown; build it
@@ -248,6 +285,13 @@ func main() {
 			}
 		}},
 		shutdownStep{"cloud health", stopCloudHealth},
+		shutdownStep{"media proxy", func() {
+			if mediaProxy != nil {
+				if err := mediaProxy.Close(); err != nil {
+					log.Warn("media proxy shutdown failed", "err", err)
+				}
+			}
+		}},
 		shutdownStep{"folder watch", watchSvc.Stop},
 		shutdownStep{"volume watch", stopVolumeWatch},
 		shutdownStep{"image sweep", stopImageSweep},

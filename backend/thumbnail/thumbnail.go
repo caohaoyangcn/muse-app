@@ -35,11 +35,18 @@ func Generate(ffmpegBin, videoPath string, durationMs int64, thumbDir string, id
 // its shutdown context here so closing the window kills an ffmpeg extraction
 // instead of waiting up to ffmpegTimeout for it.
 func GenerateContext(parent context.Context, ffmpegBin, videoPath string, durationMs int64, thumbDir string, id int64) (string, error) {
+	return GenerateContextWithTimeout(parent, ffmpegBin, videoPath, durationMs, thumbDir, id, ffmpegTimeout)
+}
+
+// GenerateContextWithTimeout is GenerateContext with an explicit bound. The
+// processor uses a longer bound for a WebDAV/HTTP source, where the first byte
+// may wait on the remote drive, but shutdown still cancels it.
+func GenerateContextWithTimeout(parent context.Context, ffmpegBin, videoPath string, durationMs int64, thumbDir string, id int64, timeout time.Duration) (string, error) {
 	var at float64
 	if durationMs > 0 {
 		at = float64(durationMs) / 10 / 1000.0
 	}
-	return ExtractAtContext(parent, ffmpegBin, videoPath, at, thumbDir, id)
+	return ExtractAtContextWithTimeout(parent, ffmpegBin, videoPath, at, thumbDir, id, timeout)
 }
 
 // ExtractAt writes thumbnails/<id>.jpg from the frame at atSec and returns the
@@ -53,6 +60,13 @@ func ExtractAt(ffmpegBin, videoPath string, atSec float64, thumbDir string, id i
 // ExtractAtContext is ExtractAt with a caller-owned context, so an extraction
 // can be canceled by application shutdown as well as by its own timeout.
 func ExtractAtContext(parent context.Context, ffmpegBin, videoPath string, atSec float64, thumbDir string, id int64) (string, error) {
+	return ExtractAtContextWithTimeout(parent, ffmpegBin, videoPath, atSec, thumbDir, id, ffmpegTimeout)
+}
+
+// ExtractAtContextWithTimeout is ExtractAtContext with an explicit bound. It is
+// the remote-source path: an HTTP range read may take longer than a local
+// extraction, and a 30-second cutoff would leave every remote cover empty.
+func ExtractAtContextWithTimeout(parent context.Context, ffmpegBin, videoPath string, atSec float64, thumbDir string, id int64, timeout time.Duration) (string, error) {
 	if ffmpegBin == "" {
 		return "", errors.New("ffmpeg is not available")
 	}
@@ -75,7 +89,7 @@ func ExtractAtContext(parent context.Context, ffmpegBin, videoPath string, atSec
 		outPath,
 	)
 
-	ctx, cancel := context.WithTimeout(parent, ffmpegTimeout)
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	cmd := platform.CommandContext(ctx, ffmpegBin, args...)
 	var stderr bytes.Buffer
