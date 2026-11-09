@@ -180,7 +180,8 @@ var config = driver.Config{
 ### 4.3 关键实现点
 
 - `Init`：生成/复用 `UserPlatform`（UUID），用 `op.MustSaveDriverStorage` 回写；创建带 cookie jar 的 resty client；登录。
-- `login`：密码 MD5；成功后保存 `userID`；`ensureRootFolderID` 在根为 `0`/空时取 `rootDirId` 并回写。
+- `login`：密码 MD5；成功后保存 `userID`；`ensureRootFolderID` 在根为 `0`/空或 `userID` 未取到时请求 `/user/getInfo` 并回写。
+- 短信二次校验：登录返回 `10807` 时保存 `phone`/`temp_token`，自动调用 `/loginServer/getMobileAuthCode`（`type=5`）发送短信，并把 `sms_phone`/`sms_temp_token` 持久化；用户在存储表单填入 `sms_code` 后再次保存，驱动直接调用 `/loginServer/validatePhone` 完成登录。`sms_resend` 可主动重发。
 - `List`：按 `parentId` 分页，`hasNext` 停止；把 `Resource` 转成 `*Object`；`ResourceType==1` 为目录。
 - `Link`：`/download/getUrl` 返回临时 URL；`10401/10404` 重新登录后重试一次。
 - `MakeDir/Move/Rename/Copy/Remove/Put`：保持 AList 行为；`Copy` 轮询异步任务，超时/失败有明确错误。
@@ -226,6 +227,7 @@ var config = driver.Config{
 ### Phase 3：测试
 
 - [x] `httptest` 覆盖登录（MD5、headers）、分页、`hasNext`、直链、`10401` 重登、根目录 ID。
+- [x] `httptest` 覆盖 `10807` 短信挑战、发送验证码、`validatePhone`、重发、失败保留验证码。
 - [x] `toObject` 的目录/文件/时间/MD5。
 - [x] 写操作请求体与返回对象。
 - [x] `go test ./drivers/bitqiu`、`go vet`/`gofmt`。
@@ -340,3 +342,4 @@ var config = driver.Config{
 | 2026-11-05 | 调研 | Done | 确认 AList 私有 API、OpenList 无 BitQiu 驱动、接口差异；补充 OpenList 现成驱动清单（见 §1.4） | 本提交 |
 | 2026-11-05 | 计划 | Planned | 计划文档建立 | `<pending>` |
 | 2026-11-09 | Phase 1–3 | Done | OpenList fork `feat/bitqiu-driver`：驱动、注册、httptest；`go test ./drivers/bitqiu`、`go vet`、Windows amd64 交叉构建通过。 | `e3c08bf` / `53520bc` / `18cb0ba` / `9818402` |
+| 2026-11-09 | SMS 二次校验 | Done | 适配 BitQiu `10807` 登录挑战：自动发送短信、`sms_code`/`sms_resend` 表单、`validatePhone` 完成登录；覆盖挑战/重发/失败路径。真实账号仍待验证。 | 本提交 |
