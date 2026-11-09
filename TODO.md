@@ -88,6 +88,10 @@
   - ✅ 排序栏新增「最近播放」（桌面、移动端、演员作品页）：降序最近在前，升序最早在前，从未播放的始终排在已播放之后。
   - ✅ 播放后即时更新：服务端写 `last_opened_at` 并发 `video:opened`；移动端把外部播放器/OpenList 的播放上报到 `POST /api/videos/{id}/opened`。
   - 源码：`frontend/src/pages/Library.tsx`、`components/Sidebar.tsx`、`components/RecentlyPlayedView.tsx`、`utils/recent.ts`、`utils/sortVideos.ts`、`backend/video/service.go`、`backend/server/server.go`。
+- [x] **工作区标签页自动分组 / 超限关闭**
+  - ✅ 同一演员的 2 个以上影片标签自动归入可折叠的演员组；组名使用演员合并后的规范名，组内少于 2 个影片时自动解散。
+  - ✅ 非主页标签上限 12 个（影片标签 + 演员作品标签共用）；超限按最近激活时间关闭最旧的非当前标签，并用 toast 说明。
+  - 源码：`frontend/src/utils/tabGroups.ts`、`components/WorkspaceTabs.tsx`、`pages/Library.tsx`、`backend/jav/service.go`、`backend/api/library.go`、`backend/video/model.go`、`docs/spec/workspace-tabs.md`。
 - [ ] **搜索排序按相关度加权**
   - 现 `Search()`（`backend/video/repository.go` `Search`）为纯 `LIKE %kw%` + `ORDER BY created_at DESC`，与关键词相关度无关。
   - 建议：文件名命中 > 路径命中、前缀命中 > 包含命中，简单加权即可（数据量 1 万以内无需 FTS5）。
