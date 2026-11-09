@@ -99,4 +99,4 @@ Muse WebDAV 客户端 ────┘
 | 2026-11-06 | WebDAV M8 | LAN 远程 Range 转发与移动端离线状态 | `a58bb3b` |
 | 2026-11-06 | WebDAV M9 | 设置文档、本地 WebDAV 集成测试、静态检查与构建 | `1492a37` / `2e030d6` |
 | 2026-11-06 | 产品修正 | 移除缓存；播放跳 OpenList；来源停用归档；跨层备份徽章；手机归档 tab | `3172b46` / `703b308` |
-| 2026-11-09 | BitQiu Phase 1–3 | OpenList fork 驱动、注册、单测、Windows 构建通过；真实账号待测 | `e3c08bf` / `53520bc` / `18cb0ba` |
+| 2026-11-09 | BitQiu Phase 1–3 | OpenList fork 驱动、注册、单测、Windows 构建通过；真实账号待测 | `e3c08bf` / `53520bc` / `18cb0ba` / `9818402` |
