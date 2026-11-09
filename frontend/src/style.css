@@ -15,6 +15,8 @@
   --accent-hover: #8f74ff;
   --danger: #e5534b;
   --radius: 10px;
+  /* Whole-shell UI scale. Set by src/utils/zoom.ts and read by the rules below. */
+  --ui-zoom: 1;
 }
 
 *,
@@ -23,10 +25,19 @@
   box-sizing: border-box;
 }
 
+html {
+  /* CSS zoom scales the shell. Dividing the layout box by the same factor makes
+     the document fill the window at every level: 80% leaves no blank strip and
+     125% does not clip the bottom. The app owns all inner scrolling. */
+  zoom: var(--ui-zoom);
+}
+
 html,
 body {
   margin: 0;
-  height: 100%;
+  width: calc(100vw / var(--ui-zoom));
+  height: calc(100vh / var(--ui-zoom));
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;

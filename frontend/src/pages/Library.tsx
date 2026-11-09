@@ -1467,7 +1467,7 @@ export default function Library({
     : undefined;
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-full flex-col">
       <header className="flex items-center gap-4 border-b border-[var(--border)] bg-[var(--panel)] px-5 py-3">
         <h1 className="m-0 flex items-center gap-2 text-[17px] font-semibold tracking-[0.2px]">
           <img className="h-12 w-12 rounded-xl object-cover" src={museLogo} alt="Muse Video" />
@@ -1656,12 +1656,6 @@ export default function Library({
                         </Button>
                       </span>
                     )}
-                    <ViewControls
-                      view={view}
-                      onViewChange={handleViewChange}
-                      cardSize={cardSize}
-                      onCardSizeChange={handleCardSizeChange}
-                    />
                   </div>
                 </div>
                 {showDiskBar && (
@@ -1675,8 +1669,17 @@ export default function Library({
                     />
                   </div>
                 )}
-                {filter.kind !== "recent" && (
-                  <div className="mb-2 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {filter.kind === "recent" ? (
+                  <div className="mb-2 flex justify-end">
+                    <ViewControls
+                      view={view}
+                      onViewChange={handleViewChange}
+                      cardSize={cardSize}
+                      onCardSizeChange={handleCardSizeChange}
+                    />
+                  </div>
+                ) : (
+                  <div className="mb-2 min-w-0">
                     <SortBar
                       sortBy={sortBy}
                       sortDir={sortDir}
@@ -1685,8 +1688,7 @@ export default function Library({
                       onViewChange={handleViewChange}
                       cardSize={cardSize}
                       onCardSizeChange={handleCardSizeChange}
-                      showViewControls={false}
-                      className="mb-0 w-max"
+                      className="mb-0"
                     />
                   </div>
                 )}

@@ -59,7 +59,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 function PageFallback({ error, onRetry }: { error: Error; onRetry: () => void }) {
   return (
     <div
-      className="flex min-h-screen flex-col items-center justify-center bg-[var(--bg)] px-6 py-10 text-[var(--text)]"
+      className="flex min-h-full flex-col items-center justify-center bg-[var(--bg)] px-6 py-10 text-[var(--text)]"
       role="alert"
     >
       <div className="w-full max-w-[560px] text-center">

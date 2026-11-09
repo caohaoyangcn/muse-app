@@ -19,9 +19,10 @@ const OPTIONS: { key: SortKey; label: string; defaultDir: SortDir }[] = [
  * default direction); clicking the active field again flips between ascending
  * and descending; the active field shows an arrow.
  *
- * The card-size slider and the grid/list toggle live in ViewControls. They stay
- * at the end of this row by default; a view that pins them next to its title
- * passes `showViewControls={false}`.
+ * The sort chips wrap inside their own group. When the card-size slider and the
+ * grid/list toggle no longer fit beside them, they move to a second line at the
+ * left instead of squeezing the chips; at full width they sit at the right.
+ * A view without sort chips (最近播放) renders ViewControls standalone.
  */
 export default function SortBar({
   sortBy,
@@ -45,9 +46,10 @@ export default function SortBar({
   className?: string;
 }) {
   return (
-    <div className={cn("mb-3 flex items-center gap-2", className)} role="toolbar" aria-label="排序与视图">
-      <span className="text-xs text-[var(--muted)]">排序</span>
-      {OPTIONS.map((opt) => {
+    <div className={cn("mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2", className)} role="toolbar" aria-label="排序与视图">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2">
+        <span className="text-xs text-[var(--muted)]">排序</span>
+        {OPTIONS.map((opt) => {
         const active = opt.key === sortBy;
         const dir: SortDir = active ? sortDir : opt.defaultDir;
         return (
@@ -73,9 +75,10 @@ export default function SortBar({
             {active && (dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
           </Button>
         );
-      })}
+        })}
+      </div>
       {showViewControls && (
-        <div className="ml-auto flex items-center gap-2">
+        <div className="shrink-0">
           <ViewControls
             view={view}
             onViewChange={onViewChange}

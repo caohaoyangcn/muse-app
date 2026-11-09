@@ -88,7 +88,7 @@ export default function Settings({
     : "guide";
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-full flex-col">
       <header className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--panel)] px-5 py-3">
         <h1 className="m-0 text-[17px] font-semibold tracking-[0.2px]">设置</h1>
         <Button className="ml-auto" onClick={onClose} aria-label="返回">

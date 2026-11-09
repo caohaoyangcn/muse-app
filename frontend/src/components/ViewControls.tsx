@@ -6,9 +6,9 @@ import { Button } from "./ui/button";
 
 /**
  * The "how dense / which shape" half of the list toolbar: continuous card width
- * and the grid/list toggle. Split out of SortBar so a view can pin these next
- * to its title while the sort chips sit in their own row — the two halves are
- * independent decisions, not one control group.
+ * and the grid/list toggle. In the SortBar it sits at the right when there is
+ * room and moves to a second line at the left when the window is narrow or
+ * zoomed in. A view without sort chips — 最近播放 — renders it standalone.
  */
 export default function ViewControls({
   view,
