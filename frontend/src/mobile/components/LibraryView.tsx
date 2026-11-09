@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { CardSize, Group, SortDir, SortKey, Video, ViewMode } from "../../types";
+import { compareLastOpened } from "../../utils/sortVideos";
 import { filterVideosByKeyword } from "../../utils/videoFilter";
 import { listGroups, listVideos, videosInGroup } from "../api";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
@@ -74,6 +75,7 @@ export function LibraryView({
     const copy = [...videos];
     const dir = sortDir === "asc" ? 1 : -1;
     copy.sort((a, b) => {
+      if (sortKey === "lastOpenedAt") return compareLastOpened(a, b, sortDir);
       let cmp: number;
       switch (sortKey) {
         case "fileSize":

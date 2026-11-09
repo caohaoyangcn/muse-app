@@ -38,7 +38,13 @@ function write(key: string, value: string) {
 }
 
 export const readSortKey = (): SortKey =>
-  read<SortKey>(SORT_KEY_STORAGE, "createdAt", ["createdAt", "fileSize", "fileName", "likeCount"]);
+  read<SortKey>(SORT_KEY_STORAGE, "createdAt", [
+    "createdAt",
+    "lastOpenedAt",
+    "fileSize",
+    "fileName",
+    "likeCount",
+  ]);
 export const writeSortKey = (k: SortKey) => write(SORT_KEY_STORAGE, k);
 
 export const readSortDir = (): SortDir => read<SortDir>(SORT_DIR_STORAGE, "desc", ["asc", "desc"]);

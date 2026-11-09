@@ -4,6 +4,7 @@ import { MOBILE_CARD_SIZE } from "../prefs";
 
 const SORT_LABELS: Record<SortKey, string> = {
   createdAt: "添加时间",
+  lastOpenedAt: "最近播放",
   fileSize: "文件大小",
   fileName: "文件名",
   likeCount: "点赞数",

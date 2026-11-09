@@ -140,6 +140,7 @@ export function VideoDetailView({
     ["比特率", formatBitrate(v.bitrate) || "未提供"],
     ["视频编码", v.videoCodec ? v.videoCodec.toUpperCase() : "未提供"],
     ["音频编码", v.audioCodec ? v.audioCodec.toUpperCase() : "无音轨"],
+    ["最近播放", v.lastOpenedAt ? formatDateTime(v.lastOpenedAt) : "从未播放"],
     [v.sourceId > 0 ? "网盘路径" : "路径", v.sourceId > 0 ? v.remotePath : v.path],
   ];
   if (v.sourceId > 0) fileRows.push(["网盘", v.sourceName || "已配置连接"]);

@@ -4,7 +4,7 @@ import type { Video } from "../types";
 import { cn } from "../lib/utils";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { invalidate } from "../services/live";
-import { ApiError, likeVideo, removeVideo, updateVideoInfo } from "./api";
+import { ApiError, likeVideo, markVideoOpened, removeVideo, updateVideoInfo } from "./api";
 import { ActorFilmsView } from "./components/ActorFilmsView";
 import { ActorIndexView } from "./components/ActorIndexView";
 import { DuplicateView } from "./components/DuplicateView";
@@ -262,6 +262,17 @@ export default function App() {
     };
   }, [cancelPendingLaunch]);
 
+  // Returning from an external player (or another app) is when the playback
+  // just recorded becomes visible to the list: re-read then, the same way a
+  // local write does, so 最近播放 and its date groups are current.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") invalidate();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   const launchPlayer = useCallback(
     (video: Video, playerID: ExternalPlayerID) => {
       savePreferredPlayer(playerID);
@@ -273,6 +284,8 @@ export default function App() {
         setPlayerVideo(video);
         return;
       }
+
+      markVideoOpened(video.id);
 
       const uri = playerByID(playerID).buildURL(video, externalStreamURL(video.id));
       launchTimer.current = window.setTimeout(() => {
@@ -304,6 +317,7 @@ export default function App() {
           toast("没有可用的 OpenList 地址", "error");
           return;
         }
+        markVideoOpened(video.id);
         window.location.href = url;
         return;
       }

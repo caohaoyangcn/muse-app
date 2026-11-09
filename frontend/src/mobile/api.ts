@@ -140,6 +140,17 @@ export function clearVideoLikes(id: number): Promise<Video> {
   return jsonRequest<Video>(`${API}/videos/${id}/likes`, "DELETE");
 }
 
+/**
+ * 最佳努力地记录一次播放：实际播放已交给 Infuse / VLC 或 OpenList，服务端
+ * 只更新时间戳。`keepalive` 让请求在 `window.location.href` 跳转后仍能发出；
+ * 失败不影响播放，只影响「最近播放」的排序与分组。
+ */
+export function markVideoOpened(id: number): void {
+  void fetch(`${API}/videos/${id}/opened`, { method: "POST", keepalive: true }).catch(
+    () => undefined,
+  );
+}
+
 /** 把收藏移入回收站（软删除）；源文件不会被删除。 */
 export function removeVideo(id: number): Promise<void> {
   return request<void>(`${API}/videos/${id}`, { method: "DELETE" });
