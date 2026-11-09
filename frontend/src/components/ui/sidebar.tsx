@@ -7,7 +7,7 @@ const Sidebar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>
       ref={ref}
       data-slot="sidebar"
       className={cn(
-        "flex h-full w-[200px] min-h-0 shrink-0 flex-col overflow-y-auto border-r border-[var(--border)] bg-[var(--panel)] px-2.5 py-3.5",
+        "flex h-full w-[200px] min-h-0 shrink-0 flex-col overflow-hidden border-r border-[var(--border)] bg-[var(--panel)] px-2.5 py-3.5",
         className,
       )}
       {...props}
@@ -29,7 +29,7 @@ const SidebarSection = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTM
       ref={ref}
       data-slot="sidebar-section"
       className={cn(
-        "mt-3.5 flex items-center justify-between px-1 text-xs uppercase tracking-[0.4px] text-[var(--muted)]",
+        "mt-3.5 mb-1 flex items-center justify-between px-2 text-[11px] font-medium tracking-[0.02em] text-[var(--muted)]",
         className,
       )}
       {...props}

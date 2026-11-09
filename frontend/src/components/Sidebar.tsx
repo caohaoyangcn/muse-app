@@ -1,26 +1,90 @@
 import { useEffect, useRef, useState } from "react";
+import type { DragEvent as ReactDragEvent } from "react";
 import type { Group, ViewFilter } from "../types";
 import { MIME_VIDEO_DRAG, MIME_VIDEO_DRAG_MULTI } from "../types";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { Sidebar as SidebarRoot, SidebarNav, SidebarSection } from "./ui/sidebar";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { NavIcon, type NavIconName } from "./NavIcon";
 
 interface SidebarProps {
   groups: Group[];
   filter: ViewFilter;
   onCreate: () => void;
   onSelect: (filter: ViewFilter) => void;
-  onRename: (group: Group) => void;
-  onDelete: (group: Group) => void;
   onReorder: (order: Group[]) => void;
   onSetParent: (id: number, parentId: number | null) => Promise<void>;
   onDropVideo: (group: Group, videoIds: number[]) => void;
   onGroupContextMenu: (e: React.MouseEvent, group: Group) => void;
 }
 
+const ROW =
+  "relative flex h-8 w-full shrink-0 items-center gap-2 rounded-[var(--radius)] px-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]";
+
+function rowClass(active: boolean, extra?: string) {
+  return cn(
+    ROW,
+    active
+      ? "bg-[rgba(124,92,255,0.12)] text-[var(--text)]"
+      : "text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)]",
+    extra,
+  );
+}
+
+/** The 2px accent marker shared by every selected row. */
+function ActiveBar() {
+  return (
+    <span
+      aria-hidden="true"
+      className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--accent)]"
+    />
+  );
+}
+
+/** One static entry in the browse or tool zone. */
+function NavRow({
+  icon,
+  label,
+  active,
+  onClick,
+  title,
+  dataTour,
+  onDragOver,
+  onDrop,
+}: {
+  icon: NavIconName;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  dataTour?: string;
+  onDragOver?: (e: ReactDragEvent<HTMLButtonElement>) => void;
+  onDrop?: (e: ReactDragEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={rowClass(active)}
+      aria-current={active ? "page" : undefined}
+      data-tour={dataTour}
+      onClick={onClick}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      title={title}
+    >
+      {active && <ActiveBar />}
+      <NavIcon name={icon} className={active ? "text-[var(--accent)]" : undefined} />
+      <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+    </button>
+  );
+}
+
 /**
- * Left navigation: "All Favorites" and the reorderable group list (tree).
+ * Left navigation in three zones: 浏览 (smart views), 分组 (the reorderable
+ * group tree), and 工具 (maintenance entries kept below the tree). The tree is
+ * the only flexible child: it scrolls when long, so the browse entries and
+ * tools stay visible without leaving an empty gap when the tree is short.
+ *
  * Ordering/nesting use native HTML5 drag & drop:
  *  - dragging over a group's top/bottom edge inserts above/below (reorder);
  *  - dragging over a group's middle nests the dragged group as its child;
@@ -28,14 +92,15 @@ interface SidebarProps {
  * Each group is also a drop target for video cards (add to group). A drag may
  * carry a single video (MIME_VIDEO_DRAG) or a multi-selected batch
  * (MIME_VIDEO_DRAG_MULTI); both are decoded into a video-id list.
+ *
+ * Renaming/deleting/parenting all live in the group context menu, reachable by
+ * right-click or by the `⋯` button that replaces the count on hover.
  */
 export default function Sidebar({
   groups,
   filter,
   onCreate,
   onSelect,
-  onRename,
-  onDelete,
   onReorder,
   onSetParent,
   onDropVideo,
@@ -173,7 +238,7 @@ export default function Sidebar({
 
   const topLevel = groups.filter((g) => g.parentId == null);
 
-  const renderGroup = (g: Group, depth: number, index: number) => {
+  const renderGroup = (g: Group, index: number) => {
     const children = groups.filter((c) => c.parentId === g.id);
     const hasChildren = children.length > 0;
     // Children are hidden unless explicitly expanded. While a group drag hovers
@@ -182,22 +247,30 @@ export default function Sidebar({
     const expanded = expandedIds.has(g.id) || (overState?.zone === "nest" && overState.index === index);
     const active = filter.kind === "group" && filter.id === g.id;
     const over = overState?.index === index ? overState.zone : null;
-    const pad = depth > 0 ? { paddingLeft: `${12 + depth * 14}px` } : undefined;
     return (
       <div key={g.id}>
         <div
           className={cn(
-            "group flex cursor-grab items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)] active:cursor-grabbing",
-            active && "bg-[var(--panel-2)] text-[var(--text)]",
+            rowClass(active),
+            "group/row cursor-grab active:cursor-grabbing",
             over && "bg-[rgba(124,92,255,0.08)] shadow-[inset_0_0_0_2px_var(--accent)]",
             over === "above" && "shadow-[inset_0_3px_0_var(--accent)]",
             over === "below" && "shadow-[inset_0_-3px_0_var(--accent)]",
             over === "nest" && "border border-dashed border-[var(--accent)] bg-[rgba(124,92,255,0.18)]",
             videoOverId === g.id && "border border-dashed border-[var(--accent)] bg-[rgba(124,92,255,0.16)] shadow-[inset_0_0_0_2px_var(--accent)]",
           )}
-          style={pad}
-          draggable
+          role="button"
+          tabIndex={0}
+          aria-current={active ? "page" : undefined}
           onClick={() => onSelect({ kind: "group", id: g.id })}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelect({ kind: "group", id: g.id });
+            }
+          }}
           onContextMenu={(e) => onGroupContextMenu(e, g)}
           onDragStart={(e) => handleDragStart(e, index, g.id)}
           onDragOver={(e) => handleDragOverGroup(e, index, g.id)}
@@ -216,6 +289,7 @@ export default function Sidebar({
           }}
           title={g.name}
         >
+          {active && <ActiveBar />}
           {hasChildren ? (
             <button
               type="button"
@@ -228,47 +302,51 @@ export default function Sidebar({
                 toggleExpanded(g.id);
               }}
             >
-              {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              <NavIcon name={expanded ? "chevron-down" : "chevron-right"} />
             </button>
           ) : (
             <span className="w-4 shrink-0" aria-hidden="true" />
           )}
-          <span className="text-sm">{depth > 0 ? "└" : "🗂"}</span>
-          <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{g.name}</span>
-          <span className="ml-auto rounded-[10px] bg-[var(--border)] px-2 py-px text-xs text-[var(--muted)]">{g.videoCount}</span>
-          <span
-            className="hidden shrink-0 gap-0.5 group-hover:flex"
-            onClick={(e) => e.stopPropagation()}
-            role="presentation"
-          >
-            <Button variant="ghost" size="sm" className="h-6 rounded-md px-1.5 py-0.5 text-xs" title="重命名分组" onClick={() => onRename(g)}>
-              ✎
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 rounded-md px-1.5 py-0.5 text-xs hover:bg-[rgba(229,83,75,0.2)] hover:text-[var(--danger)]"
-              title="删除分组"
-              onClick={() => onDelete(g)}
+          <NavIcon
+            name={expanded || active ? "folder-open" : "folder"}
+            className={active ? "text-[var(--accent)]" : undefined}
+          />
+          <span className="min-w-0 flex-1 truncate">{g.name}</span>
+          <span className="relative ml-auto flex h-5 w-9 shrink-0 items-center justify-end">
+            <span className="text-[11px] tabular-nums text-[var(--muted)] transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">
+              {g.videoCount}
+            </span>
+            <button
+              type="button"
+              className="pointer-events-none absolute inset-y-0 right-0 flex w-5 items-center justify-center rounded text-[var(--muted)] opacity-0 transition hover:bg-[var(--border)] hover:text-[var(--text)] group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
+              aria-label={`分组操作：${g.name}`}
+              title="分组操作"
+              onClick={(e) => {
+                e.stopPropagation();
+                onGroupContextMenu(e, g);
+              }}
             >
-              🗑
-            </Button>
+              <NavIcon name="more-horizontal" className="h-3.5 w-3.5" />
+            </button>
           </span>
         </div>
-        {expanded && children.map((c) => renderGroup(c, depth + 1, groups.indexOf(c)))}
+        {expanded && children.length > 0 && (
+          <div className="ml-3 border-l border-[var(--border)] pl-1">
+            {children.map((c) => renderGroup(c, groups.indexOf(c)))}
+          </div>
+        )}
       </div>
     );
   };
 
   return (
     <SidebarRoot data-tour="sidebar">
-      <SidebarNav>
-        <div
-          className={cn(
-            "flex cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)]",
-            filter.kind === "all" && "bg-[var(--panel-2)] text-[var(--text)]",
-            dragIndex != null && "bg-[rgba(124,92,255,0.08)] shadow-[inset_0_0_0_2px_var(--accent)]",
-          )}
+      <SidebarNav className="flex min-h-0 flex-1 flex-col">
+        <SidebarSection className="mt-0 shrink-0">浏览</SidebarSection>
+        <NavRow
+          icon="star"
+          label="全部收藏"
+          active={filter.kind === "all"}
           onClick={() => onSelect({ kind: "all" })}
           onDragOver={(e) => {
             if (dragIndex == null) return;
@@ -277,83 +355,63 @@ export default function Sidebar({
           }}
           onDrop={handleDropDetach}
           title="全部收藏（把分组拖到这里可设为顶层）"
-        >
-          <span>⭐</span>
-          <span>全部收藏</span>
-        </div>
-
-        <div
-          className={cn(
-            "flex cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)]",
-            filter.kind === "recent" && "bg-[var(--panel-2)] text-[var(--text)]",
-          )}
+        />
+        <NavRow
+          icon="history"
+          label="最近播放"
+          active={filter.kind === "recent"}
           onClick={() => onSelect({ kind: "recent" })}
           title="按播放时间分组：1 天内 / 3 天内 / 7 天内 / 14 天内 / 更早"
-        >
-          <span>🕘</span>
-          <span>最近播放</span>
-        </div>
+        />
+        <NavRow
+          icon="users"
+          label="演员"
+          active={filter.kind === "actors"}
+          onClick={() => onSelect({ kind: "actors" })}
+          title="按演员浏览出演过的影片"
+        />
 
-        <SidebarSection>
+        <SidebarSection className="mt-4 shrink-0">
           <span>分组</span>
-          <Button variant="ghost" size="sm" className="h-6 w-6 rounded-md p-0" title="新建分组" onClick={onCreate}>
-            <Plus className="h-4 w-4" />
+          <Button variant="ghost" size="sm" className="h-5 w-5 rounded p-0" title="新建分组" onClick={onCreate}>
+            <NavIcon name="plus" className="h-3.5 w-3.5" />
           </Button>
         </SidebarSection>
 
-        {groups.length === 0 ? (
-          <div className="px-3 py-1.5 text-xs text-[var(--muted)]">暂无分组</div>
-        ) : (
-          topLevel.map((g) => renderGroup(g, 0, groups.indexOf(g)))
-        )}
+        {/* The tree is the only shrinkable child: short lists sit right above
+            the tools, long lists scroll instead of pushing them away. */}
+        <div className="min-h-0 overflow-y-auto pr-0.5">
+          {groups.length === 0 ? (
+            <div className="px-2 py-2 text-xs text-[var(--muted)]">暂无分组</div>
+          ) : (
+            topLevel.map((g) => renderGroup(g, groups.indexOf(g)))
+          )}
+        </div>
 
-        <SidebarSection>
-          <span>刮削</span>
-        </SidebarSection>
-        <div
-          className={cn(
-            "flex cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)]",
-            (filter.kind === "actors") && "bg-[var(--panel-2)] text-[var(--text)]",
-          )}
-          onClick={() => onSelect({ kind: "actors" })}
-          title="按演员浏览出演过的影片"
-        >
-          <span>🎭</span>
-          <span>演员</span>
-        </div>
-        <div
-          data-tour="scrape-tasks"
-          className={cn(
-            "flex cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)]",
-            filter.kind === "scrapeTasks" && "bg-[var(--panel-2)] text-[var(--text)]",
-          )}
-          onClick={() => onSelect({ kind: "scrapeTasks", status: "queued" })}
-          title="查看刮削任务"
-        >
-          <span>↻</span>
-          <span>刮削任务</span>
-        </div>
-        <div
-          className={cn(
-            "flex cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)]",
-            filter.kind === "duplicates" && "bg-[var(--panel-2)] text-[var(--text)]",
-          )}
-          onClick={() => onSelect({ kind: "duplicates" })}
-          title="同一番号的多个版本：保留一个，或全部保留"
-        >
-          <span>⧉</span>
-          <span>查重</span>
-        </div>
-        <div
-          className={cn(
-            "flex cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)]",
-            filter.kind === "trash" && "bg-[var(--panel-2)] text-[var(--text)]",
-          )}
-          onClick={() => onSelect({ kind: "trash" })}
-          title="归档的网盘收藏与已移出收藏的影片：可恢复或彻底删除"
-        >
-          <span>🗑</span>
-          <span>归档与回收站</span>
+        <div className="mt-3 shrink-0 border-t border-[var(--border)] pt-2">
+          <SidebarSection className="mt-0">工具</SidebarSection>
+          <NavRow
+            icon="list-checks"
+            label="刮削任务"
+            active={filter.kind === "scrapeTasks"}
+            dataTour="scrape-tasks"
+            onClick={() => onSelect({ kind: "scrapeTasks", status: "queued" })}
+            title="查看刮削任务"
+          />
+          <NavRow
+            icon="duplicate"
+            label="查重"
+            active={filter.kind === "duplicates"}
+            onClick={() => onSelect({ kind: "duplicates" })}
+            title="同一番号的多个版本：保留一个，或全部保留"
+          />
+          <NavRow
+            icon="archive"
+            label="归档与回收站"
+            active={filter.kind === "trash"}
+            onClick={() => onSelect({ kind: "trash" })}
+            title="归档的网盘收藏与已移出收藏的影片：可恢复或彻底删除"
+          />
         </div>
       </SidebarNav>
     </SidebarRoot>

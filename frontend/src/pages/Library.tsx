@@ -1550,8 +1550,6 @@ export default function Library({
           filter={filter}
           onCreate={() => setGroupDialog({ mode: "create" })}
           onSelect={selectFilter}
-          onRename={(g) => setGroupDialog({ mode: "rename", group: g })}
-          onDelete={(g) => setDeleteGroupTarget(g)}
           onReorder={handleReorderGroups}
           onSetParent={handleSetGroupParent}
           onDropVideo={(group, videoIds) => void handleDropVideo(group, videoIds)}
