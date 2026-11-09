@@ -272,6 +272,14 @@ func (l *Library) Video(id int64) (*video.Video, error) {
 	return v, nil
 }
 
+// MarkVideoOpened records a playback reported by a transport. The desktop
+// records the timestamp inside Open; the LAN client hands playback to an
+// external app, so the server never sees it and the client reports it here.
+// The value is what the recently-played sort and view read.
+func (l *Library) MarkVideoOpened(id int64) error {
+	return l.videos.MarkOpened(id)
+}
+
 // RefreshVolumes re-observes the volumes the favorites live on (is the external
 // drive plugged in?) and returns what it saw. A volume that came back is
 // reconciled: files that were only away stop being reported as missing, and

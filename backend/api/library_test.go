@@ -144,8 +144,15 @@ func (r *memVideoRepo) ApplyScrapedCoverIfAllowed(id int64, p string) (bool, err
 	return true, nil
 }
 func (r *memVideoRepo) SetCoverSource(id int64, source string) error { return nil }
-func (r *memVideoRepo) UpdateLastOpened(id int64, t int64) error     { return nil }
-func (r *memVideoRepo) ListNeedingMetadata() ([]int64, error)        { return nil, nil }
+func (r *memVideoRepo) UpdateLastOpened(id int64, t int64) error {
+	v, err := r.Get(id)
+	if err != nil {
+		return err
+	}
+	v.LastOpenedAt = t
+	return nil
+}
+func (r *memVideoRepo) ListNeedingMetadata() ([]int64, error) { return nil, nil }
 func (r *memVideoRepo) UpdateInfo(id int64, title, notes string) error {
 	v, err := r.Get(id)
 	if err != nil {
@@ -408,6 +415,26 @@ func TestVideosInGroupResolvesObjects(t *testing.T) {
 	}
 	if got[0].FileName != "b.mp4" {
 		t.Errorf("resolved object mismatch: %q", got[0].FileName)
+	}
+}
+
+// MarkVideoOpened is the transport entry for a playback the server itself never
+// sees (the phone hands it to an external player). It must store the timestamp
+// the 最近播放 view and sort read, and reject an unknown id.
+func TestMarkVideoOpenedThroughFacade(t *testing.T) {
+	lib, vr, _ := newFacade(t)
+	if err := lib.MarkVideoOpened(10); err != nil {
+		t.Fatalf("mark opened: %v", err)
+	}
+	got, err := vr.Get(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastOpenedAt <= 0 {
+		t.Errorf("lastOpenedAt = %d, want a recorded timestamp", got.LastOpenedAt)
+	}
+	if err := lib.MarkVideoOpened(404); !errors.Is(err, video.ErrNotFound) {
+		t.Errorf("unknown id err = %v, want ErrNotFound", err)
 	}
 }
 

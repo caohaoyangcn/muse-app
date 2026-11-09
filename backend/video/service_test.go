@@ -2,6 +2,7 @@ package video
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -550,6 +551,108 @@ func TestServiceRemoteOpenAndStatusHooks(t *testing.T) {
 	}
 	if !paged {
 		t.Error("remote page hook was not called")
+	}
+}
+
+// MarkOpened is the transport entry for playback this service did not launch
+// (the phone hands it to an external player). It stores the timestamp and
+// announces it so the recently-played view can re-read.
+func TestServiceMarkOpenedRecordsAndAnnounces(t *testing.T) {
+	svc, dir := newTestService(t)
+	v, err := svc.AddVideo(writeFakeVideo(t, dir, "recent.mp4", 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type openedEvent struct {
+		id int64
+		at int64
+	}
+	var events []openedEvent
+	svc.emit = func(name string, data ...any) {
+		if name != "video:opened" || len(data) != 1 {
+			return
+		}
+		payload, ok := data[0].(map[string]any)
+		if !ok {
+			return
+		}
+		id, _ := payload["id"].(int64)
+		at, _ := payload["lastOpenedAt"].(int64)
+		events = append(events, openedEvent{id: id, at: at})
+	}
+
+	if err := svc.MarkOpened(v.ID); err != nil {
+		t.Fatalf("mark opened: %v", err)
+	}
+	got, err := svc.repo.Get(v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastOpenedAt <= 0 {
+		t.Errorf("lastOpenedAt = %d, want a recorded timestamp", got.LastOpenedAt)
+	}
+	if len(events) != 1 || events[0].id != v.ID || events[0].at != got.LastOpenedAt {
+		t.Errorf("events = %+v, want one event matching video %d at %d", events, v.ID, got.LastOpenedAt)
+	}
+
+	if err := svc.MarkOpened(4242); !errors.Is(err, ErrNotFound) {
+		t.Errorf("unknown id err = %v, want ErrNotFound", err)
+	}
+	if len(events) != 1 {
+		t.Errorf("unknown id emitted an event: %+v", events)
+	}
+}
+
+// Open records the playback time for both local and remote favorites, and a
+// failed open must leave the previous timestamp alone.
+func TestServiceRemoteOpenAnnouncesPlayback(t *testing.T) {
+	svc, _ := newTestService(t)
+	v, _, err := svc.AddRemoteVideo(4, "/媒体/remote.mp4", "remote.mp4", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	online := true
+	svc.SetRemoteSupport(
+		func(context.Context, *Video) error { return nil },
+		func(context.Context, *Video) (bool, error) { return true, nil },
+		nil,
+		func(*Video) bool { return online },
+	)
+
+	var eventAt int64
+	svc.emit = func(name string, data ...any) {
+		if name != "video:opened" || len(data) != 1 {
+			return
+		}
+		if payload, ok := data[0].(map[string]any); ok {
+			eventAt, _ = payload["lastOpenedAt"].(int64)
+		}
+	}
+
+	if err := svc.Open(v.ID); err != nil {
+		t.Fatalf("remote open: %v", err)
+	}
+	got, err := svc.repo.Get(v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastOpenedAt <= 0 || eventAt != got.LastOpenedAt {
+		t.Errorf("lastOpenedAt = %d, event at = %d", got.LastOpenedAt, eventAt)
+	}
+
+	// An offline source never opens, so it must not update the timestamp.
+	online = false
+	before := got.LastOpenedAt
+	if err := svc.Open(v.ID); err == nil {
+		t.Fatal("offline remote open must fail")
+	}
+	after, err := svc.repo.Get(v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.LastOpenedAt != before {
+		t.Errorf("failed open changed lastOpenedAt from %d to %d", before, after.LastOpenedAt)
 	}
 }
 

@@ -154,8 +154,15 @@ func (r *stubVideoRepo) SetScrapedCoverAllowed(id int64, allowed bool) error    
 func (r *stubVideoRepo) ApplyScrapedCoverIfAllowed(id int64, p string) (bool, error) {
 	return true, nil
 }
-func (r *stubVideoRepo) SetCoverSource(id int64, source string) error   { return nil }
-func (r *stubVideoRepo) UpdateLastOpened(id int64, t int64) error       { return nil }
+func (r *stubVideoRepo) SetCoverSource(id int64, source string) error { return nil }
+func (r *stubVideoRepo) UpdateLastOpened(id int64, t int64) error {
+	v, err := r.Get(id)
+	if err != nil {
+		return err
+	}
+	v.LastOpenedAt = t
+	return nil
+}
 func (r *stubVideoRepo) ListNeedingMetadata() ([]int64, error)          { return nil, nil }
 func (r *stubVideoRepo) UpdateInfo(id int64, title, notes string) error { return nil }
 func (r *stubVideoRepo) SetCustomCover(id int64, at int64) error        { return nil }
@@ -1200,6 +1207,36 @@ func TestAPIEditInfoAndLikes(t *testing.T) {
 	res, body = doJSON(t, http.MethodPut, base+"/api/videos/1/info", `{bad json`)
 	if res.StatusCode != http.StatusBadRequest {
 		t.Errorf("bad info body status = %d, want 400 (body=%s)", res.StatusCode, body)
+	}
+}
+
+// The LAN client reports a playback it handed to an external player. The
+// endpoint only stores the timestamp; the mobile client reads it back on its
+// next list request.
+func TestAPIMarkVideoOpened(t *testing.T) {
+	_, _, base := newTestServer(t)
+
+	res, body := doJSON(t, http.MethodPost, base+"/api/videos/1/opened", "")
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("mark opened status = %d, want 204 (body=%s)", res.StatusCode, body)
+	}
+
+	res, body = doJSON(t, http.MethodGet, base+"/api/videos/1", "")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("get video status = %d, want 200 (body=%s)", res.StatusCode, body)
+	}
+	var v video.Video
+	if err := json.Unmarshal(body, &v); err != nil {
+		t.Fatalf("video JSON: %v (%s)", err, body)
+	}
+	if v.LastOpenedAt <= 0 {
+		t.Errorf("lastOpenedAt = %d, want a recorded timestamp", v.LastOpenedAt)
+	}
+
+	// Unknown video → 400 with the façade's user-facing message.
+	res, body = doJSON(t, http.MethodPost, base+"/api/videos/999/opened", "")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("unknown video status = %d, want 400 (body=%s)", res.StatusCode, body)
 	}
 }
 

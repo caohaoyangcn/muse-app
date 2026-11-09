@@ -219,6 +219,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("PUT /api/videos/{id}/info", s.handleUpdateVideoInfo)
 	mux.HandleFunc("POST /api/videos/{id}/likes", s.handleLikeVideo)
 	mux.HandleFunc("DELETE /api/videos/{id}/likes", s.handleClearVideoLikes)
+	// The phone hands playback to an external player, so it reports that a
+	// favorite was played; only the timestamp is stored (no playback progress).
+	mux.HandleFunc("POST /api/videos/{id}/opened", s.handleMarkVideoOpened)
 	mux.HandleFunc("POST /api/groups", s.handleCreateGroup)
 	mux.HandleFunc("PUT /api/groups/{id}", s.handleRenameGroup)
 	mux.HandleFunc("DELETE /api/groups/{id}", s.handleDeleteGroup)
@@ -712,6 +715,22 @@ func (s *Server) handleClearVideoLikes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, v)
+}
+
+// handleMarkVideoOpened records that the LAN client started playing a favorite.
+// Playback itself happens in the phone's external player, so the server only
+// stores the moment it was handed off; the recently-played view and sort read
+// that timestamp.
+func (s *Server) handleMarkVideoOpened(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	if err := s.lib.MarkVideoOpened(id); err != nil {
+		httpError(w, http.StatusBadRequest, video.UserMessage(err))
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {

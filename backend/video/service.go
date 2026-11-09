@@ -439,7 +439,7 @@ func (s *Service) Open(id int64) error {
 		if err := s.remoteOpen(context.Background(), v); err != nil {
 			return err
 		}
-		if err := s.repo.UpdateLastOpened(v.ID, nowMillis()); err != nil {
+		if err := s.recordOpened(v.ID); err != nil {
 			s.log.Warn("update last opened failed", "id", v.ID, "err", err)
 		}
 		return nil
@@ -456,8 +456,33 @@ func (s *Service) Open(id int64) error {
 	if err := platform.OpenWithDefaultApp(v.Path); err != nil {
 		return fmt.Errorf("打开视频失败：%w", err)
 	}
-	if err := s.repo.UpdateLastOpened(v.ID, nowMillis()); err != nil {
+	if err := s.recordOpened(v.ID); err != nil {
 		s.log.Warn("update last opened failed", "id", v.ID, "err", err)
+	}
+	return nil
+}
+
+// MarkOpened records that a favorite was played. The desktop records this as
+// part of Open; the LAN client hands playback to an external player, so it
+// reports the event through the façade. A single write path keeps the timestamp
+// honest for the recently-played view and sort.
+func (s *Service) MarkOpened(id int64) error {
+	if _, err := s.repo.Get(id); err != nil {
+		return err
+	}
+	return s.recordOpened(id)
+}
+
+// recordOpened stores the playback time and announces it, so a view sorting or
+// grouping by recently played can re-read without each client knowing which
+// write caused the change.
+func (s *Service) recordOpened(id int64) error {
+	at := nowMillis()
+	if err := s.repo.UpdateLastOpened(id, at); err != nil {
+		return err
+	}
+	if s.emit != nil {
+		s.emit("video:opened", map[string]any{"id": id, "lastOpenedAt": at})
 	}
 	return nil
 }
