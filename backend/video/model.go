@@ -60,6 +60,12 @@ type Video struct {
 	// code. Once set, the UI presents the favorite under it instead of the file
 	// name, so a messy file name never stands in for the work's identity.
 	JavCode string `json:"javCode"`
+	// Actors is the canonical cast (演员) the scraper recorded for this favorite,
+	// with 演员合并 aliases folded into their canonical name. Like JavCode it is a
+	// read-model projection filled by the shared façade from
+	// video_jav.actors_json, never a column on videos; empty until a scrape has
+	// produced a cast. The workspace uses it to group open video tabs by actor.
+	Actors []string `json:"actors"`
 	// MosaicRestored reports membership in the 马赛克破解 group — the collection
 	// rule that tags restored/mosaic-removed works. It is a read-model
 	// projection filled by the shared façade (transitive membership included),

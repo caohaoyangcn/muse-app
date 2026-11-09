@@ -3,6 +3,7 @@ package jav
 import (
 	"database/sql"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"muse-app/backend/database"
@@ -91,6 +92,40 @@ func TestListActorsToleratesInvalidJSON(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("actors=%+v, want none", got)
+	}
+}
+
+// ActorsByVideo is the shared read model's per-favorite cast. Merged stage
+// names collapse to their canonical name, repeats disappear, names are sorted,
+// and a favorite without a scraped cast stays out of the map.
+func TestActorsByVideoResolvesAliasesAndSorts(t *testing.T) {
+	svc, _, ids := newActorFixture(t, [][]string{
+		{"B", "C"},
+		{"A"},
+		{},
+	})
+	if err := svc.MergeActors("B", "A"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.ActorsByVideo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[int64][]string{
+		ids[0]: {"A", "C"},
+		ids[1]: {"A"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("actors by video = %+v, want %+v", got, want)
+	}
+	for id, cast := range want {
+		if !reflect.DeepEqual(got[id], cast) {
+			t.Errorf("video %d cast = %v, want %v", id, got[id], cast)
+		}
+	}
+	if _, ok := got[ids[2]]; ok {
+		t.Errorf("video without a cast must be absent: %+v", got)
 	}
 }
 

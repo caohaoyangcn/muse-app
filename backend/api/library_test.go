@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -819,6 +820,50 @@ func TestListVideosCarriesScrapedCode(t *testing.T) {
 	}
 }
 
+// The same read model carries the canonical scraped cast. The workspace tab
+// strip groups open films by these names, so merged aliases must already be
+// folded and the list must be sorted and non-nil.
+func TestListVideosCarriesScrapedActors(t *testing.T) {
+	lib := newActorFacade(t, [][]string{{"B", "C"}, {"A"}, {}})
+	if err := lib.MergeActors("B", "A"); err != nil {
+		t.Fatal(err)
+	}
+
+	videos, err := lib.ListVideos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(videos) != 3 {
+		t.Fatalf("got %d videos, want 3", len(videos))
+	}
+	byID := make(map[int64]video.Video, len(videos))
+	for _, v := range videos {
+		byID[v.ID] = v
+	}
+	want := map[int64][]string{
+		1: {"A", "C"},
+		2: {"A"},
+		3: {},
+	}
+	for id, cast := range want {
+		v, ok := byID[id]
+		if !ok {
+			t.Fatalf("video %d missing from %+v", id, videos)
+		}
+		if !reflect.DeepEqual(v.Actors, cast) {
+			t.Errorf("video %d actors = %v, want %v", id, v.Actors, cast)
+		}
+	}
+
+	single, err := lib.Video(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(single.Actors, []string{"A", "C"}) {
+		t.Errorf("single video actors = %v, want [A C]", single.Actors)
+	}
+}
+
 // Favorites in the 马赛克破解 group carry the tag flag both clients render
 // beside the name; favorites outside it do not.
 func TestListVideosCarriesRestoredBadge(t *testing.T) {
@@ -862,6 +907,9 @@ func TestListVideosWithoutJavServiceLeavesCodeEmpty(t *testing.T) {
 	for _, v := range videos {
 		if v.JavCode != "" {
 			t.Errorf("code = %q, want empty without a JAV service", v.JavCode)
+		}
+		if len(v.Actors) != 0 {
+			t.Errorf("actors = %v, want empty without a JAV service", v.Actors)
 		}
 	}
 }

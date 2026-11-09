@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1046,6 +1047,29 @@ func TestAPIListVideosCarriesScrapedCode(t *testing.T) {
 	}
 	if len(videos) != 1 || videos[0].JavCode != "ABC-123" {
 		t.Fatalf("videos = %+v, want one carrying ABC-123", videos)
+	}
+}
+
+// The LAN API carries the same canonical cast as the desktop read model; the
+// workspace tab strip groups films from this field.
+func TestAPIListVideosCarriesActors(t *testing.T) {
+	base := newJavTestServer(t, &stubJavRepo{
+		refs: []jav.ActorFilmRef{{Name: "葵つかさ", VideoID: 1}},
+	})
+	res, err := http.Get(base + "/api/videos")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", res.StatusCode)
+	}
+	var videos []video.Video
+	if err := json.NewDecoder(res.Body).Decode(&videos); err != nil {
+		t.Fatal(err)
+	}
+	if len(videos) != 1 || !reflect.DeepEqual(videos[0].Actors, []string{"葵つかさ"}) {
+		t.Fatalf("videos = %+v, want one carrying the canonical cast", videos)
 	}
 }
 

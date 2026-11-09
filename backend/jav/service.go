@@ -215,6 +215,45 @@ func (s *Service) ListTaskOverviews() ([]TaskOverview, error) { return s.repo.Li
 // model. A favorite with no saved code is absent from the map.
 func (s *Service) Codes() (map[int64]string, error) { return s.repo.ListCodes() }
 
+// ActorsByVideo returns the canonical cast per favorite for the shared video
+// read model. Merged stage names (演员合并) resolve to their canonical name, so
+// an automatically grouped workspace tab and the actor index agree on who the
+// actor is. Names are deduplicated and sorted so the projection is stable; a
+// favorite with no scraped cast is absent from the map.
+func (s *Service) ActorsByVideo() (map[int64][]string, error) {
+	refs, err := s.repo.ListActorFilmRefs()
+	if err != nil {
+		return nil, err
+	}
+	merges, err := s.repo.ListActorMerges()
+	if err != nil {
+		return nil, err
+	}
+	aliases := actorAliasMap(merges)
+
+	sets := make(map[int64]map[string]struct{})
+	for _, ref := range refs {
+		canonical := resolveActor(ref.Name, aliases)
+		if canonical == "" {
+			continue
+		}
+		if sets[ref.VideoID] == nil {
+			sets[ref.VideoID] = make(map[string]struct{})
+		}
+		sets[ref.VideoID][canonical] = struct{}{}
+	}
+	out := make(map[int64][]string, len(sets))
+	for videoID, names := range sets {
+		cast := make([]string, 0, len(names))
+		for name := range names {
+			cast = append(cast, name)
+		}
+		sort.Strings(cast)
+		out[videoID] = cast
+	}
+	return out, nil
+}
+
 // ListActors returns the aggregated cast index: one entry per actor with the
 // number of favorites they appear in, derived from the existing scrape results.
 // Names that have been merged (演员合并) are folded into their canonical entry,

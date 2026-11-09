@@ -104,6 +104,21 @@ func (l *Library) scrapedCodes() map[int64]string {
 	return codes
 }
 
+// scrapedActors loads the canonical cast per favorite for the video read
+// model. Best effort like scrapedCodes: without a scrape result a favorite
+// simply has no actors and never joins an automatic tab group.
+func (l *Library) scrapedActors() map[int64][]string {
+	if l.jav == nil {
+		return nil
+	}
+	actors, err := l.jav.ActorsByVideo()
+	if err != nil {
+		l.log.Warn("load scraped actors failed", "err", err)
+		return nil
+	}
+	return actors
+}
+
 // restoredVideoIDs returns the favorites in the 马赛克破解 group, including the
 // members of its child groups (group membership is transitive). It is best
 // effort, like the scrape read: a failure leaves the badge off rather than
@@ -124,17 +139,45 @@ func (l *Library) restoredVideoIDs() map[int64]struct{} {
 	return set
 }
 
-// applyReadModel fills the fields a Video carries only for reading: the
-// authoritative 番号 from the scrape result and the 马赛克破解 tag from group
-// membership. Both maps are loaded once per batch by the caller.
-func applyReadModel(v *video.Video, codes map[int64]string, restored map[int64]struct{}, sources map[int64]cloud.SourceState, backups map[string]bool) {
-	v.JavCode = codes[v.ID]
-	_, v.MosaicRestored = restored[v.ID]
+// videoReadModel bundles the fields a Video carries only for reading. The maps
+// are loaded once per batch by loadVideoReadModel and applied to every row.
+type videoReadModel struct {
+	codes    map[int64]string
+	actors   map[int64][]string
+	restored map[int64]struct{}
+	sources  map[int64]cloud.SourceState
+	backups  map[string]bool
+}
+
+// loadVideoReadModel reads the projections a batch of favorites needs. Every
+// individual read is best effort, so a broken scrape result or group read
+// leaves a field empty instead of failing the library.
+func (l *Library) loadVideoReadModel() videoReadModel {
+	return videoReadModel{
+		codes:    l.scrapedCodes(),
+		actors:   l.scrapedActors(),
+		restored: l.restoredVideoIDs(),
+		sources:  l.cloudSources(),
+		backups:  l.backedUpKeys(),
+	}
+}
+
+// apply fills the read-model fields: the authoritative 番号 and canonical cast,
+// the 马赛克破解 tag, backup state and the cloud source badge.
+func (m videoReadModel) apply(v *video.Video) {
+	v.JavCode = m.codes[v.ID]
+	v.Actors = m.actors[v.ID]
+	if v.Actors == nil {
+		// The API contract is an array, not JSON null; the workspace tab strip
+		// iterates it without a nil guard.
+		v.Actors = []string{}
+	}
+	_, v.MosaicRestored = m.restored[v.ID]
 	if v.DeletedAt == 0 && v.JavCode != "" {
-		v.BackedUp = backups[jav.DuplicateKey(v.JavCode, jav.PartForFile(v.FileName, v.JavCode))]
+		v.BackedUp = m.backups[jav.DuplicateKey(v.JavCode, jav.PartForFile(v.FileName, v.JavCode))]
 	}
 	if v.SourceID > 0 {
-		if source, ok := sources[v.SourceID]; ok {
+		if source, ok := m.sources[v.SourceID]; ok {
 			v.SourceName = source.Name
 			v.SourceOffline = !source.Online
 			v.SourceEnabled = source.Enabled
@@ -182,16 +225,16 @@ func (l *Library) cloudSources() map[int64]cloud.SourceState {
 	return sources
 }
 
-// attachReadModel fills the read-model fields on a list of favorites. The two
+// attachReadModel fills the read-model fields on a list of favorites. The
 // projections live outside the videos table, so every read path that hands the
 // UI a Video passes through here.
 func (l *Library) attachReadModel(videos []video.Video) {
 	if len(videos) == 0 {
 		return
 	}
-	codes, restored, sources, backups := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources(), l.backedUpKeys()
+	model := l.loadVideoReadModel()
 	for i := range videos {
-		applyReadModel(&videos[i], codes, restored, sources, backups)
+		model.apply(&videos[i])
 	}
 }
 
@@ -200,7 +243,7 @@ func (l *Library) attachReadModelOne(v *video.Video) {
 	if v == nil {
 		return
 	}
-	applyReadModel(v, l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources(), l.backedUpKeys())
+	l.loadVideoReadModel().apply(v)
 }
 
 // ---- Reads (shared read model for both transports) ----
@@ -575,9 +618,9 @@ func (l *Library) ListJavTaskOverviews() ([]jav.TaskOverview, error) {
 	if err != nil {
 		return nil, err
 	}
-	codes, restored, sources, backups := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources(), l.backedUpKeys()
+	model := l.loadVideoReadModel()
 	for i := range overviews {
-		applyReadModel(&overviews[i].Video, codes, restored, sources, backups)
+		model.apply(&overviews[i].Video)
 	}
 	return overviews, nil
 }
@@ -627,10 +670,10 @@ func (l *Library) attachDuplicateReadModel(groups []jav.DuplicateGroup) {
 	if len(groups) == 0 {
 		return
 	}
-	codes, restored, sources, backups := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources(), l.backedUpKeys()
+	model := l.loadVideoReadModel()
 	for i := range groups {
 		for j := range groups[i].Videos {
-			applyReadModel(&groups[i].Videos[j], codes, restored, sources, backups)
+			model.apply(&groups[i].Videos[j])
 		}
 	}
 }
@@ -672,10 +715,10 @@ func (l *Library) ListContentDuplicates(includeIgnored bool) ([]video.ContentDup
 		return nil, err
 	}
 	if len(groups) > 0 {
-		codes, restored, sources, backups := l.scrapedCodes(), l.restoredVideoIDs(), l.cloudSources(), l.backedUpKeys()
+		model := l.loadVideoReadModel()
 		for i := range groups {
 			for j := range groups[i].Members {
-				applyReadModel(&groups[i].Members[j].Video, codes, restored, sources, backups)
+				model.apply(&groups[i].Members[j].Video)
 			}
 		}
 	}
