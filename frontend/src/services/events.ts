@@ -20,6 +20,7 @@ const EVENTS = [
   "video:missing:swept", // missing favorites were reconciled against an attached volume
   "video:filescan:done", // a 文件检测 pass finished: records may have been revived or cleaned up
   "video:liked",
+  "video:opened", // a favorite was played: the 最近播放 sort/view is now stale
   "video:removed", // a favorite was permanently deleted
   "video:trashed", // a favorite moved to the recycle bin
   "video:restored", // a favorite came back from the recycle bin

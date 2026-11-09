@@ -155,6 +155,7 @@ export default function VideoDetailPanel({
               ? "文件缺失"
               : "可用",
       ],
+      ["最近播放", video.lastOpenedAt ? formatDateTime(video.lastOpenedAt) : "从未播放"],
     ];
     if (remote) rows.push(["网盘", video.sourceName || "已配置连接"]);
     return rows;

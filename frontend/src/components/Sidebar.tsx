@@ -282,6 +282,18 @@ export default function Sidebar({
           <span>全部收藏</span>
         </div>
 
+        <div
+          className={cn(
+            "flex cursor-pointer items-center gap-2 rounded-[var(--radius)] px-3 py-2 text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)]",
+            filter.kind === "recent" && "bg-[var(--panel-2)] text-[var(--text)]",
+          )}
+          onClick={() => onSelect({ kind: "recent" })}
+          title="按播放时间分组：1 天内 / 3 天内 / 7 天内 / 14 天内 / 更早"
+        >
+          <span>🕘</span>
+          <span>最近播放</span>
+        </div>
+
         <SidebarSection>
           <span>分组</span>
           <Button variant="ghost" size="sm" className="h-6 w-6 rounded-md p-0" title="新建分组" onClick={onCreate}>

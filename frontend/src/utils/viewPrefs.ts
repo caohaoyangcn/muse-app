@@ -48,7 +48,13 @@ export const writeCardSize = (s: CardSize) => writeStoredCardSize(CARD_SIZE_STOR
 // Sort is a field plus a direction, stored as two values so a hand-edited or
 // half-written store can still fall back per axis instead of losing both.
 export const readSortKey = (): SortKey =>
-  readStored<SortKey>(SORT_KEY_STORAGE, "createdAt", ["createdAt", "fileSize", "fileName", "likeCount"]);
+  readStored<SortKey>(SORT_KEY_STORAGE, "createdAt", [
+    "createdAt",
+    "lastOpenedAt",
+    "fileSize",
+    "fileName",
+    "likeCount",
+  ]);
 export const writeSortKey = (k: SortKey) => writeStored(SORT_KEY_STORAGE, k);
 
 export const readSortDir = (): SortDir => readStored<SortDir>(SORT_DIR_STORAGE, "desc", ["asc", "desc"]);

@@ -28,6 +28,7 @@ import Toasts, { type ToastItem } from "../components/Toasts";
 import VideoGrid from "../components/VideoGrid";
 import VideoList from "../components/VideoList";
 import VideoDetailPanel from "../components/VideoDetailPanel";
+import RecentlyPlayedView from "../components/RecentlyPlayedView";
 import WorkspaceTabs, { type WorkspaceTabItem } from "../components/WorkspaceTabs";
 import {
   addVideoToGroup,
@@ -79,6 +80,8 @@ import {
   type DiskOption,
 } from "../utils/diskFilter";
 import { filterVideosByKeyword } from "../utils/videoFilter";
+import { groupRecentlyPlayed } from "../utils/recent";
+import { compareLastOpened } from "../utils/sortVideos";
 import { videoDisplayName } from "../utils/videoName";
 import {
   readCardSize,
@@ -198,9 +201,14 @@ export default function Library({
   // replaces the source with its results, as before.
   const fetchLibraryVideos = useCallback(async (view: ViewFilter, search: string) => {
     const found = search ? await searchVideos(search) : await listVideos();
-    if (view.kind !== "group") return found;
-    const ids = new Set(await videosInGroup(view.id));
-    return found.filter((v) => ids.has(v.id));
+    if (view.kind === "group") {
+      const ids = new Set(await videosInGroup(view.id));
+      return found.filter((v) => ids.has(v.id));
+    }
+    // 最近播放 is a history: a search narrows it instead of escaping to the
+    // whole library, so the heading always describes what is on screen.
+    if (view.kind === "recent") return found.filter((v) => v.lastOpenedAt > 0);
+    return found;
   }, []);
 
   const panelView =
@@ -502,8 +510,14 @@ export default function Library({
   );
   const sortedVideos = useMemo(() => {
     const list = [...videos];
+    // 最近播放 fixes its own order: the age groups are the organisation, so a
+    // second sort inside them would only fight the history.
+    if (filter.kind === "recent") {
+      return list.sort((a, b) => compareLastOpened(a, b, "desc"));
+    }
     const dir = sortDir === "asc" ? 1 : -1;
     list.sort((a, b) => {
+      if (sortBy === "lastOpenedAt") return compareLastOpened(a, b, sortDir);
       let c: number;
       if (sortBy === "fileName") c = nameCollator.compare(a.fileName, b.fileName);
       else if (sortBy === "fileSize") c = a.fileSize - b.fileSize;
@@ -512,7 +526,7 @@ export default function Library({
       return c * dir;
     });
     return list;
-  }, [videos, sortBy, sortDir, nameCollator]);
+  }, [videos, sortBy, sortDir, nameCollator, filter.kind]);
 
   const handleSortChange = useCallback((key: SortKey, dir: SortDir) => {
     setSortBy(key);
@@ -564,6 +578,23 @@ export default function Library({
     () => filterVideosByDisk(visibleVideos, selectedDiskKeys),
     [visibleVideos, selectedDiskKeys],
   );
+
+  // The age buckets are relative to "now", so a page left open has to move an
+  // entry across a boundary eventually. A minute is far below the smallest
+  // boundary (one day), and the interval only runs while the view is shown.
+  const [recentNow, setRecentNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (filter.kind !== "recent") return;
+    setRecentNow(Date.now());
+    const timer = window.setInterval(() => setRecentNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [filter.kind]);
+
+  const recentGroups = useMemo(
+    () => (filter.kind === "recent" ? groupRecentlyPlayed(shownVideos, recentNow) : []),
+    [filter.kind, shownVideos, recentNow],
+  );
+
   const selectedDiskLabels = useMemo(
     () => diskBarOptions.filter((disk) => selectedDiskKeys.has(disk.key)).map((disk) => disk.label),
     [diskBarOptions, selectedDiskKeys],
@@ -1124,8 +1155,9 @@ export default function Library({
   // sees what is on screen. The shortcut therefore always lands on a video list
   // — leaving a video/actor tab behind, and stepping out of the 演员 / 查重 /
   // 刮削任务 panels, which are not the video list (their filters would leave the
-  // box searching something other than videos). The current list (全部收藏 or a
-  // group) is kept; the header box is focused with its query selected.
+  // box searching something other than videos). The current list (全部收藏, a
+  // group, or 最近播放) is kept; the header box is focused with its query
+  // selected.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
@@ -1138,7 +1170,7 @@ export default function Library({
       }
       e.preventDefault();
       if (activeTab !== "library") selectTab("library");
-      if (filter.kind !== "all" && filter.kind !== "group") {
+      if (filter.kind !== "all" && filter.kind !== "group" && filter.kind !== "recent") {
         setFilter({ kind: "all" });
       }
       setSearchFocusToken((n) => n + 1);
@@ -1330,9 +1362,9 @@ export default function Library({
   );
 
   // Both views (grid/list) share the exact same data and interaction wiring.
-  // Declared after handleVideoDragStart, which it references.
-  const videoListProps = {
-    videos: shownVideos,
+  // `videos` is passed separately: the 最近播放 view renders one instance per
+  // age group. Declared after handleVideoDragStart, which it references.
+  const videoItemProps = {
     selectedIds,
     onToggleSelect: toggleSelect,
     onOpen: openDetail,
@@ -1367,7 +1399,12 @@ export default function Library({
 
   // The list's own heading. It is the one piece of the toolbar that says where
   // the reader is; the count beside it stays secondary text.
-  const viewTitle = filter.kind === "group" ? (activeGroupTitle ?? "分组") : "全部收藏";
+  const viewTitle =
+    filter.kind === "group"
+      ? (activeGroupTitle ?? "分组")
+      : filter.kind === "recent"
+        ? "最近播放"
+        : "全部收藏";
   const viewCountText = filtering
     ? `匹配 ${shownVideos.length} / 共 ${videos.length} 个视频`
     : `${videos.length} 个视频`;
@@ -1640,22 +1677,29 @@ export default function Library({
                     />
                   </div>
                 )}
-                <div className="mb-2 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  <SortBar
-                    sortBy={sortBy}
-                    sortDir={sortDir}
-                    onChange={handleSortChange}
-                    view={view}
-                    onViewChange={handleViewChange}
-                    cardSize={cardSize}
-                    onCardSizeChange={handleCardSizeChange}
-                    showViewControls={false}
-                    className="mb-0 w-max"
-                  />
-                </div>
+                {filter.kind !== "recent" && (
+                  <div className="mb-2 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <SortBar
+                      sortBy={sortBy}
+                      sortDir={sortDir}
+                      onChange={handleSortChange}
+                      view={view}
+                      onViewChange={handleViewChange}
+                      cardSize={cardSize}
+                      onCardSizeChange={handleCardSizeChange}
+                      showViewControls={false}
+                      className="mb-0 w-max"
+                    />
+                  </div>
+                )}
               </div>
               {loading ? (
                 <div className="flex min-h-[320px] h-full flex-col items-center justify-center text-center text-[var(--muted)]">加载中…</div>
+              ) : filter.kind === "recent" && !keyword.trim() && videos.length === 0 ? (
+                <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
+                  <div className="mb-1.5 text-xl text-[var(--text)]">还没有播放记录</div>
+                  <div>播放过的视频会按 1 天、3 天、7 天、14 天分组出现在这里</div>
+                </div>
               ) : videos.length === 0 ? (
                 <EmptyState keyword={keyword} onAdd={() => setAddSourceOpen(true)} />
               ) : shownVideos.length === 0 ? (
@@ -1669,10 +1713,12 @@ export default function Library({
                     </Button>
                   )}
                 </div>
+              ) : filter.kind === "recent" ? (
+                <RecentlyPlayedView groups={recentGroups} view={view} {...videoItemProps} />
               ) : view === "grid" ? (
-                <VideoGrid {...videoListProps} />
+                <VideoGrid videos={shownVideos} {...videoItemProps} />
               ) : (
-                <VideoList {...videoListProps} />
+                <VideoList videos={shownVideos} {...videoItemProps} />
               )}
             </>
           )}

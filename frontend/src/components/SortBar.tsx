@@ -8,6 +8,7 @@ import ViewControls from "./ViewControls";
 // (newest first, largest first, A→Z).
 const OPTIONS: { key: SortKey; label: string; defaultDir: SortDir }[] = [
   { key: "createdAt", label: "添加时间", defaultDir: "desc" },
+  { key: "lastOpenedAt", label: "最近播放", defaultDir: "desc" },
   { key: "fileSize", label: "文件大小", defaultDir: "desc" },
   { key: "fileName", label: "文件名", defaultDir: "asc" },
   { key: "likeCount", label: "点赞数", defaultDir: "desc" },

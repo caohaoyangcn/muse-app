@@ -49,11 +49,12 @@ export const STATUS_AVAILABLE: VideoStatus = "available";
 export const STATUS_MISSING: VideoStatus = "missing";
 
 // A library view is either all favorites, a single group, the scrape-task
-// board, the aggregated actor index, the 查重 (duplicate) worklist, or the
-// search results. An individual actor's film list is not a filter — it opens as
-// its own workspace tab.
+// board, the aggregated actor index, the 查重 (duplicate) worklist, the
+// recently-played history, or the search results. An individual actor's film
+// list is not a filter — it opens as its own workspace tab.
 export type ViewFilter =
   | { kind: "all" }
+  | { kind: "recent" }
   | { kind: "group"; id: number }
   | { kind: "scrapeTasks"; status: "queued" | "succeeded" | "failed" }
   | { kind: "actors" }
@@ -91,7 +92,7 @@ export const actorTabName = (tab: WorkspaceTab): string | null =>
 // Library grid sort options. Sorting happens in the frontend over the fully
 // loaded list, so it applies uniformly to every view (all / group / search
 // results).
-export type SortKey = "createdAt" | "fileSize" | "fileName" | "likeCount";
+export type SortKey = "createdAt" | "lastOpenedAt" | "fileSize" | "fileName" | "likeCount";
 export type SortDir = "asc" | "desc";
 
 // How the library grid renders the video list: thumbnail cards or compact

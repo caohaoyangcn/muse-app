@@ -5,6 +5,7 @@ import { useLiveQuery } from "../hooks/useLiveQuery";
 import type { ActorProfile, CardSize, SortDir, SortKey, Video, ViewMode } from "../types";
 import { beginVideoDrag } from "../utils/dragGhost";
 import { actorAvatarURL, actorProfileMeta as profileMeta } from "../utils/format";
+import { compareLastOpened } from "../utils/sortVideos";
 import { filterVideosByKeyword } from "../utils/videoFilter";
 import { readCardSize, readViewMode, writeCardSize, writeViewMode } from "../utils/viewPrefs";
 import SearchBar from "./SearchBar";
@@ -78,6 +79,7 @@ export default function ActorFilmsView({
     const list = [...videos];
     const dir = sortDir === "asc" ? 1 : -1;
     list.sort((a, b) => {
+      if (sortBy === "lastOpenedAt") return compareLastOpened(a, b, sortDir);
       let c: number;
       if (sortBy === "fileName") c = nameCollator.compare(a.fileName, b.fileName);
       else if (sortBy === "fileSize") c = a.fileSize - b.fileSize;
