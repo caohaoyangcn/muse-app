@@ -1,11 +1,11 @@
 # OpenList fork 与 BitQiu 驱动实施计划
 
-**状态：** Proposed / Spike
+**状态：** In progress（驱动已实现并通过单测/构建；真实账号联调与分发待做）
 **范围：** 在 OpenList fork 中新增 `drivers/bitqiu`，把 AList v3.55 的比特球驱动移植到 OpenList v4；Windows 构建、测试、可选分发
 **非范围：** Muse 的 WebDAV 客户端与云端片源 UI（见 [Muse WebDAV 云盘片源](webdav-cloud-source.md)）、Muse 直连比特球私有 API
 **仓库：** OpenList fork（独立仓库/独立进程），不把 OpenList 代码复制进 Muse
 **许可证：** OpenList 为 AGPL-3.0；fork 与其分发的二进制必须满足 AGPL
-**最后更新：** 2026-11-05
+**最后更新：** 2026-11-09
 
 ---
 
@@ -130,7 +130,7 @@
 - 在 Muse 仓库同级克隆：`../OpenList`，分支 `feat/bitqiu-driver`。
 - 如本机已登录 GitHub，推送到个人 fork；否则保留本地分支并生成 patch。
 - **不把 OpenList 作为 Muse 的 git submodule，不复制其源码进 Muse。**
-- 固定基线：记录 OpenList 上游 commit（当前调研基线 `ef5d8c8`，2026-11-04）和 AList 参考 commit（`92e7453`，2026-10-21）。实现时以 fork 的实际基线为准，并写入 `SOURCE.txt`。
+- 固定基线：OpenList `25da990`（2026-11-09），AList v3.55.0 `3cddb6b`。fork 分支 `feat/bitqiu-driver`，源码在 Muse 仓库同级的 `../OpenList`，不复制进 Muse。
 - 上游 PR 作为可选项；合入前使用 fork。
 
 ## 4. 驱动设计
@@ -203,32 +203,32 @@ var config = driver.Config{
 
 ### Phase 0：调研与基线
 
-- [ ] 固定 OpenList 上游 commit、AList 参考 commit。
-- [ ] 记录 AList 驱动端点、请求头、错误码。
-- [ ] 确认 OpenList 的 `driver.*Result`、`stream.CacheFullAndHash`、`op.MustSaveDriverStorage` 可用。
-- [ ] 确认 Windows 构建需要 Go 1.26.4+ 与 OpenList-Frontend 产物。
+- [x] 固定 OpenList 上游 commit、AList 参考 commit。
+- [x] 记录 AList 驱动端点、请求头、错误码。
+- [x] 确认 OpenList 的 `driver.*Result`、`stream.CacheFullAndHash`、`op.MustSaveDriverStorage` 可用。
+- [x] 确认 Windows 构建需要 Go 1.26.4+ 与 OpenList-Frontend 产物。
 
 ### Phase 1：移植最小可读驱动
 
-- [ ] `meta.go` / `types.go` / `util.go`。
-- [ ] `driver.go` 的 `Init/Drop/List/Link`。
-- [ ] `apiBase` 可注入，便于 httptest。
-- [ ] `drivers/all.go` 注册。
-- [ ] `go build ./...`。
+- [x] `meta.go` / `types.go` / `util.go`。
+- [x] `driver.go` 的 `Init/Drop/List/Link`。
+- [x] `apiBase` 可注入，便于 httptest。
+- [x] `drivers/all.go` 注册。
+- [x] `go build ./...`（`GOPROXY=https://proxy.golang.org`；直连会卡在 OpenList 上游的 `gluon` 伪版本）。
 
 ### Phase 2：写操作与上传
 
-- [ ] `MakeDir/Move/Rename/Copy/Remove`。
-- [ ] `Put`（小文件 + 分片 + 进度）。
-- [ ] 复制任务轮询与失败处理。
-- [ ] 重试上限、错误消息、脱敏日志。
+- [x] `MakeDir/Move/Rename/Copy/Remove`。
+- [x] `Put`（小文件 + 分片 + 进度）。
+- [x] 复制任务轮询与失败处理。
+- [x] 重试上限、错误消息、脱敏日志。
 
 ### Phase 3：测试
 
-- [ ] `httptest` 覆盖登录（MD5、headers）、分页、`hasNext`、直链、`10401` 重登、根目录 ID。
-- [ ] `toObject` 的目录/文件/时间/MD5。
-- [ ] 写操作请求体与返回对象。
-- [ ] `go test ./drivers/bitqiu`、`go vet`/`gofmt`。
+- [x] `httptest` 覆盖登录（MD5、headers）、分页、`hasNext`、直链、`10401` 重登、根目录 ID。
+- [x] `toObject` 的目录/文件/时间/MD5。
+- [x] 写操作请求体与返回对象。
+- [x] `go test ./drivers/bitqiu`、`go vet`/`gofmt`。
 - [ ] 真实账号手动矩阵（见 §6）。
 
 ### Phase 4：构建与分发
@@ -339,3 +339,4 @@ var config = driver.Config{
 | --- | --- | --- | --- | --- |
 | 2026-11-05 | 调研 | Done | 确认 AList 私有 API、OpenList 无 BitQiu 驱动、接口差异；补充 OpenList 现成驱动清单（见 §1.4） | 本提交 |
 | 2026-11-05 | 计划 | Planned | 计划文档建立 | `<pending>` |
+| 2026-11-09 | Phase 1–3 | Done | OpenList fork `feat/bitqiu-driver`：驱动、注册、httptest；`go test ./drivers/bitqiu`、`go vet`、Windows amd64 交叉构建通过。 | `e3c08bf` / `53520bc` / `18cb0ba` |

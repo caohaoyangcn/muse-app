@@ -43,7 +43,7 @@ Muse WebDAV 客户端 ────┘
 | --- | --- | --- | --- | --- |
 | 添加来源弹窗 | [add-video-source-dialog.md](add-video-source-dialog.md) | In progress | 三来源已接通；仅剩 Windows 原生窗口检查 | 文档收尾 |
 | WebDAV 云盘片源 | [webdav-cloud-source.md](webdav-cloud-source.md) | In progress | M9 + 无缓存播放/来源归档/备份标记完成；真实 OpenList/BitQiu 待联调 | OpenList fork 联调 |
-| OpenList BitQiu 驱动 | [openlist-bitqiu-driver.md](openlist-bitqiu-driver.md) | Proposed / Spike | Phase 1 最小可读驱动 | `Add BitQiu driver`（OpenList fork） |
+| OpenList BitQiu 驱动 | [openlist-bitqiu-driver.md](openlist-bitqiu-driver.md) | In progress | Phase 1–3 驱动/测试/构建完成；真实账号联调与分发待做 | 真实账号矩阵 + Windows 发布包 |
 
 > 状态只在本表和各文档的「进度记录」中更新；不要用代码注释代替进度记录。
 
@@ -99,3 +99,4 @@ Muse WebDAV 客户端 ────┘
 | 2026-11-06 | WebDAV M8 | LAN 远程 Range 转发与移动端离线状态 | `a58bb3b` |
 | 2026-11-06 | WebDAV M9 | 设置文档、本地 WebDAV 集成测试、静态检查与构建 | `1492a37` / `2e030d6` |
 | 2026-11-06 | 产品修正 | 移除缓存；播放跳 OpenList；来源停用归档；跨层备份徽章；手机归档 tab | `3172b46` / `703b308` |
+| 2026-11-09 | BitQiu Phase 1–3 | OpenList fork 驱动、注册、单测、Windows 构建通过；真实账号待测 | `e3c08bf` / `53520bc` / `18cb0ba` |
