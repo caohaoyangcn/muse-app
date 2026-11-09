@@ -341,5 +341,5 @@ var config = driver.Config{
 | --- | --- | --- | --- | --- |
 | 2026-11-05 | 调研 | Done | 确认 AList 私有 API、OpenList 无 BitQiu 驱动、接口差异；补充 OpenList 现成驱动清单（见 §1.4） | 本提交 |
 | 2026-11-05 | 计划 | Planned | 计划文档建立 | `<pending>` |
-| 2026-11-09 | Phase 1–3 | Done | OpenList fork `feat/bitqiu-driver`：驱动、注册、httptest；`go test ./drivers/bitqiu`、`go vet`、Windows amd64 交叉构建通过。 | `e3c08bf` / `53520bc` / `18cb0ba` / `9818402` |
-| 2026-11-09 | SMS 二次校验 | Done | 适配 BitQiu `10807` 登录挑战：自动发送短信、`sms_code`/`sms_resend` 表单、`validatePhone` 完成登录；覆盖挑战/重发/失败路径。真实账号仍待验证。 | 本提交 |
+| 2026-11-09 | Phase 1–3 | Done | OpenList fork `feat/bitqiu-driver`：驱动、注册、httptest；`go test ./drivers/bitqiu`、`go vet`、Windows amd64 交叉构建通过。 | `e3c08bf` / `53520bc` / `18cb0ba` / `9818402` / `c268fbf` |
+| 2026-11-09 | SMS 二次校验 | Done | 适配 BitQiu `10807` 登录挑战：自动发送短信、`sms_code`/`sms_resend` 表单、`validatePhone` 完成登录；覆盖挑战/重发/失败路径。真实账号仍待验证。 | `c268fbf` |
