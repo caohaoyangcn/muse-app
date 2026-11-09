@@ -83,9 +83,11 @@
 
 ### 核心收藏体验
 
-- [ ] **最近播放视图**
-  - `videos.last_opened_at` 字段与 `Open()` 写入逻辑（`backend/video/service.go` 的 `Open`）已存在，但前端无任何展示，也没有按最近打开排序的入口。
-  - 参照 spec §40 V1.1 路线中的 Recently Played：新增「最近播放」视图或排序项。
+- [x] **最近播放视图**
+  - ✅ 侧边栏「最近播放」：只列已播放收藏，按 1 天内访问过 / 3 天内 / 7 天内 / 14 天内 / 更早之前分组，组内按播放时间倒序；空组隐藏。
+  - ✅ 排序栏新增「最近播放」（桌面、移动端、演员作品页）：降序最近在前，升序最早在前，从未播放的始终排在已播放之后。
+  - ✅ 播放后即时更新：服务端写 `last_opened_at` 并发 `video:opened`；移动端把外部播放器/OpenList 的播放上报到 `POST /api/videos/{id}/opened`。
+  - 源码：`frontend/src/pages/Library.tsx`、`components/Sidebar.tsx`、`components/RecentlyPlayedView.tsx`、`utils/recent.ts`、`utils/sortVideos.ts`、`backend/video/service.go`、`backend/server/server.go`。
 - [ ] **搜索排序按相关度加权**
   - 现 `Search()`（`backend/video/repository.go` `Search`）为纯 `LIKE %kw%` + `ORDER BY created_at DESC`，与关键词相关度无关。
   - 建议：文件名命中 > 路径命中、前缀命中 > 包含命中，简单加权即可（数据量 1 万以内无需 FTS5）。
@@ -113,12 +115,12 @@
   - ✅ 两种视图共享排序、选中集与全部交互（`Library.tsx` `videoListProps` 统一接线），切换即时生效。
 - [ ] **键盘快捷键**（部分完成：卡片键盘导航已上线）
   - ✅ 已有：单选卡片后 ↑/↓/←/→ 移动选中（网格上下按整行跳转并自动滚动到可见）、Enter 打开、Del 弹出移除确认、Esc 清除选中（`Library.tsx` keydown，输入框/按钮聚焦或弹窗打开时不劫持）。
-  - ✅ Ctrl/Cmd+F：从任意标签页回到影片库列表并聚焦顶部搜索框；演员索引、查重、刮削任务面板会回到「全部收藏」，全部收藏/分组视图保持当前列表。已有输入内容会被全选，便于直接输入新关键词。
+  - ✅ Ctrl/Cmd+F：从任意标签页回到影片库列表并聚焦顶部搜索框；演员索引、查重、刮削任务面板会回到「全部收藏」，全部收藏/分组/最近播放视图保持当前列表。已有输入内容会被全选，便于直接输入新关键词。
   - spec §40 其余仍缺：空格打开（当前空格是编辑信息）、以及更多全局快捷键。
 - [x] **排序选项**
   - ✅ 列表顶部新增排序栏（`frontend/src/components/SortBar.tsx`）：添加时间 / 文件大小 / 文件名三个字段，点击切换字段、再点切换升降序，活动字段显示 ↑/↓。
   - ✅ 前端排序（`Library.tsx` `sortedVideos`），对全部/分组/搜索结果统一生效；默认「添加时间 降序」与后端 `created_at DESC, id DESC` 一致；文件名用 `Intl.Collator`（numeric，中文/英文与 "2"<"10" 均正确）。
-  - 可选扩展：按时长 / 最近打开排序（数据已在 `Video` 对象中，加一个按钮即可）。
+  - ✅ 「最近播放」排序已支持（桌面端与移动端）；仍可选：按时长排序。
 
 ### 局域网服务
 

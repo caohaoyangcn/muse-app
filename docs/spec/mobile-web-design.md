@@ -116,6 +116,7 @@ npm run build:mobile      # frontend/ 下
 | `PUT /api/videos/{id}/info` | `UpdateVideoInfo` |
 | `POST /api/videos/{id}/likes` | `LikeVideo` |
 | `DELETE /api/videos/{id}/likes` | `ClearVideoLikes` |
+| `POST /api/videos/{id}/opened` | `MarkVideoOpened`（只记最近播放时间，204） |
 | `POST /api/groups` / `PUT /api/groups/{id}` / `DELETE /api/groups/{id}` | `CreateGroup` / `RenameGroup` / `DeleteGroup` |
 | `POST /api/groups/{id}/videos` | `AddVideoToGroup` |
 | `POST /api/jav/duplicates/ignore` | `IgnoreJavDuplicate` |
@@ -136,7 +137,7 @@ npm run build:mobile      # frontend/ 下
 - **未刮削返回 `null` 而非 404**：桌面端把 `sql.ErrNoRows` 解释为"尚无数据"，移动端需要区分"未刮削"与"视频不存在"。因此 `/jav` 与 `/jav/task` 在无数据时返回 `200` + `null`，只有视频本身不存在才是 `404`。
 - **演员名走 query 参数**：演员名是任意字符串（CJK、标点、甚至 `/`），作为路径段会被截断或需要额外转义，因此用 `?name=`。
 - **写端点返回更新后的 `Video`**：与桌面端行为一致，移动端据此直接重绘，无需回查。
-- **串流只负责传输**：Range 让原生播放器自行 seek，Muse 不读取视频帧、不 remux、不 transcode，也不保存播放进度。
+- **串流只负责传输**：Range 让原生播放器自行 seek，Muse 不读取视频帧、不 remux、不 transcode，也不保存播放进度。移动端在把播放交给外部播放器或 OpenList 之前，用 `POST /api/videos/{id}/opened` 上报一次；服务端只更新最近播放时间，用于桌面端「最近播放」的排序与分组。
 - **播放交给专用客户端**：移动 Web 只负责生成完整 LAN URL，并通过 URL Scheme 启动 Infuse 或 VLC；编码、容器、字幕和音轨全部由客户端处理。
 - **默认播放器**：首次点击播放打开选择面板，用户选择后写入 `localStorage`；后续优先自动尝试该客户端，2 秒内未观察到页面隐藏则回退到选择面板。
 - **安装检测边界**：浏览器没有枚举已安装 App 的 API，因此不能宣称“已检测到客户端”；页面隐藏只表示很可能成功交给客户端，失败时仍提供重试、切换和复制地址。
