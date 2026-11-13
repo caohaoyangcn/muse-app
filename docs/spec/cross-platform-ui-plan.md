@@ -218,7 +218,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 |---|---|
 | 2026-11-13 | 初稿：确立分层、阶段 0-4、度量与目录规则 |
 | 2026-11-13 | 阶段 0 完成：抽出 `frontend/src/theme.css`（两份 token 定义合一，构建产物哈希不变）；`components/ui/` 提升为 `src/ui/`（40 个文件的 import 已改写，产物哈希不变）；目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` |
-| 2026-11-13 | **阶段 2 完成**（6/6 视图）：`ScrapeTaskView` 下沉到 `views/scrape/useScrapeTasks.ts`，桌面 165→123 行、移动 110→95 行；移动端此前直接显示 `t.status` 原始值，现在与桌面共用同一张状态文案表。阶段 2 合计：五个共享视图模型 670 行，六对壳从 3388 行降到 2814 行 |
+| 2026-11-13 | **阶段 2 完成**（6/6 视图）：`ScrapeTaskView` 下沉到 `views/scrape/useScrapeTasks.ts`，桌面 165→123 行、移动 110→95 行；移动端此前直接显示 `t.status` 原始值，现在与桌面共用同一张状态文案表。阶段 2 合计：六个共享视图模型 + 通知类型 685 行，六对壳从 3388 行降到 2812 行（净 +109 行，全部是共享层的注释与契约；重复的取数与写操作归零） |
 | 2026-11-13 | 阶段 2 第四、五个视图：`ActorIndexView` / `ActorFilmsView` 下沉到 `views/actors/`（`useActorIndex` 32 行、`useActorFilms` 50 行），四个壳合计 774→710 行；顺带把演员档案的来源统一到 `client.actorProfile`，并修正桌面筛选漏掉艺名的问题 |
 | 2026-11-13 | 阶段 2 第三个视图：`ContentDuplicateView` 逻辑下沉到 `views/duplicates/useContentDuplicates.ts`（231 行，含扫描状态机与两个纯函数 `scanStatusText` / `scanProgress`），桌面壳 581→457 行、移动壳 365→250 行 |
 | 2026-11-13 | 阶段 2 第二个视图：`DuplicateView`（同番号多版本）逻辑下沉到 `views/duplicates/useJavDuplicates.ts`（124 行），桌面壳 434→371 行、移动壳 250→224 行；中性通知类型提到 `views/notify.ts`，被两个视图模型共用 |
