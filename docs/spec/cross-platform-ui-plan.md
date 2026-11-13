@@ -52,10 +52,12 @@ L3 视图模型（共享）       src/views/<name>/
    <Name>Desktop.tsx      桌面展示
    <Name>Mobile.tsx       移动展示
 
-L2 数据（共享接口，双实现）src/services/
-   client.ts              MuseClient 接口（唯一契约）
+L2 数据（共享契约 + 平台门面）src/services/
+   client.ts              MuseClient 接口（两端都有的 27 项能力）
    client.wails.ts        Wails 绑定实现（桌面入口注入）
    client.http.ts         fetch /api 实现（移动入口注入）
+   desktop.ts             桌面门面 = client + 64 项桌面专属能力（唯一取数入口）
+   web.ts                 移动门面 = client + 媒体 URL / 单条读取（唯一取数入口）
 
 L1 主题（共享）           src/theme.css  唯一 token 来源
 ```
@@ -69,6 +71,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 | `src/mobile/**` 不得 import `src/components/**` | 防止反向依赖桌面实现 |
 | `src/components/**` 视为桌面专属 | 需要共享的一律下沉到 `ui/` 或 `views/` |
 | 新组件必须先考虑 `src/ui/` | 禁止在业务文件里手搭基元 |
+| 壳只经门面取数：`components/`、`pages/`、`App.tsx` 只能 import `services/desktop`，`mobile/` 只能 import `services/web` | 直接 import `services/api.ts` / `http.ts` 只允许出现在 `services/` 内部 |
 
 ### 允许分叉的清单
 
@@ -218,6 +221,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 - **2026-11-13**：不做桌面端响应式改造。桌面窗口拉窄是独立需求，不在本计划内。
 - **2026-11-13**：不引入第三方组件库（含 Astryx）。理由见评估：Beta 0.7.x 版本锁死、+45KB gzip 全局 CSS、视频墙/右键菜单/拖拽等核心场景它不覆盖，收益集中在可选交互组件，而自建 `ui/` 已能覆盖。
 - **2026-11-13**：对照页做成**独立 HTML 入口**，不是应用内路由。它不是 Vite 的构建入口，所以 `npm run build` 根本不会产出它 —— 这比"路由里加 `import.meta.env.DEV` 判断"更硬：生产包里连代码都没有。右栏直接 iframe 已构建的移动端（Go 服务在 `:8899` 提供），不引入假数据。
+- **2026-11-13**：平台专属能力**不进共享契约**，进平台门面。把 64 项只有桌面能做的能力塞进 `MuseClient`，移动端只能留 64 个必然抛错的方法，类型从"保证"退化成"声明"。改为两个门面（`desktop.ts` / `web.ts`）各自 `export { client }` 再直出本平台专属项：壳里只有一种取数写法，编译器保证不越界，检查脚本不需要白名单。
 - **2026-11-13**：视图清单用 **JSON**（`src/views/manifest.json`）而不是 TS 常量。检查脚本是纯 Node，读不了 TypeScript；JSON 让"人读的清单"和"机器校验的数据"是同一份文件。代价是 TS 侧没有类型提示 —— 目前没有代码消费它，等真有人用再加一个薄包装。
 - **2026-11-13**：清单只记**已知差异**（gaps），不做全能力矩阵。全矩阵每加一个按钮就要改两处、且无法校验，必然烂掉；只记"移动端缺什么 + 为什么缺"，每一项都能被脚本验证指向真实视图。
 - **2026-11-13**：`RestoredBadge`、`BackupBadge`、`ErrorBoundary` 三个共享叶子组件从 `components/` 上移到 `ui/`。它们是移动端唯一还反向依赖桌面目录的地方，移走后 `mobile/ → components/` 的规则可以是硬的（零例外），不需要白名单 —— 有例外名单的检查会很快被"再加一个吧"填满。
@@ -246,6 +250,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 |---|---|
 | 2026-11-13 | 初稿：确立分层、阶段 0-4、度量与目录规则 |
 | 2026-11-13 | 阶段 0 完成：抽出 `frontend/src/theme.css`（两份 token 定义合一，构建产物哈希不变）；`components/ui/` 提升为 `src/ui/`（40 个文件的 import 已改写，产物哈希不变）；目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` |
+| 2026-11-13 | 补齐阶段 1 的欠账：契约此前只被 6 个视图模型使用，18 个壳仍直连传输层（10 个共享函数、17 处引用点）。新增 `services/desktop.ts`（64 项桌面专属能力）与 `services/web.ts`（5 项 Web 专属），壳全部改走门面，共享调用改走 `client.*`；检查脚本新增"唯一入口"与"门面不能拿错"两条规则，修掉了一个扩展名匹配 bug（规则先写在路径比较上，`.ts` 后缀让负向测试假通过） |
 | 2026-11-13 | **阶段 4 完成，计划闭环**：新增 `frontend/gallery.html` 双端对照页（双 iframe + 视口切换），验证过 dev server 三个入口均可访问、`npm run build` 不产出该页 |
 | 2026-11-13 | 阶段 4 第二步：`src/views/manifest.json` 记录 8 个视图的位置与 14 处已知平台差异；检查脚本新增四条校验（文件存在、模型被认领、gap 指向已知视图、platform 取值合法），并加 `npm run gaps` 一条命令列出移动端还缺什么 |
 | 2026-11-13 | 阶段 3 收尾 + 阶段 4 第一步：三个共享叶子组件上移到 `ui/`（移动端对 `components/` 的反向依赖归零）；新增 `check-shared-ui.mjs` 并接进 `npm run lint`，覆盖 5 类规则；裸 `<button>` 基线 70（上限 80）。故意注入一条反向 import 验证过检查会失败 |
