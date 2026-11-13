@@ -60,5 +60,5 @@ export default function TabContextMenu({
     },
   ];
 
-  return <MenuSurface items={items} onClose={onClose} x={x} y={y} />;
+  return <MenuSurface items={items} label="标签页操作" onClose={onClose} x={x} y={y} />;
 }

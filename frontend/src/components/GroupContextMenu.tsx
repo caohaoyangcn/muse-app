@@ -77,5 +77,5 @@ export default function GroupContextMenu({
     },
   ];
 
-  return <MenuSurface items={items} onClose={onClose} x={x} y={y} />;
+  return <MenuSurface items={items} label="分组操作" onClose={onClose} x={x} y={y} />;
 }
