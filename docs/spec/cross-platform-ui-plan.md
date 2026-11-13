@@ -154,6 +154,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 | 1.4 | 传输隔离 | 移动 bundle 中 Wails 绑定符号计数为 0 |
 | 1.5 | 错误处理分支 | 视图不再出现 `String(e)` / `instanceof ApiError`（新代码） |
 | 2 TrashView | 两平台实现行数 | 414 + 295 → 337 + 247 + 150（共享逻辑），重复的取数与写操作归零 |
+| 2 DuplicateView | 两平台实现行数 | 434 + 250 → 371 + 224 + 124（共享逻辑），取数、复核、保留/忽略全部单一实现 |
 
 ## 6. 风险与回滚
 
@@ -180,7 +181,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 | 1 | 1.4 入口注入 + TrashView 接线 | 已完成 | `1f462dd` | 2026-11-13 |
 | 1 | 1.5 错误类型统一 | 已完成 | `6a7823f` | 2026-11-13 |
 | 2 | TrashView | 已完成 | `6a7823f` | 2026-11-13 |
-| 2 | DuplicateView | 待开始 | — | — |
+| 2 | DuplicateView（同番号多版本） | 已完成 | `481bcc6` | 2026-11-13 |
 | 2 | ContentDuplicateView | 待开始 | — | — |
 | 2 | ActorIndexView | 待开始 | — | — |
 | 2 | ActorFilmsView | 待开始 | — | — |
@@ -195,6 +196,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 - **2026-11-13**：不合并构建入口。理由：Wails 绑定、`go:embed` 产物、history 路由三处分歧真实存在，合并会把平台判断塞进每个组件。
 - **2026-11-13**：不做桌面端响应式改造。桌面窗口拉窄是独立需求，不在本计划内。
 - **2026-11-13**：不引入第三方组件库（含 Astryx）。理由见评估：Beta 0.7.x 版本锁死、+45KB gzip 全局 CSS、视频墙/右键菜单/拖拽等核心场景它不覆盖，收益集中在可选交互组件，而自建 `ui/` 已能覆盖。
+- **2026-11-13**：平台能力以**可选参数**注入视图模型，不在 hook 内部分支。桌面查重会逐条调 `RefreshStatus` 复核文件是否还在（Wails 绑定），浏览器没有这个端点：`useJavDuplicates({ refreshVersion })` 由桌面传入、移动不传。这样"这台机器能做、那台不能"的差异在调用处一眼可见，而不是藏在 `if (isDesktop)` 里。
 - **2026-11-13**：共享层**不输出 toast 类型**。`useTrash` 发的是中性通知 `{kind, text, details}`，桌面映射成三态 + 详情列表的 `ToastItem`，移动映射成两态 tone + 首条详情拼进正文。理由：两端的 toast 能力不同，让视图模型依赖任何一端的类型都会把另一端的形状带歪。
 - **2026-11-13**：确认框的开关状态归**展示层**，不进视图模型。数据与写操作在 hook 里，哪一次点击先关框再执行由各壳自己决定，两端行为一致但组件不同（`ConfirmDialog` / `ConfirmSheet`）。
 - **2026-11-13**：错误统一走 `services/errors.ts` 的 `errorMessage(error, fallback)`，不用异常子类做区分。Wails 以字符串或 `Error` 拒绝，HTTP 抛 `ApiError`，函数把两者都归一为用户可读文本，视图不再写 `String(e)` 或 `instanceof ApiError`。
@@ -209,6 +211,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 |---|---|
 | 2026-11-13 | 初稿：确立分层、阶段 0-4、度量与目录规则 |
 | 2026-11-13 | 阶段 0 完成：抽出 `frontend/src/theme.css`（两份 token 定义合一，构建产物哈希不变）；`components/ui/` 提升为 `src/ui/`（40 个文件的 import 已改写，产物哈希不变）；目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` |
+| 2026-11-13 | 阶段 2 第二个视图：`DuplicateView`（同番号多版本）逻辑下沉到 `views/duplicates/useJavDuplicates.ts`（124 行），桌面壳 434→371 行、移动壳 250→224 行；中性通知类型提到 `views/notify.ts`，被两个视图模型共用 |
 | 2026-11-13 | 阶段 2 首个视图完成：`TrashView` 逻辑下沉到 `views/trash/useTrash.ts`（150 行），桌面壳 414→337 行、移动壳 295→247 行，两平台重复的取数与写操作归零；同时新增 `services/errors.ts`，消掉两端各自的错误处理分支 |
 | 2026-11-13 | 阶段 1 主体完成（1.5 错误类型统一留待后续）：`mobile/api.ts` → `services/http.ts`（纯移动，产物字节不变）；新增 `services/client.ts`（26 项交集契约）与两个 adapter；两入口注入；`TrashView` 两平台改写为 `client.*`，桌面 +2.1 KB / 移动 +2.1 KB，移动 bundle 仍不含 Wails 符号 |
 | 2026-11-13 | 0.3 改判：不再预先补齐六个空原子，改为随阶段 2/3 的真实消费者落地，避免留下无人调用的组件 |
