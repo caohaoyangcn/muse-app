@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 import { cn } from "../lib/utils";
 import "./motion.css";
@@ -14,6 +14,78 @@ function useEscape(open: boolean, onClose: () => void) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+}
+
+const FOCUSABLE = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+/**
+ * Keeps focus inside an open sheet.
+ *
+ * The panel itself takes the initial focus, not its first field: most sheets
+ * hold a text input, and focusing that on open would pop the soft keyboard over
+ * the sheet the user just opened to read. Tab still walks into the contents, and
+ * focus that escapes (a browser-driven focus move, not a Tab) is pulled back.
+ *
+ * Focus returns to whatever opened the sheet when it closes, so a keyboard or
+ * screen-reader user is not dropped at the top of the page.
+ */
+function useFocusTrap(open: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const panel = ref.current;
+    if (!panel) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const focusables = () =>
+      Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => el.getClientRects().length > 0,
+      );
+
+    panel.focus({ preventScroll: true });
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const list = focusables();
+      if (list.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const index = list.indexOf(document.activeElement as HTMLElement);
+      const next = e.shiftKey
+        ? index <= 0
+          ? list.length - 1
+          : index - 1
+        : index === -1 || index === list.length - 1
+          ? 0
+          : index + 1;
+      e.preventDefault();
+      list[next]?.focus({ preventScroll: true });
+    };
+
+    const onFocusIn = (e: FocusEvent) => {
+      if (panel.contains(e.target as Node)) return;
+      const list = focusables();
+      (list[0] ?? panel).focus({ preventScroll: true });
+    };
+
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("focusin", onFocusIn);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("focusin", onFocusIn);
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, [open]);
+
+  return ref;
 }
 
 /**
@@ -33,6 +105,7 @@ export function BottomSheet({
   children: ReactNode;
 }) {
   useEscape(open, onClose);
+  const panelRef = useFocusTrap(open);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex flex-col justify-end">
@@ -40,10 +113,14 @@ export function BottomSheet({
         aria-label="关闭"
         className="fade-enter absolute inset-0 bg-black/55"
         onClick={onClose}
+        tabIndex={-1}
         type="button"
       />
       <div
-        className="sheet-enter relative max-h-[85dvh] rounded-t-2xl border-t border-[var(--border)] bg-[var(--panel)] pb-[var(--safe-bottom)]"
+        ref={panelRef}
+        tabIndex={-1}
+        className="sheet-enter relative max-h-[85dvh] rounded-t-2xl border-t border-[var(--border)] bg-[var(--panel)] pb-[var(--safe-bottom)] outline-none"
+        aria-label={title}
         aria-modal="true"
         role="dialog"
       >
@@ -117,6 +194,7 @@ export function ConfirmSheet({
   onClose: () => void;
 }) {
   useEscape(open, onClose);
+  const panelRef = useFocusTrap(open);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
@@ -124,10 +202,14 @@ export function ConfirmSheet({
         aria-label="关闭"
         className="fade-enter absolute inset-0 bg-black/60"
         onClick={onClose}
+        tabIndex={-1}
         type="button"
       />
       <div
-        className="fade-enter relative w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-5"
+        ref={panelRef}
+        tabIndex={-1}
+        className="fade-enter relative w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-5 outline-none"
+        aria-label={title}
         aria-modal="true"
         role="alertdialog"
       >
