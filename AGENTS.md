@@ -9,7 +9,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - `backend/database/` —— SQLite 打开与 schema 迁移
 - `backend/video/`、`backend/group/`、`backend/jav/`、`backend/watch/`、`backend/thumbnail/`、`backend/settings/` —— 各领域模型的 model/repository/service 代码，测试（`*_test.go`）与源码同目录
 - `backend/server/` —— 局域网 Web 服务（SPA + JSON API + Range 串流）；`webui/` 内嵌静态资源
-- `frontend/src/` —— 两种客户端共用一份源码：`ui/` 是跨平台基元层（`Button`、`Input`、`Dialog` 等），`components/` 是桌面专属业务组件，`mobile/` 是局域网移动壳；`services/api.ts` 是 Wails 绑定的唯一封装层，`types.ts`、`utils/`、`hooks/` 为共享代码；`frontend/wailsjs/` 为生成产物，勿手改
+- `frontend/src/` —— 两种客户端共用一份源码：`ui/` 是跨平台基元层（`Button`、`Input`、`Dialog` 等），`components/` 是桌面专属业务组件，`mobile/` 是局域网移动壳；`services/client.ts` 是两端共用契约、`services/desktop.ts` / `services/web.ts` 是平台门面（壳的唯一取数入口），`types.ts`、`utils/`、`hooks/` 为共享代码；`frontend/wailsjs/` 为生成产物，勿手改
 - `docs/spec/` 与根目录 `spec-v1.md` / `spec-v1.1.md` —— 设计文档
 
 ## 构建、测试与开发命令
