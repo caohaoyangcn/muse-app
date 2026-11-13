@@ -3,16 +3,8 @@ import { useState } from "react";
 import type { TrashSnapshot, Video } from "../../types";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { invalidate } from "../../services/live";
-import {
-  ApiError,
-  clearArchivedVideos,
-  coverURL,
-  deleteVideoPermanently,
-  emptyTrash,
-  listArchived,
-  listTrash,
-  restoreVideo,
-} from "../../services/http";
+import { ApiError, coverURL } from "../../services/http";
+import { client } from "../../services/client";
 import { videoName } from "../videoDisplay";
 import { formatFileSize } from "../../utils/format";
 import { cn } from "../../lib/utils";
@@ -31,8 +23,8 @@ export function TrashView({
 }: {
   onToast: (message: string, tone?: "info" | "error") => void;
 }) {
-  const trash = useLiveQuery(listTrash, "trash");
-  const archive = useLiveQuery(listArchived, "archive");
+  const trash = useLiveQuery(client.listTrash, "trash");
+  const archive = useLiveQuery(client.listArchived, "archive");
   const [mode, setMode] = useState<"trash" | "archive">("trash");
   const [target, setTarget] = useState<Video | null>(null);
   const [emptyOpen, setEmptyOpen] = useState(false);
@@ -57,7 +49,7 @@ export function TrashView({
   const restore = async (video: Video) => {
     setBusy(true);
     try {
-      await restoreVideo(video.id);
+      await client.restoreVideo(video.id);
       invalidate();
       onToast(`已恢复「${videoName(video)}」`);
     } catch (e) {
@@ -73,7 +65,7 @@ export function TrashView({
     setTarget(null);
     setBusy(true);
     try {
-      await deleteVideoPermanently(video.id);
+      await client.deleteVideoPermanently(video.id);
       invalidate();
       onToast(`已彻底删除「${videoName(video)}」`);
     } catch (e) {
@@ -87,7 +79,7 @@ export function TrashView({
     setEmptyOpen(false);
     setBusy(true);
     try {
-      const count = await emptyTrash();
+      const count = await client.emptyTrash();
       invalidate();
       onToast(count > 0 ? `已清空回收站（${count} 项）` : "回收站已经是空的");
     } catch (e) {
@@ -101,7 +93,7 @@ export function TrashView({
     setArchiveOpen(false);
     setBusy(true);
     try {
-      const count = await clearArchivedVideos();
+      const count = await client.clearArchivedVideos();
       invalidate();
       onToast(count > 0 ? `已清空归档（${count} 项）` : "归档已经是空的");
     } catch (e) {

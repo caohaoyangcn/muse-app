@@ -3,14 +3,7 @@ import { Trash2, RotateCcw, SlidersHorizontal } from "lucide-react";
 import type { TrashSnapshot, Video } from "../types";
 import { useLiveQuery } from "../hooks/useLiveQuery";
 import { invalidate } from "../services/live";
-import {
-  clearArchivedVideos,
-  deleteVideoPermanently,
-  emptyTrash,
-  listArchived,
-  listTrash,
-  restoreVideo,
-} from "../services/api";
+import { client } from "../services/client";
 import { formatFileSize, videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import ConfirmDialog from "./ConfirmDialog";
@@ -33,10 +26,10 @@ export default function TrashView({
   onNotify: (toast: Omit<ToastItem, "id">, ttl?: number) => void;
   onOpenSettings: (section?: string) => void;
 }) {
-  const trash = useLiveQuery(listTrash, "trash", {
+  const trash = useLiveQuery(client.listTrash, "trash", {
     onError: () => undefined,
   });
-  const archive = useLiveQuery(listArchived, "archive", {
+  const archive = useLiveQuery(client.listArchived, "archive", {
     onError: () => undefined,
   });
   const [mode, setMode] = useState<"trash" | "archive">("trash");
@@ -61,7 +54,7 @@ export default function TrashView({
   const restore = async (video: Video) => {
     setBusyId(video.id);
     try {
-      await restoreVideo(video.id);
+      await client.restoreVideo(video.id);
       invalidate();
       onNotify({ kind: "success", message: `已恢复“${videoDisplayName(video)}”` });
     } catch (e) {
@@ -75,7 +68,7 @@ export default function TrashView({
     setPurgeTarget(null);
     setBusyId(video.id);
     try {
-      await deleteVideoPermanently(video.id);
+      await client.deleteVideoPermanently(video.id);
       invalidate();
       onNotify({
         kind: "info",
@@ -93,7 +86,7 @@ export default function TrashView({
     setEmptyTarget(false);
     setEmptying(true);
     try {
-      const count = await emptyTrash();
+      const count = await client.emptyTrash();
       invalidate();
       onNotify({
         kind: "info",
@@ -111,7 +104,7 @@ export default function TrashView({
     setClearArchiveTarget(false);
     setClearingArchive(true);
     try {
-      const count = await clearArchivedVideos();
+      const count = await client.clearArchivedVideos();
       invalidate();
       onNotify({
         kind: "info",
