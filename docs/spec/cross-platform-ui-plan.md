@@ -120,11 +120,16 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 
 ### 阶段 3：交互形态自适应
 
-- `ui/ActionMenu`：内部按 `useMediaQuery('(max-width: 767px)')` 渲染 Popover 或底部 Sheet，业务侧只写一份调用。
-- 替换手写组件：三个右键菜单（437 行）、`Toasts`（42 行）、`mobile/components/Sheet`（143 行）。
-- 同步补齐 ARIA：`role`、`aria-label`、`aria-live`、焦点回收。
+按"最独立 → 最纠缠"的顺序做，每步单独提交、单独验收：
 
-验收：`src/components/ContextMenu.tsx`、`GroupContextMenu.tsx`、`TabContextMenu.tsx` 删除或被薄封装取代；键盘可完整操作菜单与提示。
+| 步骤 | 内容 | 验收 |
+|---|---|---|
+| 3.1 | `ui/Sheet`：`BottomSheet`、`SheetAction`、`ConfirmSheet` 从 `mobile/components/Sheet.tsx` 迁入，动画随组件走（`ui/sheet.css`），补 `Escape` 与 `aria-modal` | 移动端行为不变；桌面 bundle 不含该 CSS |
+| 3.2 | `ui/Toast`：合并两端提示条（桌面三态 + 详情列表、移动两态 + 自动消失） | 两端提示外观与消失时机一致；`aria-live="polite"` |
+| 3.3 | `ui/ActionMenu`：按 `useMediaQuery('(max-width: 767px)')` 渲染 Popover 或底部 Sheet，替换三个手写右键菜单（437 行） | 子菜单 hover 延迟、飞行窗锚定与右溢翻转、视口钳制三项不退化；键盘可完整操作 |
+| 3.4 | ARIA 收口：`role`、`aria-label`、`aria-live`、焦点回收，覆盖菜单、提示、抽屉 | 交互组件全部可键盘操作，读屏可读 |
+
+验收：`src/components/ContextMenu.tsx`、`GroupContextMenu.tsx`、`TabContextMenu.tsx` 删除或被薄封装取代。
 
 ### 阶段 4：防漂移机制
 
@@ -189,7 +194,10 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 | 2 | ActorIndexView | 已完成 | `e5ea0e7` | 2026-11-13 |
 | 2 | ActorFilmsView | 已完成 | `e5ea0e7` | 2026-11-13 |
 | 2 | ScrapeTaskView | 已完成 | `5536412` | 2026-11-13 |
-| 3 | ActionMenu / 替换手写 | 待开始 | — | — |
+| 3 | 3.1 `ui/Sheet` | 已完成 | `6163498` | 2026-11-13 |
+| 3 | 3.2 `ui/Toast` | 待开始 | — | — |
+| 3 | 3.3 `ui/ActionMenu` + 替换三个菜单 | 待开始 | — | — |
+| 3 | 3.4 ARIA 收口 | 待开始 | — | — |
 | 4 | manifest / gallery / 检查脚本 | 待开始 | — | — |
 
 状态取值：待开始 / 进行中 / 已完成 / 已放弃（附原因）。
@@ -199,6 +207,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 - **2026-11-13**：不合并构建入口。理由：Wails 绑定、`go:embed` 产物、history 路由三处分歧真实存在，合并会把平台判断塞进每个组件。
 - **2026-11-13**：不做桌面端响应式改造。桌面窗口拉窄是独立需求，不在本计划内。
 - **2026-11-13**：不引入第三方组件库（含 Astryx）。理由见评估：Beta 0.7.x 版本锁死、+45KB gzip 全局 CSS、视频墙/右键菜单/拖拽等核心场景它不覆盖，收益集中在可选交互组件，而自建 `ui/` 已能覆盖。
+- **2026-11-13**：基元的样式随组件走（`ui/sheet.tsx` 直接 `import "./sheet.css"`），不再把动画塞进平台样式表。这样只有真正引入该组件的 bundle 才带上它的 CSS —— 桌面端没有任何地方用 Sheet，构建产物里的 CSS 一个字节都没变。
 - **2026-11-13**：任务看板的分组名统一用「进行中 / 已完成 / 失败」。原来桌面是「排队中 / 已成功 / 已失败」、移动是「进行中 / 已完成 / 失败」，两套词描述同一个枚举；取短的那套，因为它要挤在标签按钮里。单条任务的状态文字（排队中 / 刮削中 / 等待重试 / 未识别到番号 …）两端共用同一张表，移动端因此不再直接显示 `running`、`no_code` 这类原始值。
 - **2026-11-13**：`actorProfile(name)` 进契约，两端实现不同。桌面走专用绑定（一次轻请求）；浏览器没有这个端点，实现在 `listActors()` 结果里按本名或艺名查（多拉一份演员列表）。同一个能力、两种实现，正是 L2 该吸收的差异 —— 视图只判断"有没有档案"。
 - **2026-11-13**：演员筛选统一为**同时匹配本名与已合并艺名**。原来桌面只匹配本名、移动匹配两者，是同名功能的两套语义；合并之后用户仍会按艺名找人，只匹配本名会让搜索词突然失效。以移动端的行为为准。
@@ -218,6 +227,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 |---|---|
 | 2026-11-13 | 初稿：确立分层、阶段 0-4、度量与目录规则 |
 | 2026-11-13 | 阶段 0 完成：抽出 `frontend/src/theme.css`（两份 token 定义合一，构建产物哈希不变）；`components/ui/` 提升为 `src/ui/`（40 个文件的 import 已改写，产物哈希不变）；目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` |
+| 2026-11-13 | 阶段 3 第一步：`BottomSheet` / `SheetAction` / `ConfirmSheet` 迁入 `ui/sheet.tsx`（143 行 → 166 行，多出的是 `Escape` 处理与 `aria-modal`），动画从 `mobile.css` 移到 `ui/sheet.css` 由组件自己引入；7 个移动端引用点改写，桌面 bundle 零变化 |
 | 2026-11-13 | **阶段 2 完成**（6/6 视图）：`ScrapeTaskView` 下沉到 `views/scrape/useScrapeTasks.ts`，桌面 165→123 行、移动 110→95 行；移动端此前直接显示 `t.status` 原始值，现在与桌面共用同一张状态文案表。阶段 2 合计：六个共享视图模型 + 通知类型 685 行，六对壳从 3388 行降到 2812 行（净 +109 行，全部是共享层的注释与契约；重复的取数与写操作归零） |
 | 2026-11-13 | 阶段 2 第四、五个视图：`ActorIndexView` / `ActorFilmsView` 下沉到 `views/actors/`（`useActorIndex` 32 行、`useActorFilms` 50 行），四个壳合计 774→710 行；顺带把演员档案的来源统一到 `client.actorProfile`，并修正桌面筛选漏掉艺名的问题 |
 | 2026-11-13 | 阶段 2 第三个视图：`ContentDuplicateView` 逻辑下沉到 `views/duplicates/useContentDuplicates.ts`（231 行，含扫描状态机与两个纯函数 `scanStatusText` / `scanProgress`），桌面壳 581→457 行、移动壳 365→250 行 |
