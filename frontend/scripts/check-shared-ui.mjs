@@ -36,6 +36,11 @@ function importsOf(source) {
     .filter(Boolean);
 }
 
+/** Does a resolved path point at this module (with or without the extension)? */
+function isModule(target, module) {
+  return target === `${SRC}/${module}` || target === `${SRC}/${module.replace(/\.tsx?$/, "")}`;
+}
+
 /** Absolute path a relative specifier points at, or null for a bare package. */
 function resolveSpec(file, spec) {
   if (!spec.startsWith(".")) return null;
@@ -75,6 +80,36 @@ forbid({ rule: "mobile/ 不得 import 桌面组件", inDir: "mobile", forbidden:
 
 // 视图模型不得关心渲染层。
 forbid({ rule: "views/ 不得 import 渲染层", inDir: "views", forbidden: ["components", "mobile"] });
+
+// 唯一入口：壳只经门面取数。直接 import 传输模块的，只能是 services/ 内部
+// （两个 adapter 与两个门面本身）。
+for (const file of files) {
+  if (file.rel.startsWith("src/services/")) continue;
+  for (const spec of importsOf(file.source)) {
+    const target = resolveSpec(file, spec);
+    if (isModule(target, "services/api.ts") || isModule(target, "services/http.ts")) {
+      problems.push(
+        `${file.rel}: 不得直接 import 传输模块（改用 services/desktop.ts 或 services/web.ts）`,
+      );
+    }
+  }
+}
+
+// 门面不能拿错：移动端不该看到桌面专属能力，桌面端也不该引 Web 专有实现。
+for (const file of files) {
+  const mobile = file.rel.startsWith("src/mobile/");
+  const desktopShell = /^src\/(components|pages)\//.test(file.rel);
+  if (!mobile && !desktopShell) continue;
+  for (const spec of importsOf(file.source)) {
+    const target = resolveSpec(file, spec);
+    if (mobile && isModule(target, "services/desktop.ts")) {
+      problems.push(`${file.rel}: 移动端不得 import 桌面门面 services/desktop.ts`);
+    }
+    if (desktopShell && isModule(target, "services/web.ts")) {
+      problems.push(`${file.rel}: 桌面端不得 import 移动门面 services/web.ts`);
+    }
+  }
+}
 
 // 传输层隔离：两个入口各引各的 adapter，混了就会把 Wails 打进 Web bundle。
 const entries = {
