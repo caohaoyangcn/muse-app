@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import type { ActorSummary } from "../../types";
 import { actorAvatarURL } from "../../utils/format";
-import { listActors } from "../api";
+import { listActors } from "../../services/http";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { EmptyState, ErrorState, Loading } from "./States";
 

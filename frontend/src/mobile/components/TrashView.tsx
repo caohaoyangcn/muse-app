@@ -12,7 +12,7 @@ import {
   listArchived,
   listTrash,
   restoreVideo,
-} from "../api";
+} from "../../services/http";
 import { videoName } from "../videoDisplay";
 import { formatFileSize } from "../../utils/format";
 import { cn } from "../../lib/utils";

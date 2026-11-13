@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CardSize, Video } from "../../types";
 import { actorAvatarURL, actorProfileMeta } from "../../utils/format";
 import { filterVideosByKeyword } from "../../utils/videoFilter";
-import { listActors, videosByActor } from "../api";
+import { listActors, videosByActor } from "../../services/http";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { readCardSize } from "../prefs";
 import { EmptyState, ErrorState, Loading } from "./States";

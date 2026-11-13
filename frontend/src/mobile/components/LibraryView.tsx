@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CardSize, Group, SortDir, SortKey, Video, ViewMode } from "../../types";
 import { compareLastOpened } from "../../utils/sortVideos";
 import { filterVideosByKeyword } from "../../utils/videoFilter";
-import { listGroups, listVideos, videosInGroup } from "../api";
+import { listGroups, listVideos, videosInGroup } from "../../services/http";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import {
   readCardSize,

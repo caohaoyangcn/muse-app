@@ -4,7 +4,7 @@ import type { Video } from "../types";
 import { cn } from "../lib/utils";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { invalidate } from "../services/live";
-import { ApiError, likeVideo, markVideoOpened, removeVideo, updateVideoInfo } from "./api";
+import { ApiError, likeVideo, markVideoOpened, removeVideo, updateVideoInfo } from "../services/http";
 import { ActorFilmsView } from "./components/ActorFilmsView";
 import { ActorIndexView } from "./components/ActorIndexView";
 import { DuplicateView } from "./components/DuplicateView";

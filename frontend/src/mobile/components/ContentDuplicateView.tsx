@@ -11,7 +11,7 @@ import {
   removeVideo,
   reverifyContentDuplicate,
   scanContentDuplicates,
-} from "../api";
+} from "../../services/http";
 import { invalidate } from "../../services/live";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { videoMeta, videoName } from "../videoDisplay";

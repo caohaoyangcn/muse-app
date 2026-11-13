@@ -1,9 +1,14 @@
-// HTTP transport for the LAN mobile client.
+// HTTP transport for the LAN web client.
 //
-// This is the mobile counterpart of services/api.ts: the desktop module calls
-// Wails bindings (window.go), which do not exist in a browser, so the mobile
-// client speaks JSON over the LAN server instead. Both are thin adapters — all
-// business logic lives in the Go api.Library façade behind them.
+// This is the browser counterpart of services/api.ts: the desktop module calls
+// Wails bindings (window.go), which do not exist in a browser, so the web client
+// speaks JSON over the LAN server instead. Both are thin adapters — all business
+// logic lives in the Go api.Library façade behind them.
+//
+// Views should not import this module directly: they call `client.*` from
+// services/client.ts, which services/client.http.ts implements on top of these
+// functions. The remaining exports here are capabilities only the web client has
+// (media URLs, `getVideo`) or platform-specific playback bookkeeping.
 import type {
   ActorSummary,
   ContentDuplicateGroup,

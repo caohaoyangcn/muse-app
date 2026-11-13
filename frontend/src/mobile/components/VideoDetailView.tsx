@@ -9,7 +9,7 @@ import {
   videoResolution,
 } from "../../utils/format";
 import { formatDateTime } from "../../utils/task";
-import { coverURL, getVideo, javDetail, javTask, likeVideo } from "../api";
+import { coverURL, getVideo, javDetail, javTask, likeVideo } from "../../services/http";
 import RestoredBadge from "../../components/RestoredBadge";
 import { invalidate } from "../../services/live";
 import { useLiveQuery } from "../../hooks/useLiveQuery";

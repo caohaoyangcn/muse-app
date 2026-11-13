@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 
 import type { JavDuplicateGroup, Video } from "../../types";
-import { ApiError, ignoreJavDuplicate, listJavDuplicates, removeVideo } from "../api";
-import { coverURL } from "../api";
+import { ApiError, ignoreJavDuplicate, listJavDuplicates, removeVideo } from "../../services/http";
+import { coverURL } from "../../services/http";
 import { invalidate } from "../../services/live";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { videoMeta, videoName } from "../videoDisplay";
