@@ -37,7 +37,7 @@ golangci-lint run ./...            # Go 静态检查
 
 ```bash
 npm install
-npm run dev             # Vite 开发服务器
+npm run dev             # Vite 开发服务器（另开 /gallery.html 可双端对照）
 npm run build           # tsc 类型检查 + 桌面端构建
 npm run build:mobile    # 构建移动端，产物写入 backend/server/webui/
 npm run lint            # ESLint + 跨平台目录规则检查（必须无错误、无警告）
