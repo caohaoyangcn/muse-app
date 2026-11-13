@@ -1,22 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { actorProfile, likeVideo, videosByActor } from "../services/api";
+import { likeVideo } from "../services/api";
 import { invalidate } from "../services/live";
-import { useLiveQuery } from "../hooks/useLiveQuery";
 import type { ActorProfile, CardSize, SortDir, SortKey, Video, ViewMode } from "../types";
 import { beginVideoDrag } from "../utils/dragGhost";
 import { actorAvatarURL, actorProfileMeta as profileMeta } from "../utils/format";
 import { compareLastOpened } from "../utils/sortVideos";
-import { filterVideosByKeyword } from "../utils/videoFilter";
 import { readCardSize, readViewMode, writeCardSize, writeViewMode } from "../utils/viewPrefs";
 import SearchBar from "./SearchBar";
 import SortBar from "./SortBar";
 import { StickyBar } from "../ui/sticky-bar";
 import VideoGrid from "./VideoGrid";
 import VideoList from "./VideoList";
-
-// Stable identity for the empty list, so the sort/selection memos below do not
-// recompute on every render before the first read lands.
-const NO_VIDEOS: Video[] = [];
+import { useActorFilms } from "../views/actors/useActorFilms";
 
 /**
  * One actor's film list, rendered as its own workspace tab. It reuses the same
@@ -44,21 +39,13 @@ export default function ActorFilmsView({
   onContextMenu: (e: React.MouseEvent, video: Video) => void;
   onNotify: (message: string, kind: "success" | "error") => void;
 }) {
-  const { data, loading, error } = useLiveQuery(() => videosByActor(name), `actor:${name}`);
-  const { data: profile } = useLiveQuery(() => actorProfile(name), `actorProfile:${name}`);
-  const videos = data ?? NO_VIDEOS;
+  const { videos, visible: visibleVideos, profile, keyword, setKeyword, filtering, loading, error } =
+    useActorFilms(name);
   const [sortBy, setSortBy] = useState<SortKey>("createdAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [view, setView] = useState<ViewMode>(readViewMode);
   const [cardSize, setCardSize] = useState<CardSize>(readCardSize);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [keyword, setKeyword] = useState("");
-
-  // Actor tabs share this component instance, so a filter typed for one actor
-  // must not follow the switch into the next actor's list.
-  useEffect(() => {
-    setKeyword("");
-  }, [name]);
 
   // A removal takes its card off the list, so a selection it was part of must
   // not linger as a phantom highlight.
@@ -76,7 +63,7 @@ export default function ActorFilmsView({
     [],
   );
   const sortedVideos = useMemo(() => {
-    const list = [...videos];
+    const list = [...visibleVideos];
     const dir = sortDir === "asc" ? 1 : -1;
     list.sort((a, b) => {
       if (sortBy === "lastOpenedAt") return compareLastOpened(a, b, sortDir);
@@ -88,15 +75,8 @@ export default function ActorFilmsView({
       return c * dir;
     });
     return list;
-  }, [videos, sortBy, sortDir, nameCollator]);
+  }, [visibleVideos, sortBy, sortDir, nameCollator]);
 
-  // The keyword narrows this actor's own list; the whole-library header search
-  // is a separate, wider query and can be active at the same time.
-  const visibleVideos = useMemo(
-    () => filterVideosByKeyword(sortedVideos, keyword),
-    [sortedVideos, keyword],
-  );
-  const filtering = keyword.trim() !== "";
 
   const toggleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => {
@@ -129,7 +109,7 @@ export default function ActorFilmsView({
   }, []);
 
   const videoListProps = {
-    videos: visibleVideos,
+    videos: sortedVideos,
     selectedIds,
     onToggleSelect: toggleSelect,
     onOpen,
@@ -156,7 +136,7 @@ export default function ActorFilmsView({
           {loading
             ? "…"
             : filtering
-              ? `匹配 ${visibleVideos.length} / 共 ${videos.length} 个视频`
+              ? `匹配 ${sortedVideos.length} / 共 ${videos.length} 个视频`
               : `${videos.length} 个视频`}
         </span>
         <div className="ml-auto">
@@ -177,7 +157,7 @@ export default function ActorFilmsView({
           <div className="mb-1.5 text-xl text-[var(--text)]">暂无影片</div>
           <div>未找到「{name}」出演的收藏影片</div>
         </div>
-      ) : visibleVideos.length === 0 ? (
+      ) : sortedVideos.length === 0 ? (
         <div className="flex min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
           <div className="mb-1.5 text-xl text-[var(--text)]">无结果</div>
           <div>没有匹配“{keyword.trim()}”的影片</div>

@@ -1,16 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { CardSize, Video } from "../../types";
 import { actorAvatarURL, actorProfileMeta } from "../../utils/format";
-import { filterVideosByKeyword } from "../../utils/videoFilter";
-import { listActors, videosByActor } from "../../services/http";
-import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { readCardSize } from "../prefs";
 import { EmptyState, ErrorState, Loading } from "./States";
 import { VideoGrid } from "./VideoGrid";
-
-// Stable identity for the empty list.
-const NO_VIDEOS: Video[] = [];
+import { useActorFilms } from "../../views/actors/useActorFilms";
 
 /** One actor's film list, opened from the actor index or a detail chip. */
 export function ActorFilmsView({
@@ -26,32 +21,20 @@ export function ActorFilmsView({
 }) {
   // A removal made on this screen goes through the shell's confirm sheet; the
   // live query is what takes the card off the list.
-  const { data, loading, error, reload } = useLiveQuery(
-    () => videosByActor(name),
-    `actor:${name}`,
-  );
-  const videos = data ?? NO_VIDEOS;
-  // 演员档案随演员索引一起返回，这里按名字（或已合并的艺名）取同一份数据，避免再为
-  // 只读的移动端加一个专用端点。
-  const { data: actors } = useLiveQuery(listActors, "actors");
-  const profile = useMemo(
-    () =>
-      (actors ?? []).find((a) => a.name === name || a.aliases?.includes(name))?.profile ?? null,
-    [actors, name],
-  );
+  const {
+    videos,
+    visible: shown,
+    profile,
+    keyword: filter,
+    setKeyword: setFilter,
+    filtering,
+    loading,
+    error,
+    reload,
+  } = useActorFilms(name);
   // No size switcher on this screen, but it honours the library's choice so the
   // two grids match. Read once on mount: the view remounts on each navigation.
   const [cardSize] = useState<CardSize>(readCardSize);
-  const [filter, setFilter] = useState("");
-
-  // This screen is reused when the pushed actor changes, so one actor's filter
-  // must not follow into the next actor's list.
-  useEffect(() => {
-    setFilter("");
-  }, [name]);
-
-  const shown = useMemo(() => filterVideosByKeyword(videos, filter), [videos, filter]);
-  const filtering = filter.trim() !== "";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

@@ -13,6 +13,12 @@ export const httpClient: MuseClient = {
   listGroups: () => http.listGroups(),
   listActors: () => http.listActors(),
   videosByActor: (name) => http.videosByActor(name),
+  // 浏览器没有为单个演员查档案的端点。演员索引里本来就带着档案，按名字（或已合并的
+  // 艺名）在同一份数据里取，省掉一个新端点，代价是这一次多拉一份演员列表。
+  actorProfile: async (name) => {
+    const actors = await http.listActors();
+    return actors.find((a) => a.name === name || a.aliases?.includes(name))?.profile ?? null;
+  },
 
   videoJav: (id) => http.javDetail(id),
   videoJavTask: (id) => http.javTask(id),

@@ -1,13 +1,7 @@
-import { useState } from "react";
-
 import type { ActorSummary } from "../../types";
 import { actorAvatarURL } from "../../utils/format";
-import { listActors } from "../../services/http";
-import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { EmptyState, ErrorState, Loading } from "./States";
-
-// Stable identity for the empty index.
-const NO_ACTORS: ActorSummary[] = [];
+import { useActorIndex } from "../../views/actors/useActorIndex";
 
 /**
  * The aggregated actor index. Merged stage names are folded into their
@@ -15,18 +9,8 @@ const NO_ACTORS: ActorSummary[] = [];
  * so the user can see which names were merged.
  */
 export function ActorIndexView({ onSelect }: { onSelect: (name: string) => void }) {
-  const { data, loading, error, reload } = useLiveQuery(listActors, "actors");
-  const actors = data ?? NO_ACTORS;
-  const [filter, setFilter] = useState("");
-
-  const needle = filter.trim().toLowerCase();
-  const shown = needle
-    ? actors.filter(
-        (a) =>
-          a.name.toLowerCase().includes(needle) ||
-          a.aliases?.some((alias) => alias.toLowerCase().includes(needle)),
-      )
-    : actors;
+  const { actors, filtered: shown, keyword: filter, setKeyword: setFilter, loading, error, reload } =
+    useActorIndex();
 
   if (loading) return <Loading />;
   if (error) return <ErrorState message={error} onRetry={reload} />;

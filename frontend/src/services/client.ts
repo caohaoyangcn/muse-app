@@ -14,6 +14,7 @@
 // imported directly by platform code — see
 // docs/spec/cross-platform-ui-plan.md §3.
 import type {
+  ActorProfile,
   ActorSummary,
   ContentDuplicateGroup,
   ContentScanStatus,
@@ -33,6 +34,8 @@ export interface MuseClient {
   listGroups(): Promise<Group[]>;
   listActors(): Promise<ActorSummary[]>;
   videosByActor(name: string): Promise<Video[]>;
+  /** 某位演员的档案（头像 / 生日 / 身高三围）；还没补全时为 null。 */
+  actorProfile(name: string): Promise<ActorProfile | null>;
 
   // ---- scrape reads ----
   videoJav(id: number): Promise<JavDetail | null>;
@@ -93,6 +96,7 @@ export const client: MuseClient = {
   listGroups: () => bound().listGroups(),
   listActors: () => bound().listActors(),
   videosByActor: (name) => bound().videosByActor(name),
+  actorProfile: (name) => bound().actorProfile(name),
 
   videoJav: (id) => bound().videoJav(id),
   videoJavTask: (id) => bound().videoJavTask(id),

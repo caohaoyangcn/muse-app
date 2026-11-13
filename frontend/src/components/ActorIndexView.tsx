@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   actorFillStatus,
-  listActors,
   mergeActors,
   startActorFill,
   unmergeActor,
@@ -14,9 +13,7 @@ import { actorAvatarURL } from "../utils/format";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { cn } from "../lib/utils";
-
-// Stable identity for the empty index.
-const NO_ACTORS: ActorSummary[] = [];
+import { useActorIndex } from "../views/actors/useActorIndex";
 
 /**
  * Aggregated actor index (演员): one chip per actor, with the number of
@@ -38,9 +35,7 @@ export default function ActorIndexView({
   onMerged: () => void;
   onNotify: (message: string, kind: "success" | "error") => void;
 }) {
-  const { data, loading, error } = useLiveQuery(listActors, "actors");
-  const actors = data ?? NO_ACTORS;
-  const [keyword, setKeyword] = useState("");
+  const { actors, filtered, keyword, setKeyword, loading, error } = useActorIndex();
   const [dragName, setDragName] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; actor: ActorSummary } | null>(null);
@@ -64,12 +59,6 @@ export default function ActorIndexView({
       .catch((e) => onNotify(`补全失败：${String(e)}`, "error"))
       .finally(() => setStartingFill(false));
   };
-
-  const filtered = useMemo(() => {
-    const kw = keyword.trim().toLowerCase();
-    if (!kw) return actors;
-    return actors.filter((a) => a.name.toLowerCase().includes(kw));
-  }, [actors, keyword]);
 
   // Drag one chip onto another to merge the dragged actor into the target. The
   // dragged name rides MIME_ACTOR_DRAG so a video drag can never trigger this.

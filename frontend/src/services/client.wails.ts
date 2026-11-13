@@ -12,6 +12,7 @@ export const wailsClient: MuseClient = {
   listGroups: () => api.listGroups(),
   listActors: () => api.listActors(),
   videosByActor: (name) => api.videosByActor(name),
+  actorProfile: (name) => api.actorProfile(name),
 
   videoJav: (id) => api.videoJav(id),
   videoJavTask: (id) => api.videoJavTask(id),
