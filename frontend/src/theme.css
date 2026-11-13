@@ -1,0 +1,23 @@
+/* Product theme tokens — the single source of truth for both clients.
+ *
+ * The desktop app (src/style.css) and the LAN web client (src/mobile/mobile.css)
+ * both import this file, so a colour or radius change lands on both platforms in
+ * one edit. Platform-specific values stay in the platform stylesheet:
+ * `--ui-zoom` + `--wails-drop-target` belong to the desktop shell, `--safe-*` to
+ * the touch client.
+ *
+ * These are read by Tailwind arbitrary values such as `bg-[var(--panel)]`, so
+ * keep the names stable; renaming one is a repo-wide change. */
+:root {
+  --bg: #17171b;
+  --panel: #1d1d23;
+  --panel-2: #232329;
+  --card: #26262d;
+  --border: #32323a;
+  --text: #e9e9ec;
+  --muted: #9b9ba5;
+  --accent: #7c5cff;
+  --accent-hover: #8f74ff;
+  --danger: #e5534b;
+  --radius: 10px;
+}

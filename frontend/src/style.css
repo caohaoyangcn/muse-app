@@ -1,20 +1,11 @@
 @import "tailwindcss";
 @import "./range.css";
+@import "./theme.css";
 
-/* Theme tokens shared by Tailwind arbitrary values and the Wails shell. */
+/* Desktop-only shell values. Product tokens (colours, radius) live in theme.css
+   so the Wails app and the LAN web client cannot drift apart. */
 :root {
   --wails-drop-target: drop;
-  --bg: #17171b;
-  --panel: #1d1d23;
-  --panel-2: #232329;
-  --card: #26262d;
-  --border: #32323a;
-  --text: #e9e9ec;
-  --muted: #9b9ba5;
-  --accent: #7c5cff;
-  --accent-hover: #8f74ff;
-  --danger: #e5534b;
-  --radius: 10px;
   /* Whole-shell UI scale. Set by src/utils/zoom.ts and read by the rules below. */
   --ui-zoom: 1;
 }

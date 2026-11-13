@@ -1,20 +1,11 @@
 @import "tailwindcss";
 @import "../range.css";
+@import "../theme.css";
 
-/* Theme tokens mirror the desktop app (frontend/src/style.css) so the two
-   clients stay visually one product. */
+/* Touch-only shell values. Product tokens (colours, radius) come from
+   ../theme.css, shared with the desktop app so the two clients stay visually
+   one product. */
 :root {
-  --bg: #17171b;
-  --panel: #1d1d23;
-  --panel-2: #232329;
-  --card: #26262d;
-  --border: #32323a;
-  --text: #e9e9ec;
-  --muted: #9b9ba5;
-  --accent: #7c5cff;
-  --accent-hover: #8f74ff;
-  --danger: #e5534b;
-  --radius: 10px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
