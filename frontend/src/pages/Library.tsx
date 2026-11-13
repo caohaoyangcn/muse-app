@@ -24,7 +24,7 @@ import SortBar from "../components/SortBar";
 import ViewControls from "../components/ViewControls";
 import TabContextMenu, { type TabMenuAction } from "../components/TabContextMenu";
 import TrashView from "../components/TrashView";
-import Toasts, { type ToastItem } from "../components/Toasts";
+import { ToastStack, type ToastItem } from "../ui/toast";
 import VideoGrid from "../components/VideoGrid";
 import VideoList from "../components/VideoList";
 import VideoDetailPanel from "../components/VideoDetailPanel";
@@ -2004,7 +2004,7 @@ export default function Library({
         />
       )}
 
-      <Toasts toasts={toasts} onDismiss={dismissToast} />
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

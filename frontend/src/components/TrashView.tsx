@@ -4,7 +4,7 @@ import type { Video } from "../types";
 import { formatFileSize, videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import ConfirmDialog from "./ConfirmDialog";
-import type { ToastItem } from "./Toasts";
+import type { ToastItem } from "../ui/toast";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import { groupTrashBySource, remainingDays, useTrash } from "../views/trash/useTrash";

@@ -3,7 +3,7 @@ import { EventsOn } from "../../wailsjs/runtime";
 import { RefreshCw } from "lucide-react";
 import { fileScanStatus, scanFileStatuses } from "../services/api";
 import type { FileScanStatus } from "../types";
-import type { ToastItem } from "./Toasts";
+import type { ToastItem } from "../ui/toast";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 

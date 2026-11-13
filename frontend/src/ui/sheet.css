@@ -1,6 +1,6 @@
-/* Sheet and dialog surfaces: a slide-up for bottom sheets, a fade for the
-   backdrop and the centred confirm box. Shipped with the component so any
-   client that imports it gets the motion, not just the phone. */
+/* Bottom sheet slide-up. Shipped with the component so any client that imports
+   it gets the motion, not just the phone. The backdrop fade lives in
+   motion.css, shared with the toast stack. */
 @keyframes muse-sheet-in {
   from {
     transform: translateY(100%);
@@ -10,19 +10,6 @@
   }
 }
 
-@keyframes muse-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 .sheet-enter {
   animation: muse-sheet-in 0.18s ease-out;
-}
-
-.fade-enter {
-  animation: muse-fade-in 0.15s ease-out;
 }

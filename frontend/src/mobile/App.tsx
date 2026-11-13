@@ -14,7 +14,7 @@ import { LibraryView } from "./components/LibraryView";
 import { ScrapeTaskView } from "./components/ScrapeTaskView";
 import { TrashView } from "./components/TrashView";
 import { ConfirmSheet } from "../ui/sheet";
-import { Toasts, type Toast } from "./components/Toasts";
+import { ToastStack, type ToastItem } from "../ui/toast";
 import { VideoActionSheet } from "./components/VideoActionSheet";
 import { VideoDetailView } from "./components/VideoDetailView";
 import {
@@ -76,16 +76,16 @@ export default function App() {
   const [editVideo, setEditVideo] = useState<Video | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Video | null>(null);
   const [busy, setBusy] = useState(false);
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastSeq = useRef(0);
   const launchTimer = useRef<number | null>(null);
   // The history entry currently on screen. Scroll offsets are filed under this
   // key when the entry is left and replayed when it is entered again.
   const currentKey = useRef("");
 
-  const toast = useCallback((message: string, tone: Toast["tone"] = "info") => {
+  const toast = useCallback((message: string, tone: ToastItem["kind"] = "info") => {
     const id = ++toastSeq.current;
-    setToasts((prev) => [...prev, { id, message, tone }]);
+    setToasts((prev) => [...prev, { id, message, kind: tone }]);
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 2600);
   }, []);
 
@@ -601,7 +601,7 @@ export default function App() {
         />
       ) : null}
 
-      <Toasts toasts={toasts} />
+      <ToastStack placement="bottom" toasts={toasts} />
     </div>
   );
 }

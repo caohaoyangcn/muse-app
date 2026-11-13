@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 
 import { cn } from "../lib/utils";
+import "./motion.css";
 import "./sheet.css";
 
 /** Escape closes the surface — on touch the back gesture is the usual exit. */
