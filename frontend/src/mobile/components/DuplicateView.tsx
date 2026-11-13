@@ -5,7 +5,7 @@ import { coverURL } from "../../services/http";
 import { useJavDuplicates } from "../../views/duplicates/useJavDuplicates";
 import { videoMeta, videoName } from "../videoDisplay";
 import { ContentDuplicateView } from "./ContentDuplicateView";
-import { ConfirmSheet } from "./Sheet";
+import { ConfirmSheet } from "../../ui/sheet";
 import { EmptyState, ErrorState, Loading } from "./States";
 import { cn } from "../../lib/utils";
 

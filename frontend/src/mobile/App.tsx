@@ -13,7 +13,7 @@ import { ExternalPlayerSheet } from "./components/ExternalPlayerSheet";
 import { LibraryView } from "./components/LibraryView";
 import { ScrapeTaskView } from "./components/ScrapeTaskView";
 import { TrashView } from "./components/TrashView";
-import { ConfirmSheet } from "./components/Sheet";
+import { ConfirmSheet } from "../ui/sheet";
 import { Toasts, type Toast } from "./components/Toasts";
 import { VideoActionSheet } from "./components/VideoActionSheet";
 import { VideoDetailView } from "./components/VideoDetailView";

@@ -5,7 +5,7 @@ import { coverURL } from "../../services/http";
 import { videoName } from "../videoDisplay";
 import { formatFileSize } from "../../utils/format";
 import { cn } from "../../lib/utils";
-import { ConfirmSheet } from "./Sheet";
+import { ConfirmSheet } from "../../ui/sheet";
 import { EmptyState, ErrorState, Loading } from "./States";
 import { remainingDays, useTrash } from "../../views/trash/useTrash";
 

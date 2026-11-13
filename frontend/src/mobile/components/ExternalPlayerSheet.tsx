@@ -3,7 +3,7 @@ import {
   externalPlayers,
   type ExternalPlayerID,
 } from "../externalPlayers";
-import { BottomSheet, SheetAction } from "./Sheet";
+import { BottomSheet, SheetAction } from "../../ui/sheet";
 
 type Props = {
   video: Video | null;

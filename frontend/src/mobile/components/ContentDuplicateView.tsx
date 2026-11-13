@@ -7,7 +7,7 @@ import {
   useContentDuplicates,
 } from "../../views/duplicates/useContentDuplicates";
 import { videoMeta, videoName } from "../videoDisplay";
-import { ConfirmSheet } from "./Sheet";
+import { ConfirmSheet } from "../../ui/sheet";
 import { EmptyState, ErrorState, Loading } from "./States";
 import { cn } from "../../lib/utils";
 

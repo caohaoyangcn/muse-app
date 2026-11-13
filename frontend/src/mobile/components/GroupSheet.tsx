@@ -1,6 +1,6 @@
 import type { Group } from "../../types";
 import { cn } from "../../lib/utils";
-import { BottomSheet } from "./Sheet";
+import { BottomSheet } from "../../ui/sheet";
 
 /**
  * The group filter. Renders the desktop sidebar's tree as a flat, readable list

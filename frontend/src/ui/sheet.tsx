@@ -1,11 +1,24 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
-import { cn } from "../../lib/utils";
+import { cn } from "../lib/utils";
+import "./sheet.css";
+
+/** Escape closes the surface — on touch the back gesture is the usual exit. */
+function useEscape(open: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+}
 
 /**
- * A bottom sheet — the mobile stand-in for the desktop app's context menus and
+ * A bottom sheet — the touch stand-in for the desktop app's context menus and
  * dialogs. Everything the desktop reaches through right-click or a modal lives
- * here on touch.
+ * here on a phone, and it is the mobile form of `ui/ActionMenu`.
  */
 export function BottomSheet({
   open,
@@ -18,6 +31,7 @@ export function BottomSheet({
   onClose: () => void;
   children: ReactNode;
 }) {
+  useEscape(open, onClose);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex flex-col justify-end">
@@ -29,6 +43,7 @@ export function BottomSheet({
       />
       <div
         className="sheet-enter relative max-h-[85dvh] rounded-t-2xl border-t border-[var(--border)] bg-[var(--panel)] pb-[var(--safe-bottom)]"
+        aria-modal="true"
         role="dialog"
       >
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
@@ -100,6 +115,7 @@ export function ConfirmSheet({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  useEscape(open, onClose);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
@@ -111,6 +127,7 @@ export function ConfirmSheet({
       />
       <div
         className="fade-enter relative w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-5"
+        aria-modal="true"
         role="alertdialog"
       >
         <div className="text-base font-semibold">{title}</div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { Video } from "../../types";
-import { BottomSheet } from "./Sheet";
+import { BottomSheet } from "../../ui/sheet";
 
 /** Sheet for editing a favorite's custom title and notes. */
 export function EditInfoSheet({

@@ -1,6 +1,6 @@
 import type { Video } from "../../types";
 import { videoName } from "../videoDisplay";
-import { BottomSheet, SheetAction } from "./Sheet";
+import { BottomSheet, SheetAction } from "../../ui/sheet";
 
 /**
  * The card overflow menu. The desktop equivalent is the right-click
