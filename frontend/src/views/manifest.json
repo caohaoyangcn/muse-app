@@ -1,0 +1,147 @@
+{
+  "comment": "每个视图在两个客户端的位置，以及已知的平台差异。由 frontend/scripts/check-shared-ui.mjs 校验：文件必须存在，views/ 下每个共享视图模型都要被某个视图条目认领，gaps 里的 view/platform 必须是已知值。改这里不需要改代码，但删掉一个 gap 前请确认移动端真的补上了。",
+  "views": [
+    {
+      "id": "library",
+      "title": "收藏库",
+      "desktop": "src/pages/Library.tsx",
+      "mobile": "src/mobile/components/LibraryView.tsx",
+      "model": null
+    },
+    {
+      "id": "trash",
+      "title": "回收站与归档",
+      "desktop": "src/components/TrashView.tsx",
+      "mobile": "src/mobile/components/TrashView.tsx",
+      "model": "src/views/trash/useTrash.ts"
+    },
+    {
+      "id": "jav-duplicates",
+      "title": "同番号多版本",
+      "desktop": "src/components/DuplicateView.tsx",
+      "mobile": "src/mobile/components/DuplicateView.tsx",
+      "model": "src/views/duplicates/useJavDuplicates.ts"
+    },
+    {
+      "id": "content-duplicates",
+      "title": "内容重复",
+      "desktop": "src/components/ContentDuplicateView.tsx",
+      "mobile": "src/mobile/components/ContentDuplicateView.tsx",
+      "model": "src/views/duplicates/useContentDuplicates.ts"
+    },
+    {
+      "id": "actor-index",
+      "title": "演员索引",
+      "desktop": "src/components/ActorIndexView.tsx",
+      "mobile": "src/mobile/components/ActorIndexView.tsx",
+      "model": "src/views/actors/useActorIndex.ts"
+    },
+    {
+      "id": "actor-films",
+      "title": "演员作品",
+      "desktop": "src/components/ActorFilmsView.tsx",
+      "mobile": "src/mobile/components/ActorFilmsView.tsx",
+      "model": "src/views/actors/useActorFilms.ts"
+    },
+    {
+      "id": "scrape",
+      "title": "刮削任务",
+      "desktop": "src/components/ScrapeTaskView.tsx",
+      "mobile": "src/mobile/components/ScrapeTaskView.tsx",
+      "model": "src/views/scrape/useScrapeTasks.ts"
+    },
+    {
+      "id": "settings",
+      "title": "设置",
+      "desktop": "src/pages/Settings.tsx",
+      "mobile": null,
+      "model": null
+    }
+  ],
+  "gaps": [
+    {
+      "view": "library",
+      "platform": "mobile",
+      "capability": "多选与批量操作",
+      "reason": "触屏长按多选未实现，批量移入回收站/加分组只能在桌面端做"
+    },
+    {
+      "view": "library",
+      "platform": "mobile",
+      "capability": "拖拽",
+      "reason": "拖入文件与拖到分组是 HTML5 拖拽，触屏没有等价手势"
+    },
+    {
+      "view": "library",
+      "platform": "mobile",
+      "capability": "添加来源、云端浏览、文件检测",
+      "reason": "需要原生文件选择器与系统路径，只在桌面端可用"
+    },
+    {
+      "view": "library",
+      "platform": "mobile",
+      "capability": "工作区标签",
+      "reason": "移动端用压栈屏 + 浏览器历史，不再维护并行标签"
+    },
+    {
+      "view": "library",
+      "platform": "mobile",
+      "capability": "新手引导",
+      "reason": "首次运行引导只在桌面端展示"
+    },
+    {
+      "view": "library",
+      "platform": "mobile",
+      "capability": "分组结构编辑",
+      "reason": "新建/重命名/删除/父子关系只在桌面端；移动端的分组列表仅用于筛选"
+    },
+    {
+      "view": "actor-index",
+      "platform": "mobile",
+      "capability": "拖动合并演员",
+      "reason": "触屏没有拖拽语义，桌面端靠把一个演员拖到另一个上"
+    },
+    {
+      "view": "actor-index",
+      "platform": "mobile",
+      "capability": "解除合并",
+      "reason": "合并与解绑一起留在桌面端，移动端只展示合并后的结果"
+    },
+    {
+      "view": "actor-index",
+      "platform": "mobile",
+      "capability": "补全演员信息",
+      "reason": "批量补全需要长时间后台任务与进度轮询，只在桌面端提供"
+    },
+    {
+      "view": "actor-films",
+      "platform": "mobile",
+      "capability": "排序与视图切换",
+      "reason": "移动端沿用收藏库上次选择的网格/列表，不提供本页排序控件"
+    },
+    {
+      "view": "jav-duplicates",
+      "platform": "mobile",
+      "capability": "关键字筛选",
+      "reason": "当前只在桌面端按番号或文件名筛选"
+    },
+    {
+      "view": "content-duplicates",
+      "platform": "mobile",
+      "capability": "关键字筛选",
+      "reason": "当前只在桌面端按指纹或文件名筛选"
+    },
+    {
+      "view": "scrape",
+      "platform": "mobile",
+      "capability": "关键字筛选与排序切换",
+      "reason": "移动端按分组看任务，不提供关键字与创建时间排序"
+    },
+    {
+      "view": "settings",
+      "platform": "mobile",
+      "capability": "整个设置页",
+      "reason": "服务器控制、监控目录、网络代理、Cookie 与回收站保留期都需要桌面端权限"
+    }
+  ]
+}

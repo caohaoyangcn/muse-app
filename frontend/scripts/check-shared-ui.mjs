@@ -6,7 +6,7 @@
 // review where a `../components/Foo` import looks perfectly ordinary.
 //
 // Run from frontend/: `npm run check:shared`
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -113,6 +113,60 @@ for (const model of models) {
       `${model.rel}: 共享视图模型只在${desktop ? "" : "桌面"}${mobile ? "" : "移动"}端被引用（两端都要）`,
     );
   }
+}
+
+// 视图清单：文件必须存在、每个共享视图模型都要被某个视图认领、gap 指向已知视图。
+// 清单本身是给人看的（移动端缺什么），这一节保证它不会烂掉。
+const manifestPath = join(SRC, "views/manifest.json");
+let manifest = null;
+try {
+  manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+} catch {
+  problems.push("src/views/manifest.json 缺失或不是合法 JSON");
+}
+
+if (manifest && process.argv.includes("--gaps")) {
+  // 人类入口：看移动端还缺什么，一条命令列出来。
+  for (const view of manifest.views ?? []) {
+    const gaps = (manifest.gaps ?? []).filter((gap) => gap.view === view.id);
+    console.log(`\n${view.title}（${view.id}）${view.mobile ? "" : " — 移动端无此视图"}`);
+    for (const gap of gaps) {
+      console.log(`  · [${gap.platform}] ${gap.capability}：${gap.reason}`);
+    }
+  }
+  process.exit(0);
+}
+
+if (manifest) {
+  const viewIds = new Set();
+  const claimedModels = new Set();
+  for (const view of manifest.views ?? []) {
+    viewIds.add(view.id);
+    for (const key of ["desktop", "mobile", "model"]) {
+      const rel = view[key];
+      if (!rel) continue;
+      if (!existsSync(join(ROOT, rel))) {
+        problems.push(`manifest: 视图 "${view.id}" 的 ${key} 指向不存在的文件 ${rel}`);
+      }
+      if (key === "model") claimedModels.add(rel);
+    }
+  }
+  for (const model of models) {
+    if (!claimedModels.has(model.rel)) {
+      problems.push(`manifest: 共享视图模型 ${model.rel} 没有在视图清单里认领`);
+    }
+  }
+  for (const gap of manifest.gaps ?? []) {
+    if (!viewIds.has(gap.view)) {
+      problems.push(`manifest: gap 指向未知视图 "${gap.view}"`);
+    }
+    if (gap.platform !== "desktop" && gap.platform !== "mobile") {
+      problems.push(`manifest: gap 的 platform 只能是 desktop 或 mobile（收到 "${gap.platform}"）`);
+    }
+  }
+  notes.push(
+    `视图清单：${(manifest.views ?? []).length} 个视图、${(manifest.gaps ?? []).length} 处已知差异`,
+  );
 }
 
 // 裸 <button> 是"绕过 ui/Button"的信号。它只许减少，不许变多。
