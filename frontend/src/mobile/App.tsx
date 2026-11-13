@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Video } from "../types";
-import { cn } from "../lib/utils";
 import ErrorBoundary from "../ui/error-boundary";
+import { Drawer, DrawerRow, DrawerSection } from "../ui/drawer";
+import { NavIcon, type NavIconName } from "../ui/NavIcon";
 import { invalidate } from "../services/live";
 import { client, ApiError, markVideoOpened } from "../services/web";
 import { ActorFilmsView } from "./components/ActorFilmsView";
@@ -51,9 +52,36 @@ function currentHref(): string {
 }
 
 /**
- * The mobile shell. Three bottom tabs mirror the desktop's workspace concept
- * (library / actor index / scrape board); video detail and actor film lists are
- * pushed screens with a visible back arrow.
+ * The sections the drawer offers. The split mirrors the desktop sidebar
+ * (browse above, tools below), so the two shells name and order the same
+ * destinations even though one is a column and the other a panel.
+ */
+const NAV_ITEMS: {
+  tab: Tab;
+  label: string;
+  icon: NavIconName;
+  section: "browse" | "tools";
+}[] = [
+  { tab: "library", label: "收藏", icon: "star", section: "browse" },
+  { tab: "actors", label: "演员", icon: "users", section: "browse" },
+  { tab: "scrape", label: "刮削任务", icon: "list-checks", section: "tools" },
+  { tab: "duplicates", label: "查重", icon: "duplicate", section: "tools" },
+  { tab: "trash", label: "归档与回收站", icon: "archive", section: "tools" },
+];
+
+const BROWSE_ITEMS = NAV_ITEMS.filter((item) => item.section === "browse");
+const TOOL_ITEMS = NAV_ITEMS.filter((item) => item.section === "tools");
+
+/**
+ * The mobile shell. A slide-out drawer replaces the desktop's fixed sidebar
+ * (library / actor index / scrape board / duplicates / trash); video detail and
+ * actor film lists are pushed screens with a visible back arrow.
+ *
+ * The drawer is summoned from the header rather than pinned to the bottom: the
+ * tab bar cost a permanent strip of a phone screen for five destinations that
+ * are switched far less often than the list is scrolled. Opening the drawer is
+ * also a history entry, so the back gesture closes it instead of leaving the
+ * app — the same rule the sheets follow.
  *
  * Navigation is owned by the browser's own history rather than an in-memory
  * stack: every push writes the destination to the address bar, so the browser
@@ -68,6 +96,9 @@ export default function App() {
   const [keyword, setKeyword] = useState("");
   const [search, setSearch] = useState("");
   const [filterGroupId, setFilterGroupId] = useState<number | "all">("all");
+  // The slide-out drawer is an overlay like the sheets: open while the user is
+  // choosing a section, closed by a tap outside, Escape, or the back gesture.
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [playerVideo, setPlayerVideo] = useState<Video | null>(null);
   const [playerNotice, setPlayerNotice] = useState<string | undefined>();
@@ -204,6 +235,7 @@ export default function App() {
       setRemoveTarget(null);
       setPlayerVideo(null);
       setPlayerNotice(undefined);
+      setDrawerOpen(false);
 
       if (state?.museModal) {
         // Forward can land on a sheet entry, but the sheet's data is gone.
@@ -219,11 +251,16 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // Sheets are history entries too, so Android's back gesture closes the sheet
-  // before it leaves the screen — matching native navigation. They share the
-  // screen's scroll key: closing a sheet must not disturb the pane underneath.
+  // Sheets and the drawer are history entries too, so Android's back gesture
+  // closes the surface before it leaves the screen — matching native
+  // navigation. They share the screen's scroll key: closing a surface must not
+  // disturb the pane underneath.
   const overlayOpen =
-    playerVideo !== null || editVideo !== null || menuVideo !== null || removeTarget !== null;
+    playerVideo !== null ||
+    editVideo !== null ||
+    menuVideo !== null ||
+    removeTarget !== null ||
+    drawerOpen;
   useEffect(() => {
     const state = navState();
     if (overlayOpen && !state.museModal) {
@@ -407,10 +444,13 @@ export default function App() {
     [toast],
   );
 
-  // The tab strip switches the base content; a pushed screen is not present on
-  // a tab root, so selecting a tab is a plain history push.
+  // The drawer switches the base content. Closing it first keeps the history
+  // honest: the drawer's entry is the one navigate() replaces with the
+  // destination, so back from the new section returns to the section the drawer
+  // was opened from, not to the drawer itself.
   const selectTab = useCallback(
     (next: Tab) => {
+      setDrawerOpen(false);
       setKeyword("");
       setSearch("");
       navigate({ kind: "tab", tab: next });
@@ -428,10 +468,19 @@ export default function App() {
         : `tab:${activeTab}`;
 
   return (
-    <div className="flex h-[100dvh] flex-col pt-[var(--safe-top)]">
-      {/* Header */}
+    <div className="flex h-[100dvh] flex-col pb-[var(--safe-bottom)] pt-[var(--safe-top)]">
+      {/* Header. The drawer trigger takes the logo's slot: the mark moved into
+          the drawer header, so the search keeps the width it had while the
+          navigation becomes a summonable panel instead of a permanent strip. */}
       <header className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--panel)] px-4 py-3">
-        <img alt="" className="size-9 rounded-[10px] object-cover" src="/assets/muse-logo.png" />
+        <button
+          aria-label="打开导航"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full text-[var(--muted)] active:bg-[var(--panel-2)]"
+          onClick={() => setDrawerOpen(true)}
+          type="button"
+        >
+          <NavIcon name="menu" className="size-5" />
+        </button>
         <span className="shrink-0 font-semibold">Muse Video</span>
         {showSearch ? (
           <div className="relative ml-auto min-w-0 flex-1">
@@ -492,33 +541,59 @@ export default function App() {
       )}
       </ErrorBoundary>
 
-      {/* Bottom tabs — hidden while a screen is pushed so the back arrow is the
-          single way out, matching native navigation. */}
-      {route.kind === "tab" ? (
-        <nav className="flex border-t border-[var(--border)] bg-[var(--panel)] pb-[var(--safe-bottom)]">
-          {(
-            [
-              ["library", "收藏"],
-              ["actors", "演员"],
-              ["scrape", "刮削"],
-              ["duplicates", "查重"],
-              ["trash", "回收站"],
-            ] as [Tab, string][]
-          ).map(([id, label]) => (
-            <button
-              className={cn(
-                "flex-1 py-3 text-sm",
-                activeTab === id ? "text-[var(--accent)]" : "text-[var(--muted)]",
-              )}
-              key={id}
-              onClick={() => selectTab(id)}
-              type="button"
-            >
-              {label}
-            </button>
+      {/* Slide-out navigation. The five destinations live in a drawer rather
+          than a bottom tab strip, so the list keeps the full height of the
+          screen. Opening it is a history entry, so the back gesture closes the
+          drawer instead of leaving the app. */}
+      <Drawer
+        className="pb-[var(--safe-bottom)] pt-[var(--safe-top)]"
+        onClose={() => setDrawerOpen(false)}
+        open={drawerOpen}
+        title="导航"
+      >
+        <div className="flex items-center gap-2.5 border-b border-[var(--border)] px-4 py-3">
+          <img alt="" className="size-9 rounded-[10px] object-cover" src="/assets/muse-logo.png" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-semibold">Muse Video</div>
+            <div className="truncate text-[11px] text-[var(--muted)]">局域网收藏</div>
+          </div>
+          <button
+            aria-label="关闭导航"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full text-[var(--muted)] active:bg-[var(--panel-2)]"
+            onClick={() => setDrawerOpen(false)}
+            type="button"
+          >
+            <NavIcon name="x" className="size-4" />
+          </button>
+        </div>
+
+        <nav aria-label="主导航" className="scroll-area min-h-0 flex-1 px-2 py-1.5">
+          <DrawerSection>浏览</DrawerSection>
+          {BROWSE_ITEMS.map((item) => (
+            <DrawerRow
+              active={activeTab === item.tab}
+              icon={<NavIcon name={item.icon} />}
+              key={item.tab}
+              label={item.label}
+              onClick={() => selectTab(item.tab)}
+            />
+          ))}
+          <DrawerSection className="pt-4">工具</DrawerSection>
+          {TOOL_ITEMS.map((item) => (
+            <DrawerRow
+              active={activeTab === item.tab}
+              icon={<NavIcon name={item.icon} />}
+              key={item.tab}
+              label={item.label}
+              onClick={() => selectTab(item.tab)}
+            />
           ))}
         </nav>
-      ) : null}
+
+        <div className="border-t border-[var(--border)] px-4 py-3 text-[11px] leading-relaxed text-[var(--muted)]">
+          刮削、添加收藏与分组整理在桌面端完成。
+        </div>
+      </Drawer>
 
       {/* Overlays */}
       <VideoActionSheet

@@ -297,7 +297,7 @@ function DetailHeader({
   onEdit?: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 border-b border-[var(--border)] px-2 py-2 pt-[calc(var(--safe-top)+6px)]">
+    <div className="flex items-center gap-2 border-b border-[var(--border)] px-2 py-2">
       <button
         aria-label="返回"
         className="px-2 text-xl leading-none text-[var(--muted)]"

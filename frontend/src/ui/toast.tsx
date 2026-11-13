@@ -22,8 +22,9 @@ const ACCENT: Record<ToastKind, string> = {
  *
  * - `top-right` — the desktop card, with the details list (a toast there reports
  *   what failed in a list form, e.g. which files were skipped).
- * - `bottom` — the phone banner above the tab bar. No details: it disappears in
- *   under three seconds and the first line is all anyone reads.
+ * - `bottom` — the phone banner, sitting just above the home indicator. No
+ *   details: it disappears in under three seconds and the first line is all
+ *   anyone reads.
  *
  * `aria-live="polite"` is on the container, so a screen reader announces each
  * arrival without stealing focus from whatever the user is doing.
@@ -45,7 +46,7 @@ export function ToastStack({
       className={cn(
         "flex flex-col gap-2",
         bottom
-          ? "pointer-events-none fixed inset-x-3 bottom-[calc(var(--safe-bottom)+72px)] z-30"
+          ? "pointer-events-none fixed inset-x-3 bottom-[calc(var(--safe-bottom)+16px)] z-30"
           : "fixed right-4 top-4 z-[400] w-[340px] gap-2.5",
       )}
     >
