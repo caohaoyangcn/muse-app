@@ -26,7 +26,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - 每完成一个边界清晰且可验证的模块，必须立即运行该模块的针对性验证并单独提交；提交应保持单一职责，不要把多个已完成模块攒成一个提交
 - `go test -tags integration ./...` —— 集成测试（真实 ffmpeg，显式指定才运行）
 - `npm run build`（在 `frontend/` 下）—— `tsc` 类型检查 + Vite 构建
-- `npm run lint`（在 `frontend/` 下）—— ESLint 检查 `src/` 中的 TypeScript、React Hooks 与 Fast Refresh 规则；lint 必须无错误、无警告
+- `npm run lint`（在 `frontend/` 下）—— ESLint 检查 `src/` 中的 TypeScript、React Hooks 与 Fast Refresh 规则，随后跑 `scripts/check-shared-ui.mjs` 校验跨平台目录规则（`ui/` 不依赖业务、`mobile/` 不 import 桌面组件、两端各引自己的传输层、每个共享视图模型两端都被引用、裸 `<button>` 不新增）；lint 必须无错误、无警告
 
 ## 编码风格与命名约定
 

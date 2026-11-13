@@ -8,8 +8,9 @@
     "build:all": "npm run build && npm run build:mobile",
     "build": "tsc && vite build",
     "build:mobile": "tsc && vite build --config vite.mobile.config.ts && node scripts/finalize-mobile.mjs",
-    "lint": "eslint src --max-warnings=0",
-    "preview": "vite preview"
+    "lint": "eslint src --max-warnings=0 && node scripts/check-shared-ui.mjs",
+    "preview": "vite preview",
+    "check:shared": "node scripts/check-shared-ui.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",
