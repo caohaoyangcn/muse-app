@@ -1,17 +1,13 @@
 import { useState } from "react";
 import { Trash2, RotateCcw, SlidersHorizontal } from "lucide-react";
-import type { TrashSnapshot, Video } from "../types";
-import { useLiveQuery } from "../hooks/useLiveQuery";
-import { invalidate } from "../services/live";
-import { client } from "../services/client";
+import type { Video } from "../types";
 import { formatFileSize, videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import ConfirmDialog from "./ConfirmDialog";
 import type { ToastItem } from "./Toasts";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { groupTrashBySource, remainingDays, useTrash } from "../views/trash/useTrash";
 
 /**
  * 回收站: favorites removed from the library, kept restorable for the retention
@@ -26,97 +22,38 @@ export default function TrashView({
   onNotify: (toast: Omit<ToastItem, "id">, ttl?: number) => void;
   onOpenSettings: (section?: string) => void;
 }) {
-  const trash = useLiveQuery(client.listTrash, "trash", {
-    onError: () => undefined,
-  });
-  const archive = useLiveQuery(client.listArchived, "archive", {
-    onError: () => undefined,
-  });
-  const [mode, setMode] = useState<"trash" | "archive">("trash");
-  const [busyId, setBusyId] = useState<number | null>(null);
-  const [emptying, setEmptying] = useState(false);
-  const [clearingArchive, setClearingArchive] = useState(false);
+  const {
+    mode,
+    setMode,
+    trashVideos,
+    archivedVideos,
+    videos,
+    retentionDays,
+    totalSize,
+    loading,
+    error,
+    reload,
+    busyId,
+    emptying,
+    clearingArchive,
+    restore,
+    purge,
+    empty,
+    clearArchive,
+  } = useTrash((notice) =>
+    onNotify({ kind: notice.kind, message: notice.text, details: notice.details }),
+  );
+
+  // Which confirmation is open is presentation, not data: each shell owns it.
   const [purgeTarget, setPurgeTarget] = useState<Video | null>(null);
   const [emptyTarget, setEmptyTarget] = useState(false);
   const [clearArchiveTarget, setClearArchiveTarget] = useState(false);
 
-  const snapshot: TrashSnapshot | null = trash.data;
-  const trashVideos = snapshot?.videos ?? [];
-  const archivedVideos = archive.data ?? [];
-  const videos = mode === "trash" ? trashVideos : archivedVideos;
-  const retentionDays = snapshot?.retentionDays ?? 14;
-  const totalSize = videos.reduce((sum, v) => sum + (v.fileSize > 0 ? v.fileSize : 0), 0);
-  const activeLoading = mode === "trash" ? trash.loading && !snapshot : archive.loading && archive.data === null;
-  const activeError = mode === "trash" ? trash.error : archive.error;
-  const activeReload = mode === "trash" ? trash.reload : archive.reload;
-  const groupedArchive = groupBySource(archivedVideos);
-
-  const restore = async (video: Video) => {
-    setBusyId(video.id);
-    try {
-      await client.restoreVideo(video.id);
-      invalidate();
-      onNotify({ kind: "success", message: `已恢复“${videoDisplayName(video)}”` });
-    } catch (e) {
-      onNotify({ kind: "error", message: "恢复失败", details: [String(e)] });
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const purge = async (video: Video) => {
-    setPurgeTarget(null);
-    setBusyId(video.id);
-    try {
-      await client.deleteVideoPermanently(video.id);
-      invalidate();
-      onNotify({
-        kind: "info",
-        message: `已彻底删除“${videoDisplayName(video)}”`,
-        details: ["只删除 Muse 的记录与生成的图片，源视频未被删除"],
-      });
-    } catch (e) {
-      onNotify({ kind: "error", message: "彻底删除失败", details: [String(e)] });
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const empty = async () => {
-    setEmptyTarget(false);
-    setEmptying(true);
-    try {
-      const count = await client.emptyTrash();
-      invalidate();
-      onNotify({
-        kind: "info",
-        message: count > 0 ? `已清空回收站（${count} 项）` : "回收站已经是空的",
-        details: count > 0 ? ["只删除 Muse 的记录与生成的图片，源视频未被删除"] : undefined,
-      });
-    } catch (e) {
-      onNotify({ kind: "error", message: "清空回收站失败", details: [String(e)] });
-    } finally {
-      setEmptying(false);
-    }
-  };
-
-  const clearArchive = async () => {
-    setClearArchiveTarget(false);
-    setClearingArchive(true);
-    try {
-      const count = await client.clearArchivedVideos();
-      invalidate();
-      onNotify({
-        kind: "info",
-        message: count > 0 ? `已清空归档（${count} 项）` : "归档已经是空的",
-        details: count > 0 ? ["只删除 Muse 的记录与生成的图片，网盘源文件未被删除"] : undefined,
-      });
-    } catch (e) {
-      onNotify({ kind: "error", message: "清空归档失败", details: [String(e)] });
-    } finally {
-      setClearingArchive(false);
-    }
-  };
+  const groupedArchive = groupTrashBySource(archivedVideos);
+  // The hook already scopes these to the mode on screen.
+  const activeLoading = loading;
+  const activeError = error;
+  const activeReload = reload;
 
   if (activeLoading) {
     return <div className="flex min-h-[320px] items-center justify-center text-[var(--muted)]">加载中…</div>;
@@ -263,7 +200,11 @@ export default function TrashView({
           confirmLabel="彻底删除"
           cancelLabel="取消"
           danger
-          onConfirm={() => void purge(purgeTarget)}
+          onConfirm={() => {
+            const target = purgeTarget;
+            setPurgeTarget(null);
+            if (target) void purge(target);
+          }}
           onCancel={() => setPurgeTarget(null)}
         />
       )}
@@ -275,7 +216,10 @@ export default function TrashView({
           confirmLabel="清空回收站"
           cancelLabel="取消"
           danger
-          onConfirm={() => void empty()}
+          onConfirm={() => {
+            setEmptyTarget(false);
+            void empty();
+          }}
           onCancel={() => setEmptyTarget(false)}
         />
       )}
@@ -287,7 +231,10 @@ export default function TrashView({
           confirmLabel="清空归档"
           cancelLabel="取消"
           danger
-          onConfirm={() => void clearArchive()}
+          onConfirm={() => {
+            setClearArchiveTarget(false);
+            void clearArchive();
+          }}
           onCancel={() => setClearArchiveTarget(false)}
         />
       )}
@@ -381,23 +328,6 @@ function TrashRow({
       </div>
     </div>
   );
-}
-
-function groupBySource(videos: Video[]): { name: string; videos: Video[] }[] {
-  const byName = new Map<string, Video[]>();
-  for (const video of videos) {
-    const name = video.sourceName || video.archiveSourceName || "已删除的网盘";
-    const list = byName.get(name) ?? [];
-    list.push(video);
-    byName.set(name, list);
-  }
-  return [...byName.entries()].map(([name, list]) => ({ name, videos: list }));
-}
-
-function remainingDays(deletedAt: number, retentionDays: number): number {
-  if (deletedAt <= 0) return retentionDays;
-  const expiresAt = deletedAt + retentionDays * DAY_MS;
-  return Math.max(0, Math.ceil((expiresAt - Date.now()) / DAY_MS));
 }
 
 function formatDateTime(ms: number): string {

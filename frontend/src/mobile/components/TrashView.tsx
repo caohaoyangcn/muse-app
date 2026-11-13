@@ -1,17 +1,13 @@
 import { useState } from "react";
 
-import type { TrashSnapshot, Video } from "../../types";
-import { useLiveQuery } from "../../hooks/useLiveQuery";
-import { invalidate } from "../../services/live";
-import { ApiError, coverURL } from "../../services/http";
-import { client } from "../../services/client";
+import type { Video } from "../../types";
+import { coverURL } from "../../services/http";
 import { videoName } from "../videoDisplay";
 import { formatFileSize } from "../../utils/format";
 import { cn } from "../../lib/utils";
 import { ConfirmSheet } from "./Sheet";
 import { EmptyState, ErrorState, Loading } from "./States";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { remainingDays, useTrash } from "../../views/trash/useTrash";
 
 /**
  * The phone's recycle bin. Removing a favorite anywhere (desktop or phone) only
@@ -23,85 +19,44 @@ export function TrashView({
 }: {
   onToast: (message: string, tone?: "info" | "error") => void;
 }) {
-  const trash = useLiveQuery(client.listTrash, "trash");
-  const archive = useLiveQuery(client.listArchived, "archive");
-  const [mode, setMode] = useState<"trash" | "archive">("trash");
+  const {
+    mode,
+    setMode,
+    trashVideos,
+    archivedVideos,
+    videos,
+    retentionDays,
+    totalSize,
+    loading,
+    error,
+    reload,
+    busyId,
+    emptying,
+    clearingArchive,
+    restore,
+    purge,
+    empty,
+    clearArchive,
+  } = useTrash((notice) =>
+    onToast(
+      // The phone has no detail rows, so the first detail rides along with the
+      // message when there is one.
+      notice.details?.length ? `${notice.text}：${notice.details[0]}` : notice.text,
+      notice.kind === "error" ? "error" : "info",
+    ),
+  );
+
+  // Which sheet is open is presentation, not data.
   const [target, setTarget] = useState<Video | null>(null);
   const [emptyOpen, setEmptyOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // The phone disables every row while one write runs.
+  const busy = busyId !== null || emptying || clearingArchive;
 
-  const snapshot: TrashSnapshot | null = trash.data;
-  const trashVideos = snapshot?.videos ?? [];
-  const archivedVideos = archive.data ?? [];
-  const videos = mode === "trash" ? trashVideos : archivedVideos;
-  const retentionDays = snapshot?.retentionDays ?? 14;
-  const totalSize = videos.reduce((sum, v) => sum + Math.max(0, v.fileSize), 0);
-  const activeLoading = mode === "trash" ? trash.loading && !snapshot : archive.loading && archive.data === null;
-  const activeError = mode === "trash" ? trash.error : archive.error;
-  const activeReload = mode === "trash" ? trash.reload : archive.reload;
-
-  if (activeLoading) return <Loading label={mode === "archive" ? "加载归档…" : "加载回收站…"} />;
-  if (activeError && videos.length === 0) {
-    return <ErrorState message={activeError} onRetry={activeReload} />;
+  if (loading) return <Loading label={mode === "archive" ? "加载归档…" : "加载回收站…"} />;
+  if (error && videos.length === 0) {
+    return <ErrorState message={error} onRetry={reload} />;
   }
-
-  const restore = async (video: Video) => {
-    setBusy(true);
-    try {
-      await client.restoreVideo(video.id);
-      invalidate();
-      onToast(`已恢复「${videoName(video)}」`);
-    } catch (e) {
-      onToast(e instanceof ApiError ? e.message : "恢复失败", "error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const purge = async () => {
-    if (!target) return;
-    const video = target;
-    setTarget(null);
-    setBusy(true);
-    try {
-      await client.deleteVideoPermanently(video.id);
-      invalidate();
-      onToast(`已彻底删除「${videoName(video)}」`);
-    } catch (e) {
-      onToast(e instanceof ApiError ? e.message : "彻底删除失败", "error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const empty = async () => {
-    setEmptyOpen(false);
-    setBusy(true);
-    try {
-      const count = await client.emptyTrash();
-      invalidate();
-      onToast(count > 0 ? `已清空回收站（${count} 项）` : "回收站已经是空的");
-    } catch (e) {
-      onToast(e instanceof ApiError ? e.message : "清空回收站失败", "error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const clearArchive = async () => {
-    setArchiveOpen(false);
-    setBusy(true);
-    try {
-      const count = await client.clearArchivedVideos();
-      invalidate();
-      onToast(count > 0 ? `已清空归档（${count} 项）` : "归档已经是空的");
-    } catch (e) {
-      onToast(e instanceof ApiError ? e.message : "清空归档失败", "error");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -184,7 +139,11 @@ export function TrashView({
         danger
         message="只删除 Muse 的收藏记录与生成的缩略图/封面；原始视频文件不会被删除。此操作无法撤销。"
         onClose={() => setTarget(null)}
-        onConfirm={() => void purge()}
+        onConfirm={() => {
+          const video = target;
+          setTarget(null);
+          if (video) void purge(video);
+        }}
         open={target !== null}
         title={`彻底删除「${target ? videoName(target) : ""}」？`}
       />
@@ -195,7 +154,10 @@ export function TrashView({
         danger
         message={`将彻底删除回收站里的 ${trashVideos.length} 项收藏。只删除 Muse 的记录与生成的图片，原始视频文件不会被删除。`}
         onClose={() => setEmptyOpen(false)}
-        onConfirm={() => void empty()}
+        onConfirm={() => {
+          setEmptyOpen(false);
+          void empty();
+        }}
         open={emptyOpen}
         title="清空回收站？"
       />
@@ -206,7 +168,10 @@ export function TrashView({
         danger
         message={`将彻底删除归档里的 ${archivedVideos.length} 项收藏。只删除 Muse 的记录与生成的图片，网盘源文件不会被删除。`}
         onClose={() => setArchiveOpen(false)}
-        onConfirm={() => void clearArchive()}
+        onConfirm={() => {
+          setArchiveOpen(false);
+          void clearArchive();
+        }}
         open={archiveOpen}
         title="清空归档？"
       />
@@ -279,9 +244,4 @@ function TrashRow({
       </div>
     </div>
   );
-}
-
-function remainingDays(deletedAt: number, retentionDays: number): number {
-  if (deletedAt <= 0) return retentionDays;
-  return Math.max(0, Math.ceil((deletedAt + retentionDays * DAY_MS - Date.now()) / DAY_MS));
 }
