@@ -11,7 +11,7 @@ import {
   type Rect,
   type TourStep,
 } from "../utils/tour";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 
 const OVERLAY_Z = 500;
 /** How long the card waits for its target to appear (a view may still render). */

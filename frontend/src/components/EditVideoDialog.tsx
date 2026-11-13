@@ -7,8 +7,8 @@ import {
   setVideoScrapedCoverAllowed,
   updateVideoInfo,
 } from "../services/api";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { videoCoverURL } from "../utils/format";
 import {
   Dialog,
@@ -17,7 +17,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
+} from "../ui/dialog";
 
 interface Props {
   video: Video;

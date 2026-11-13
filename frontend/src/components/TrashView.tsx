@@ -15,7 +15,7 @@ import { formatFileSize, videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import ConfirmDialog from "./ConfirmDialog";
 import type { ToastItem } from "./Toasts";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

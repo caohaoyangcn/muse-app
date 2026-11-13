@@ -18,14 +18,14 @@ import {
 import { videoDisplayName } from "../utils/videoName";
 import BackupBadge from "./BackupBadge";
 import RestoredBadge from "./RestoredBadge";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
-} from "./ui/dialog";
+} from "../ui/dialog";
 
 type OverrideMode = "auto" | "manual" | "skip";
 

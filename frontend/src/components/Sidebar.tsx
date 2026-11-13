@@ -3,8 +3,8 @@ import type { DragEvent as ReactDragEvent } from "react";
 import type { Group, ViewFilter } from "../types";
 import { MIME_VIDEO_DRAG, MIME_VIDEO_DRAG_MULTI } from "../types";
 import { cn } from "../lib/utils";
-import { Button } from "./ui/button";
-import { Sidebar as SidebarRoot, SidebarNav, SidebarSection } from "./ui/sidebar";
+import { Button } from "../ui/button";
+import { Sidebar as SidebarRoot, SidebarNav, SidebarSection } from "../ui/sidebar";
 import { NavIcon, type NavIconName } from "./NavIcon";
 
 interface SidebarProps {

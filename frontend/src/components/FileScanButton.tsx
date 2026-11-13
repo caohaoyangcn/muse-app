@@ -4,7 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { fileScanStatus, scanFileStatuses } from "../services/api";
 import type { FileScanStatus } from "../types";
 import type { ToastItem } from "./Toasts";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 
 /**

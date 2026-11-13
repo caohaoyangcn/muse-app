@@ -8,7 +8,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
+} from "../ui/dialog";
 
 export interface CloudSummary {
   count: number;

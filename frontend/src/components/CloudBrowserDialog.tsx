@@ -8,7 +8,7 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
+} from "../ui/dialog";
 import { addCloudVideos, browseCloud, listCloudConnections } from "../services/api";
 import type { AddVideoResult, CloudConnection, CloudEntry } from "../types";
 import { formatFileSize } from "../utils/format";

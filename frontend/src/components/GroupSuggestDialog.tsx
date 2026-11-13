@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GroupSuggestion } from "../types";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
+} from "../ui/dialog";
 
 /** One file's suggestion entry, decorated with the backend video id so group
  * membership can be applied after the user confirms. */

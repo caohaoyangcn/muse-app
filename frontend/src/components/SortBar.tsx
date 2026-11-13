@@ -1,7 +1,7 @@
 import type { CardSize, SortDir, SortKey, ViewMode } from "../types";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { cn } from "../lib/utils";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 import ViewControls from "./ViewControls";
 
 // The sort fields with the direction each one starts in when first selected

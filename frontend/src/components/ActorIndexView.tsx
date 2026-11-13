@@ -11,8 +11,8 @@ import { useLiveQuery } from "../hooks/useLiveQuery";
 import type { ActorFillStatus, ActorSummary } from "../types";
 import { MIME_ACTOR_DRAG } from "../types";
 import { actorAvatarURL } from "../utils/format";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { cn } from "../lib/utils";
 
 // Stable identity for the empty index.

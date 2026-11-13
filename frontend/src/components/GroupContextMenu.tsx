@@ -3,7 +3,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import type { Group } from "../types";
 import GroupRelationFlyout from "./GroupRelationFlyout";
 import { cn } from "../lib/utils";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 
 export type GroupMenuAction =
   | { kind: "rename" }

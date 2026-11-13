@@ -2,7 +2,7 @@ import type { CardSize, ViewMode } from "../types";
 import { Grid2X2, List, Minus, Plus } from "lucide-react";
 import { cn } from "../lib/utils";
 import { DESKTOP_CARD_SIZE } from "../utils/viewPrefs";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 
 /**
  * The "how dense / which shape" half of the list toolbar: continuous card width

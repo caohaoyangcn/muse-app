@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cn } from "../../lib/utils";
+import { cn } from "../lib/utils";
 
 const Sidebar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>(
   ({ className, ...props }, ref) => (

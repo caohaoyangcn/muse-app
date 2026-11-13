@@ -98,7 +98,7 @@ import {
   writeViewMode,
 } from "../utils/viewPrefs";
 import museLogo from "../assets/images/muse-logo.png";
-import { Button } from "../components/ui/button";
+import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 

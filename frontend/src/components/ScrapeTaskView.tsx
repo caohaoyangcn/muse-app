@@ -6,7 +6,7 @@ import { formatDateTime } from "../utils/task";
 import { videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import RestoredBadge from "./RestoredBadge";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 
 export type ScrapeTaskStatus = "queued" | "succeeded" | "failed";

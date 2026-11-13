@@ -4,7 +4,7 @@ import type { Group, Video } from "../types";
 import GroupFlyout from "./GroupFlyout";
 import { cn } from "../lib/utils";
 import { videoDisplayName } from "../utils/videoName";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 
 export type MenuAction = "open" | "details" | "openFolder" | "copyPath" | "edit" | "remove";
 

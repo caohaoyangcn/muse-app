@@ -10,7 +10,7 @@ import { filterVideosByKeyword } from "../utils/videoFilter";
 import { readCardSize, readViewMode, writeCardSize, writeViewMode } from "../utils/viewPrefs";
 import SearchBar from "./SearchBar";
 import SortBar from "./SortBar";
-import { StickyBar } from "./ui/sticky-bar";
+import { StickyBar } from "../ui/sticky-bar";
 import VideoGrid from "./VideoGrid";
 import VideoList from "./VideoList";
 

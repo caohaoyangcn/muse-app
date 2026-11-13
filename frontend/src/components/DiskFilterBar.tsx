@@ -1,6 +1,6 @@
 import type { DiskOption } from "../utils/diskFilter";
 import { cn } from "../lib/utils";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 
 const ACTIVE_CHIP =
   "border-[var(--accent)] bg-[rgba(124,92,255,0.14)] text-[var(--text)]";

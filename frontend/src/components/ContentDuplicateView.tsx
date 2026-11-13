@@ -14,7 +14,7 @@ import { useLiveQuery } from "../hooks/useLiveQuery";
 import type { ContentDuplicateGroup, ContentDuplicateMember, ContentScanStatus, Video } from "../types";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
@@ -22,8 +22,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
-import { Input } from "./ui/input";
+} from "../ui/dialog";
+import { Input } from "../ui/input";
 
 // Stable identity for the empty worklist.
 const NO_GROUPS: ContentDuplicateGroup[] = [];

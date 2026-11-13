@@ -38,8 +38,8 @@ import type {
 import { BrowserOpenURL } from "../../wailsjs/runtime";
 import { invalidate } from "../services/live";
 import ConfirmDialog from "../components/ConfirmDialog";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { cn } from "../lib/utils";
 import { ArrowRight, Cloud, Keyboard } from "lucide-react";
 

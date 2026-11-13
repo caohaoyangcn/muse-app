@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { WorkspaceTab } from "../types";
 import { cn } from "../lib/utils";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 
 export type TabMenuAction = "close" | "closeOthers" | "closeAll";
 

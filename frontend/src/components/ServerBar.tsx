@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { serverStatus, startServer, stopServer } from "../services/api";
 import type { ServerStartInfo } from "../types";
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 
 /**
  * Header control for the LAN server mode. Lets the user start/stop the HTTP
