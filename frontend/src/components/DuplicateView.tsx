@@ -1,11 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
-import {
-  ignoreJavDuplicate,
-  listJavDuplicates,
-  refreshStatus,
-  removeVideo,
-} from "../services/api";
-import { useLiveQuery } from "../hooks/useLiveQuery";
+import { useMemo, useState } from "react";
+import { refreshStatus } from "../services/api";
 import type { JavDuplicateGroup, Video } from "../types";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
@@ -20,9 +14,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
-
-// Stable identity for the empty worklist.
-const NO_GROUPS: JavDuplicateGroup[] = [];
+import { filterJavGroups, useJavDuplicates } from "../views/duplicates/useJavDuplicates";
 
 /** What both duplicate panels need from the library shell. */
 type DuplicatePanelProps = {
@@ -118,54 +110,28 @@ function TabButton({
  */
 function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: DuplicatePanelProps) {
   const [keyword, setKeyword] = useState("");
-  // Dismissed works are hidden by default; the switch is for checking a
-  // decision (or finding one to undo by keeping a single version).
-  const [includeIgnored, setIncludeIgnored] = useState(false);
   const [pendingKeep, setPendingKeep] = useState<{ group: JavDuplicateGroup; keep: Video } | null>(null);
-  const [busy, setBusy] = useState(false);
 
-  const fetchGroups = useCallback(async () => {
-    const list = await listJavDuplicates(includeIgnored);
-    // Deleting a duplicate happens in the OS file manager, outside the app, so
-    // the stored availability flag can be stale. The backend also reconciles
-    // these versions when the worklist is read: a copy confirmed gone on an
-    // attached volume is removed before the groups are returned. This pass only
-    // refreshes what is still listed — including the detached-drive state the
-    // backend deliberately keeps.
-    const ids = [...new Set(list.flatMap((g) => g.videos.map((v) => v.id)))];
-    const updates = new Map<number, Video>();
-    await Promise.all(
-      ids.map(async (id) => {
-        try {
-          updates.set(id, await refreshStatus(id));
-        } catch {
-          // A failed check leaves the stored flag in place.
-        }
-      }),
-    );
-    if (updates.size > 0) {
-      for (const group of list) {
-        group.videos = group.videos.map((v) => updates.get(v.id) ?? v);
-      }
-    }
-    return list;
-  }, [includeIgnored]);
+  const {
+    groups,
+    activeCount,
+    loading,
+    error,
+    reload,
+    includeIgnored,
+    setIncludeIgnored,
+    busy,
+    keepVersion,
+    keepAll,
+  } = useJavDuplicates({
+    // 桌面端可以把服务器/磁盘的现状重新问一遍；浏览器没有这个端点。
+    refreshVersion: refreshStatus,
+    onResolved,
+    notify: (notice) =>
+      onNotify(notice.text, notice.kind === "error" ? "error" : "success"),
+  });
 
-  const { data, loading, error, reload } = useLiveQuery(
-    fetchGroups,
-    `jav-duplicates:${includeIgnored}`,
-  );
-  const groups = data ?? NO_GROUPS;
-
-  const filtered = useMemo(() => {
-    const needle = keyword.trim().toLowerCase();
-    if (!needle) return groups;
-    return groups.filter(
-      (group) =>
-        group.code.toLowerCase().includes(needle) ||
-        group.videos.some((v) => v.fileName.toLowerCase().includes(needle)),
-    );
-  }, [groups, keyword]);
+  const filtered = useMemo(() => filterJavGroups(groups, keyword), [groups, keyword]);
 
   // Keep one version: every other record in the group leaves the favorites. The
   // underlying files are not deleted, matching the app-wide rule that a
@@ -174,47 +140,16 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
     if (!pendingKeep) return;
     const { group, keep } = pendingKeep;
     setPendingKeep(null);
-    const removed = group.videos.filter((v) => v.id !== keep.id);
-    setBusy(true);
-    try {
-      for (const v of removed) {
-        await removeVideo(v.id);
-      }
-      onNotify(
-        removed.length === 1
-          ? `已保留「${keep.fileName}」，移入回收站 1 个重复版本`
-          : `已保留「${keep.fileName}」，移入回收站 ${removed.length} 个重复版本`,
-        "success",
-      );
-      onResolved(removed.map((v) => v.id));
-      reload();
-    } catch (e) {
-      onNotify(`移入回收站失败：${String(e)}`, "error");
-      reload();
-    } finally {
-      setBusy(false);
-    }
+    await keepVersion(group, keep);
   };
-
-  const handleIgnore = async (group: JavDuplicateGroup) => {
-    try {
-      await ignoreJavDuplicate(group.key);
-      onNotify(group.videos.length > 2 ? "已保留全部版本" : "已保留两者", "success");
-      reload();
-    } catch (e) {
-      onNotify(`忽略重复提示失败：${String(e)}`, "error");
-    }
-  };
-
-  const duplicateCount = groups.filter((g) => !g.ignored).length;
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <span className="text-xs text-[var(--muted)]">
-          {duplicateCount === 0 ? "没有识别到重复作品" : `${duplicateCount} 部作品存在多个版本`}
-          {includeIgnored && groups.length !== duplicateCount
-            ? ` · 另有 ${groups.length - duplicateCount} 部已忽略`
+          {activeCount === 0 ? "没有识别到重复作品" : `${activeCount} 部作品存在多个版本`}
+          {includeIgnored && groups.length !== activeCount
+            ? ` · 另有 ${groups.length - activeCount} 部已忽略`
             : ""}
         </span>
         <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--muted)]">
@@ -283,7 +218,7 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
                   className="ml-auto"
                   disabled={busy}
                   title="保留全部版本，并不再提示这部作品（等价于忽略重复提示）"
-                  onClick={() => void handleIgnore(group)}
+                  onClick={() => void keepAll(group)}
                 >
                   {group.videos.length > 2 ? "保留全部" : "保留两者"}
                 </Button>

@@ -1,18 +1,13 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import type { JavDuplicateGroup, Video } from "../../types";
-import { ApiError, ignoreJavDuplicate, listJavDuplicates, removeVideo } from "../../services/http";
 import { coverURL } from "../../services/http";
-import { invalidate } from "../../services/live";
-import { useLiveQuery } from "../../hooks/useLiveQuery";
+import { useJavDuplicates } from "../../views/duplicates/useJavDuplicates";
 import { videoMeta, videoName } from "../videoDisplay";
 import { ContentDuplicateView } from "./ContentDuplicateView";
 import { ConfirmSheet } from "./Sheet";
 import { EmptyState, ErrorState, Loading } from "./States";
 import { cn } from "../../lib/utils";
-
-// Stable identity for the empty worklist.
-const NO_GROUPS: JavDuplicateGroup[] = [];
 
 /**
  * 查重 (duplicates) on the phone holds two worklists that answer different
@@ -85,53 +80,32 @@ function JavDuplicatePanel({
   onOpenVideo: (v: Video) => void;
   onToast: (message: string, tone?: "info" | "error") => void;
 }) {
-  const [includeIgnored, setIncludeIgnored] = useState(false);
   const [pendingKeep, setPendingKeep] = useState<{ group: JavDuplicateGroup; keep: Video } | null>(null);
-  const [busy, setBusy] = useState(false);
 
-  const { data, loading, error, reload } = useLiveQuery(
-    () => listJavDuplicates(includeIgnored).then((list) => list ?? NO_GROUPS),
-    `jav-duplicates:${includeIgnored}`,
-  );
-  const groups = data ?? NO_GROUPS;
+  const {
+    groups,
+    activeCount,
+    loading,
+    error,
+    reload,
+    includeIgnored,
+    setIncludeIgnored,
+    busy,
+    keepVersion,
+    keepAll,
+  } = useJavDuplicates({
+    notify: (notice) => onToast(notice.text, notice.kind === "error" ? "error" : "info"),
+  });
 
-  const confirmKeep = useCallback(async () => {
+  const confirmKeep = async () => {
     if (!pendingKeep) return;
     const { group, keep } = pendingKeep;
     setPendingKeep(null);
-    const removed = group.videos.filter((v) => v.id !== keep.id);
-    setBusy(true);
-    try {
-      for (const v of removed) await removeVideo(v.id);
-      onToast(`已保留「${videoName(keep)}」，移入回收站 ${removed.length} 个重复版本`);
-      // The removal changes the favorites behind every screen; this panel's own
-      // list follows the invalidation like the others.
-      invalidate();
-    } catch (e) {
-      onToast(e instanceof ApiError ? e.message : "移入回收站失败", "error");
-      reload();
-    } finally {
-      setBusy(false);
-    }
-  }, [pendingKeep, onToast, reload]);
-
-  const keepAll = useCallback(
-    async (group: JavDuplicateGroup) => {
-      try {
-        await ignoreJavDuplicate(group.key);
-        onToast("已保留全部版本");
-        reload();
-      } catch (e) {
-        onToast(e instanceof ApiError ? e.message : "忽略重复提示失败", "error");
-      }
-    },
-    [onToast, reload],
-  );
+    await keepVersion(group, keep);
+  };
 
   if (loading) return <Loading />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
-
-  const activeCount = groups.filter((g) => !g.ignored).length;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4">

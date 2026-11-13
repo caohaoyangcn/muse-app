@@ -6,24 +6,12 @@ import { client } from "../../services/client";
 import { errorMessage } from "../../services/errors";
 import { invalidate } from "../../services/live";
 import { videoDisplayName } from "../../utils/videoName";
+import type { ViewNotify } from "../notify";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/**
- * What the trash view reports back to its shell. Deliberately not a toast type:
- * the desktop has three toast kinds with a details list, the phone has two
- * tones and no detail rows, so each shell maps this into its own notifier.
- */
-export type TrashNotice = {
-  kind: "success" | "info" | "error";
-  text: string;
-  details?: string[];
-};
-
-export type TrashNotify = (notice: TrashNotice) => void;
-
 /** 回收站与归档共用的取数、状态与操作。两个平台的壳只负责渲染。 */
-export function useTrash(notify: TrashNotify) {
+export function useTrash(notify: ViewNotify) {
   const trash = useLiveQuery(client.listTrash, "trash", { onError: () => undefined });
   const archive = useLiveQuery(client.listArchived, "archive", { onError: () => undefined });
 
