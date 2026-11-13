@@ -1,24 +1,17 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-import type { JavTaskOverview, Video } from "../../types";
-import { listJavTasks } from "../../services/http";
-import { useLiveQuery } from "../../hooks/useLiveQuery";
+import type { Video } from "../../types";
 import { formatDateTime } from "../../utils/task";
 import { cn } from "../../lib/utils";
 import { EmptyState, ErrorState, Loading } from "./States";
 import RestoredBadge from "../../components/RestoredBadge";
 import { videoName } from "../videoDisplay";
-
-type Category = "queued" | "succeeded" | "failed";
-
-const CATEGORY_LABELS: Record<Category, string> = {
-  queued: "进行中",
-  succeeded: "已完成",
-  failed: "失败",
-};
-
-// Stable identity for the empty board.
-const NO_TASKS: JavTaskOverview[] = [];
+import {
+  SCRAPE_CATEGORY_LABELS,
+  scrapeStatusLabel,
+  useScrapeTasks,
+  type ScrapeTaskCategory,
+} from "../../views/scrape/useScrapeTasks";
 
 /**
  * The scrape board. Read-only: the mobile client can inspect task status but
@@ -26,20 +19,12 @@ const NO_TASKS: JavTaskOverview[] = [];
  * provider configuration live).
  */
 export function ScrapeTaskView({ onOpenVideo }: { onOpenVideo: (v: Video) => void }) {
-  const { data, loading, error, reload } = useLiveQuery(listJavTasks, "scrape-tasks");
-  const tasks = data ?? NO_TASKS;
-  const [category, setCategory] = useState<Category>("queued");
-
-  const counts = useMemo(() => {
-    const acc: Record<Category, number> = { queued: 0, succeeded: 0, failed: 0 };
-    for (const t of tasks) {
-      const c = (t.category as Category) in acc ? (t.category as Category) : "failed";
-      acc[c]++;
-    }
-    return acc;
-  }, [tasks]);
-
-  const shown = tasks.filter((t) => t.category === category);
+  const [category, setCategory] = useState<ScrapeTaskCategory>("queued");
+  // 这一屏没有关键字框，看板只按分组过滤。
+  const { tasks, counts, visible: shown, loading, error, reload } = useScrapeTasks({
+    status: category,
+    keyword: "",
+  });
 
   if (loading) return <Loading />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
@@ -47,7 +32,7 @@ export function ScrapeTaskView({ onOpenVideo }: { onOpenVideo: (v: Video) => voi
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4">
       <div className="flex gap-2 py-2">
-        {(Object.keys(CATEGORY_LABELS) as Category[]).map((c) => (
+        {(Object.keys(SCRAPE_CATEGORY_LABELS) as ScrapeTaskCategory[]).map((c) => (
           <button
             className={cn(
               "flex-1 rounded-full border px-3 py-2 text-sm",
@@ -59,7 +44,7 @@ export function ScrapeTaskView({ onOpenVideo }: { onOpenVideo: (v: Video) => voi
             onClick={() => setCategory(c)}
             type="button"
           >
-            {CATEGORY_LABELS[c]} {counts[c]}
+            {SCRAPE_CATEGORY_LABELS[c]} {counts[c]}
           </button>
         ))}
       </div>
@@ -71,7 +56,7 @@ export function ScrapeTaskView({ onOpenVideo }: { onOpenVideo: (v: Video) => voi
             title="暂无刮削任务"
           />
         ) : shown.length === 0 ? (
-          <EmptyState title={`没有${CATEGORY_LABELS[category]}的任务`} />
+          <EmptyState title={`没有${SCRAPE_CATEGORY_LABELS[category]}的任务`} />
         ) : (
           <div className="flex flex-col gap-2">
             {shown.map((t) => (
@@ -88,7 +73,7 @@ export function ScrapeTaskView({ onOpenVideo }: { onOpenVideo: (v: Video) => voi
                   {t.video.mosaicRestored && <RestoredBadge />}
                 </div>
                 <div className="mt-1 text-xs text-[var(--muted)]">
-                  {t.status}
+                  {scrapeStatusLabel(t.status)}
                   {t.attempts > 0 ? ` · 尝试 ${t.attempts}/${t.maxAttempts}` : ""}
                   {t.errorCode ? ` · ${t.errorCode}` : ""}
                 </div>
