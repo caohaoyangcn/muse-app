@@ -31,7 +31,6 @@ export interface MuseClient {
   listVideos(): Promise<Video[]>;
   searchVideos(keyword: string): Promise<Video[]>;
   listGroups(): Promise<Group[]>;
-  videosInGroup(id: number): Promise<Video[]>;
   listActors(): Promise<ActorSummary[]>;
   videosByActor(name: string): Promise<Video[]>;
 
@@ -92,7 +91,6 @@ export const client: MuseClient = {
   listVideos: () => bound().listVideos(),
   searchVideos: (keyword) => bound().searchVideos(keyword),
   listGroups: () => bound().listGroups(),
-  videosInGroup: (id) => bound().videosInGroup(id),
   listActors: () => bound().listActors(),
   videosByActor: (name) => bound().videosByActor(name),
 
