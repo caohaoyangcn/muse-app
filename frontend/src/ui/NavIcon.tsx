@@ -7,10 +7,12 @@ import folder from "../assets/icons/nav/folder.svg?raw";
 import folderOpen from "../assets/icons/nav/folder-open.svg?raw";
 import history from "../assets/icons/nav/history.svg?raw";
 import listChecks from "../assets/icons/nav/list-checks.svg?raw";
+import menu from "../assets/icons/nav/menu.svg?raw";
 import moreHorizontal from "../assets/icons/nav/more-horizontal.svg?raw";
 import plus from "../assets/icons/nav/plus.svg?raw";
 import star from "../assets/icons/nav/star.svg?raw";
 import users from "../assets/icons/nav/users.svg?raw";
+import x from "../assets/icons/nav/x.svg?raw";
 import { cn } from "../lib/utils";
 
 /**
@@ -18,6 +20,10 @@ import { cn } from "../lib/utils";
  * editable source: Vite's `?raw` import inlines them, so a single
  * `stroke="currentColor"` follows the row's text or accent color at any size
  * without a separate icon build step.
+ *
+ * This lives in `ui/` because both shells draw navigation: the desktop sidebar
+ * and the phone's slide-out drawer share one glyph set, so a new section looks
+ * the same in both without a second copy.
  *
  * The markup is first-party static content, never user input; inlining it with
  * `dangerouslySetInnerHTML` is what keeps the SVG file itself the source of
@@ -32,10 +38,12 @@ const ICONS = {
   "folder-open": folderOpen,
   history,
   "list-checks": listChecks,
+  menu,
   "more-horizontal": moreHorizontal,
   plus,
   star,
   users,
+  x,
 } as const;
 
 export type NavIconName = keyof typeof ICONS;

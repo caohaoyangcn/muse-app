@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { WorkspaceTab } from "../types";
 import { cn } from "../lib/utils";
-import { NavIcon } from "./NavIcon";
+import { NavIcon } from "../ui/NavIcon";
 
 /** One rendered tab in the strip: its identity plus the label shown. */
 export interface WorkspaceTabItem {
