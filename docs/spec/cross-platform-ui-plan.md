@@ -84,8 +84,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 |---|---|---|
 | 0.1 | 抽 `src/theme.css`，桌面 `style.css` 与移动 `mobile.css` 各自 `@import`；平台专属变量（`--ui-zoom` / `--safe-*`）留在各自文件 | 两份 token 定义变一份，构建产物视觉无变化 |
 | 0.2 | `components/ui/` → `src/ui/`，更新全部引用 | `tsc` 通过；`grep -r "components/ui" src` 为空 |
-| 0.3 | 补齐缺失原子：`Sheet`、`Toast`、`ActionMenu`、`ListRow`、`EmptyState`、`Spinner` | 新原子有 props 类型与无障碍属性 |
-| 0.4 | 目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` | 文档含规则表 |
+| 0.3 | 缺失原子**按需创建**（`Sheet`、`Toast`、`ActionMenu`、`ListRow`、`EmptyState`、`Spinner`）：随阶段 2/3 的真实消费者落地，不预先建空组件 | 每个新原子都有实际消费者、props 类型与无障碍属性 || 0.4 | 目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` | 文档含规则表 |
 
 ### 阶段 1：数据层统一
 
@@ -153,10 +152,10 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 
 | 阶段 | 步骤 | 状态 | 提交 | 日期 |
 |---|---|---|---|---|
-| 0 | 0.1 抽 `theme.css` | 待开始 | — | — |
-| 0 | 0.2 `ui/` 迁移 | 待开始 | — | — |
-| 0 | 0.3 补齐原子 | 待开始 | — | — |
-| 0 | 0.4 规则入文档 | 待开始 | — | — |
+| 0 | 0.1 抽 `theme.css` | 已完成 | `b12a67d` | 2026-11-13 |
+| 0 | 0.2 `ui/` 迁移 | 已完成 | `6118dfc` | 2026-11-13 |
+| 0 | 0.3 补齐原子 | 已改判为按需创建（随 2/3 落地） | — | — |
+| 0 | 0.4 规则入文档 | 已完成 | 随本文档提交 | 2026-11-13 |
 | 1 | 1.1 接口定义 | 待开始 | — | — |
 | 1 | 1.2 Wails adapter | 待开始 | — | — |
 | 1 | 1.3 HTTP adapter | 待开始 | — | — |
@@ -184,3 +183,5 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 | 日期 | 变更 |
 |---|---|
 | 2026-11-13 | 初稿：确立分层、阶段 0-4、度量与目录规则 |
+| 2026-11-13 | 阶段 0 完成：抽出 `frontend/src/theme.css`（两份 token 定义合一，构建产物哈希不变）；`components/ui/` 提升为 `src/ui/`（40 个文件的 import 已改写，产物哈希不变）；目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` |
+| 2026-11-13 | 0.3 改判：不再预先补齐六个空原子，改为随阶段 2/3 的真实消费者落地，避免留下无人调用的组件 |

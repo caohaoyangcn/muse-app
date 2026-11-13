@@ -9,7 +9,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - `backend/database/` —— SQLite 打开与 schema 迁移
 - `backend/video/`、`backend/group/`、`backend/jav/`、`backend/watch/`、`backend/thumbnail/`、`backend/settings/` —— 各领域模型的 model/repository/service 代码，测试（`*_test.go`）与源码同目录
 - `backend/server/` —— 局域网 Web 服务（SPA + JSON API + Range 串流）；`webui/` 内嵌静态资源
-- `frontend/src/` —— `pages/`、`components/`、`services/api.ts`（Wails 绑定的唯一封装层）、`types.ts`；`frontend/wailsjs/` 为生成产物，勿手改
+- `frontend/src/` —— 两种客户端共用一份源码：`ui/` 是跨平台基元层（`Button`、`Input`、`Dialog` 等），`components/` 是桌面专属业务组件，`mobile/` 是局域网移动壳；`services/api.ts` 是 Wails 绑定的唯一封装层，`types.ts`、`utils/`、`hooks/` 为共享代码；`frontend/wailsjs/` 为生成产物，勿手改
 - `docs/spec/` 与根目录 `spec-v1.md` / `spec-v1.1.md` —— 设计文档
 
 ## 构建、测试与开发命令
@@ -50,4 +50,6 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 
 - 新业务逻辑一律经由 `api.Library`，避免桌面端与 HTTP 行为漂移；平台专属能力保留在各自分层中
 - 删除收藏只删除数据库记录与生成的缩略图——绝不触碰底层视频文件
+- 跨平台基元一律放 `frontend/src/ui/`，桌面 `components/` 与移动 `mobile/` 都从这里取；不要在业务文件里手搭按钮、对话框、提示条。`ui/` 只依赖 React 与 `lib/utils`，不得 import 业务或平台模块
+- `frontend/src/mobile/` 不得 import `frontend/src/components/`：需要两平台复用的实现下沉到 `ui/`（展示）或 `views/`（取数与状态）。共享改造的阶段与进度见 `docs/spec/cross-platform-ui-plan.md`
 - 前端取数一律走 `useLiveQuery`（`frontend/src/hooks/useLiveQuery.ts`），不要自己写「只加载一次 + 接收 refreshToken」：写操作成功后调用一次 `invalidate()`（`frontend/src/services/live.ts`），所有已挂载视图会自行静默重读。桌面端后端事件只在 `services/events.ts` 统一订阅，视图不要 `EventsOn` 数据类事件
