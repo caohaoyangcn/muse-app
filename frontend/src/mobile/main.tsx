@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "./App";
-import ErrorBoundary from "../components/ErrorBoundary";
+import ErrorBoundary from "../ui/error-boundary";
 import { configureClient } from "../services/client";
 import { httpClient } from "../services/client.http";
 import "./mobile.css";

@@ -2,7 +2,7 @@ import type { JavTaskOverview, Video } from "../types";
 import { formatDateTime } from "../utils/task";
 import { videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
-import RestoredBadge from "./RestoredBadge";
+import RestoredBadge from "../ui/restored-badge";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import {

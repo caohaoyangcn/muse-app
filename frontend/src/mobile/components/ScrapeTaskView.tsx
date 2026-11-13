@@ -4,7 +4,7 @@ import type { Video } from "../../types";
 import { formatDateTime } from "../../utils/task";
 import { cn } from "../../lib/utils";
 import { EmptyState, ErrorState, Loading } from "./States";
-import RestoredBadge from "../../components/RestoredBadge";
+import RestoredBadge from "../../ui/restored-badge";
 import { videoName } from "../videoDisplay";
 import {
   SCRAPE_CATEGORY_LABELS,

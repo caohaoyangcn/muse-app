@@ -1,7 +1,7 @@
 import type { CardSize, Video } from "../types";
 import { useVirtualRows } from "../hooks/useVirtualRows";
-import BackupBadge from "./BackupBadge";
-import RestoredBadge from "./RestoredBadge";
+import BackupBadge from "../ui/backup-badge";
+import RestoredBadge from "../ui/restored-badge";
 import { scaleBetween } from "../utils/cardSize";
 import { DESKTOP_CARD_SIZE } from "../utils/viewPrefs";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";

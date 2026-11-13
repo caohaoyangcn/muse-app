@@ -5,7 +5,7 @@ import { applyZoom, readZoom } from './utils/zoom'
 import { configureClient } from './services/client'
 import { wailsClient } from './services/client.wails'
 import App from './App'
-import ErrorBoundary from './components/ErrorBoundary'
+import ErrorBoundary from './ui/error-boundary'
 
 // Bind the Wails-backed transport before anything renders. Views read through
 // services/client.ts, so they never touch the generated bindings directly.

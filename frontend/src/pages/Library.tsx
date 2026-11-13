@@ -11,7 +11,7 @@ import DropOverlay from "../components/DropOverlay";
 import DuplicateView from "../components/DuplicateView";
 import EditVideoDialog from "../components/EditVideoDialog";
 import EmptyState from "../components/EmptyState";
-import ErrorBoundary from "../components/ErrorBoundary";
+import ErrorBoundary from "../ui/error-boundary";
 import FileScanButton from "../components/FileScanButton";
 import GroupContextMenu, { type GroupMenuAction } from "../components/GroupContextMenu";
 import GroupDialog from "../components/GroupDialog";

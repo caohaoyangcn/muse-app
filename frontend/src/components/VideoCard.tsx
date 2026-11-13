@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import type { Video } from "../types";
 import MetadataPopup from "./MetadataPopup";
-import BackupBadge from "./BackupBadge";
-import RestoredBadge from "./RestoredBadge";
+import BackupBadge from "../ui/backup-badge";
+import RestoredBadge from "../ui/restored-badge";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import { cn } from "../lib/utils";

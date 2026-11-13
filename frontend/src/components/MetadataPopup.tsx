@@ -10,8 +10,8 @@ import {
 } from "../utils/format";
 import { cn } from "../lib/utils";
 import { videoDisplayName } from "../utils/videoName";
-import BackupBadge from "./BackupBadge";
-import RestoredBadge from "./RestoredBadge";
+import BackupBadge from "../ui/backup-badge";
+import RestoredBadge from "../ui/restored-badge";
 
 const GAP = 8;
 

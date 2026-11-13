@@ -10,7 +10,7 @@ import {
 } from "../../utils/format";
 import { formatDateTime } from "../../utils/task";
 import { coverURL, getVideo, javDetail, javTask, likeVideo } from "../../services/http";
-import RestoredBadge from "../../components/RestoredBadge";
+import RestoredBadge from "../../ui/restored-badge";
 import { invalidate } from "../../services/live";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { videoName } from "../videoDisplay";

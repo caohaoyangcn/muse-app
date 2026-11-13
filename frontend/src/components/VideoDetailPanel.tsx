@@ -16,8 +16,8 @@ import {
   videoResolution,
 } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
-import BackupBadge from "./BackupBadge";
-import RestoredBadge from "./RestoredBadge";
+import BackupBadge from "../ui/backup-badge";
+import RestoredBadge from "../ui/restored-badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import {

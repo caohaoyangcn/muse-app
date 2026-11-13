@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Video } from "../types";
 import { cn } from "../lib/utils";
-import ErrorBoundary from "../components/ErrorBoundary";
+import ErrorBoundary from "../ui/error-boundary";
 import { invalidate } from "../services/live";
 import { ApiError, likeVideo, markVideoOpened, removeVideo, updateVideoInfo } from "../services/http";
 import { ActorFilmsView } from "./components/ActorFilmsView";
