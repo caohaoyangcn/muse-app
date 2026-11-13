@@ -51,5 +51,6 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - 新业务逻辑一律经由 `api.Library`，避免桌面端与 HTTP 行为漂移；平台专属能力保留在各自分层中
 - 删除收藏只删除数据库记录与生成的缩略图——绝不触碰底层视频文件
 - 跨平台基元一律放 `frontend/src/ui/`，桌面 `components/` 与移动 `mobile/` 都从这里取；不要在业务文件里手搭按钮、对话框、提示条。`ui/` 只依赖 React 与 `lib/utils`，不得 import 业务或平台模块
+- 壳取数只经门面：`components/`、`pages/`、`App.tsx` 用 `services/desktop`，`mobile/` 用 `services/web`；`services/api.ts` 与 `services/http.ts` 只能在 `services/` 内部被引用。共享能力一律 `client.*`
 - `frontend/src/mobile/` 不得 import `frontend/src/components/`：需要两平台复用的实现下沉到 `ui/`（展示）或 `views/`（取数与状态）。共享改造的阶段与进度见 `docs/spec/cross-platform-ui-plan.md`
 - 前端取数一律走 `useLiveQuery`（`frontend/src/hooks/useLiveQuery.ts`），不要自己写「只加载一次 + 接收 refreshToken」：写操作成功后调用一次 `invalidate()`（`frontend/src/services/live.ts`），所有已挂载视图会自行静默重读。桌面端后端事件只在 `services/events.ts` 统一订阅，视图不要 `EventsOn` 数据类事件

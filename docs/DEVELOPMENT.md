@@ -81,6 +81,7 @@ api.Library ──► video.Service / group.Service ──► SQLite
 - 新业务逻辑一律经由 `api.Library`，避免桌面端与 HTTP 行为漂移。
 - 平台专属能力保留在各自分层（`backend/platform/`、`backend/server/`）。
 - 跨平台基元放在 `frontend/src/ui/`，桌面 `components/` 与移动 `mobile/` 都从这里取；`ui/` 只依赖 React 与 `lib/utils`。
+- 壳取数只经门面：`components/`、`pages/`、`App.tsx` 用 `services/desktop.ts`，`mobile/` 用 `services/web.ts`；两端都有的能力走 `client.*`，平台专属能力由门面直出。
 - `frontend/src/mobile/` 不得 import `frontend/src/components/`；需要复用的实现下沉到 `ui/`（展示）或 `views/`（取数与状态）。阶段与进度见 `docs/spec/cross-platform-ui-plan.md`。
 - 移除收藏只把记录移入回收站；彻底清理只删除数据库记录与生成的图片，绝不触碰底层视频文件。
 - 前端取数一律走 `useLiveQuery`（`frontend/src/hooks/useLiveQuery.ts`）；写操作成功后调用一次 `invalidate()`（`frontend/src/services/live.ts`），所有已挂载视图会自行静默重读。
