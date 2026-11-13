@@ -1,0 +1,78 @@
+// 桌面端门面（desktop）：壳只从这里取数，不直接 import 传输模块。
+//
+// 两层：
+//  - `client`   两端都有的能力，实现是 Wails 绑定（见 client.wails.ts）。
+//  - 本文件直出的 64 项是**只有桌面端做得到**的能力：原生文件选择器、云盘配置、
+//    刮削控制、演员补全与合并、服务器控制、Cookie 管理、封面选帧、卷状态刷新等。
+//    它们不进 MuseClient —— 浏览器永远做不到，塞进共享契约只会让接口说假话。
+//
+// 移动端对应的是 services/web.ts。两者都 re-export `client`，所以壳里的取数入口
+// 只有一种写法：`import { client, … } from "../services/desktop"`。
+export { client } from "./client";
+
+export {
+  actorFillStatus,
+  addCloudVideos,
+  addVideoToGroup,
+  addVideos,
+  addWatchDir,
+  archiveCloudConnection,
+  browseCloud,
+  clearArchivedSource,
+  clearFC2Cookie,
+  clearJavBusCookie,
+  cloudStorageAvailable,
+  copyPath,
+  createGroup,
+  deleteCloudConnection,
+  deleteGroup,
+  enableCloudConnection,
+  ensureVideoIn4KGroup,
+  fileScanStatus,
+  getFC2CookieStatus,
+  getJavBusCookieStatus,
+  getScrapeProxy,
+  getServerPort,
+  getTourSeen,
+  getTrashRetentionDays,
+  listCloudConnections,
+  listWatchDirs,
+  mergeActors,
+  openCloudPage,
+  openContainingFolder,
+  openVideo,
+  pickVideoFiles,
+  pickWatchDir,
+  purgeExpiredTrash,
+  refreshStatus,
+  refreshVolumes,
+  removeWatchDir,
+  renameGroup,
+  reorderGroups,
+  rescanWatchDirs,
+  resetVideoCover,
+  saveCloudConnection,
+  scanFileStatuses,
+  scrapeVideoJav,
+  scrapeVideosJav,
+  serverStatus,
+  setFC2Cookie,
+  setGroupParent,
+  setJavBusCookie,
+  setScrapeProxy,
+  setServerPort,
+  setTourSeen,
+  setTrashRetentionDays,
+  setVideoCover,
+  setVideoGroups,
+  setVideoJavOverride,
+  setVideoScrapedCoverAllowed,
+  startActorFill,
+  startServer,
+  stopServer,
+  suggestGroupsForVideos,
+  testCloudConnection,
+  unmergeActor,
+  videoGroupIDs,
+  videosInGroup,
+} from "./api";

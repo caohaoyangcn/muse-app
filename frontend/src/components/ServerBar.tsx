@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { serverStatus, startServer, stopServer } from "../services/api";
+import { serverStatus, startServer, stopServer } from "../services/desktop";
 import type { ServerStartInfo } from "../types";
 import { Button } from "../ui/button";
 

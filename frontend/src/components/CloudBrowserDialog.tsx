@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
-import { addCloudVideos, browseCloud, listCloudConnections } from "../services/api";
+import { addCloudVideos, browseCloud, listCloudConnections } from "../services/desktop";
 import type { AddVideoResult, CloudConnection, CloudEntry } from "../types";
 import { formatFileSize } from "../utils/format";
 import { cn } from "../lib/utils";

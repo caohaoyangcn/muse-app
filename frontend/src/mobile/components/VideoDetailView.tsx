@@ -9,7 +9,7 @@ import {
   videoResolution,
 } from "../../utils/format";
 import { formatDateTime } from "../../utils/task";
-import { coverURL, getVideo, javDetail, javTask, likeVideo } from "../../services/http";
+import { client, coverURL, getVideo } from "../../services/web";
 import RestoredBadge from "../../ui/restored-badge";
 import { invalidate } from "../../services/live";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
@@ -84,8 +84,8 @@ export function VideoDetailView({
     // A metadata failure must not hide the file info: the status section simply
     // reports "not scraped".
     const [detail, task] = await Promise.all([
-      javDetail(videoId).catch(() => null),
-      javTask(videoId).catch(() => null),
+      client.videoJav(videoId).catch(() => null),
+      client.videoJavTask(videoId).catch(() => null),
     ]);
     return { video, detail, task };
   }, [videoId]);
@@ -99,7 +99,7 @@ export function VideoDetailView({
     if (!v) return;
     setBusy(true);
     try {
-      await likeVideo(v.id);
+      await client.likeVideo(v.id);
       invalidate();
     } finally {
       setBusy(false);

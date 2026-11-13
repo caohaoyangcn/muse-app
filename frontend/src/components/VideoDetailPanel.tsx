@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { JavDetail, JavTask, Video } from "../types";
-import {
-  scrapeVideoJav,
-  setVideoJavOverride,
-  videoJav,
-  videoJavTask,
-} from "../services/api";
+import { client, scrapeVideoJav, setVideoJavOverride } from "../services/desktop";
 import { useLiveQuery } from "../hooks/useLiveQuery";
 import {
   formatBitrate,
@@ -103,11 +98,11 @@ export default function VideoDetailPanel({
 
   const fetchJav = useCallback(async (): Promise<{ detail: JavDetail | null; task: JavTask | null }> => {
     const [detail, task] = await Promise.all([
-      videoJav(video.id).catch((e) => {
+      client.videoJav(video.id).catch((e) => {
         if (isMissingJavDetail(e)) return null;
         throw e;
       }),
-      videoJavTask(video.id).catch(() => null),
+      client.videoJavTask(video.id).catch(() => null),
     ]);
     return { detail, task };
   }, [video.id]);

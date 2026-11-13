@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { EventsOn } from "../../wailsjs/runtime";
 import { RefreshCw } from "lucide-react";
-import { fileScanStatus, scanFileStatuses } from "../services/api";
+import { fileScanStatus, scanFileStatuses } from "../services/desktop";
 import type { FileScanStatus } from "../types";
 import type { ToastItem } from "../ui/toast";
 import { Button } from "../ui/button";

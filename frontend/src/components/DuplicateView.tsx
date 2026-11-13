@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { refreshStatus } from "../services/api";
+import { refreshStatus } from "../services/desktop";
 import type { JavDuplicateGroup, Video } from "../types";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";

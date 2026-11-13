@@ -4,7 +4,7 @@ import { scaleBetween } from "../../utils/cardSize";
 import { useVirtualRows } from "../../hooks/useVirtualRows";
 import BackupBadge from "../../ui/backup-badge";
 import RestoredBadge from "../../ui/restored-badge";
-import { coverURL } from "../../services/http";
+import { coverURL } from "../../services/web";
 import { MOBILE_CARD_SIZE } from "../prefs";
 import { videoMeta, videoName } from "../videoDisplay";
 

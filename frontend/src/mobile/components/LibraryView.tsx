@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CardSize, Group, SortDir, SortKey, Video, ViewMode } from "../../types";
 import { compareLastOpened } from "../../utils/sortVideos";
 import { filterVideosByKeyword } from "../../utils/videoFilter";
-import { listGroups, listVideos, videosInGroup } from "../../services/http";
+import { client, videosInGroup } from "../../services/web";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import {
   readCardSize,
@@ -55,11 +55,11 @@ export function LibraryView({
   const fetchLibrary = useCallback(async () => {
     const [list, groupList] = await Promise.all([
       keyword
-        ? listVideos(keyword)
+        ? client.searchVideos(keyword)
         : filterGroupId === "all"
-          ? listVideos()
+          ? client.listVideos()
           : videosInGroup(filterGroupId),
-      listGroups(),
+      client.listGroups(),
     ]);
     return { videos: list ?? NO_VIDEOS, groups: groupList ?? NO_GROUPS };
   }, [keyword, filterGroupId]);

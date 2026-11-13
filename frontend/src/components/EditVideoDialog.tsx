@@ -1,12 +1,6 @@
 import { useState } from "react";
 import type { Video } from "../types";
-import {
-  clearVideoLikes,
-  resetVideoCover,
-  setVideoCover,
-  setVideoScrapedCoverAllowed,
-  updateVideoInfo,
-} from "../services/api";
+import { client, resetVideoCover, setVideoCover, setVideoScrapedCoverAllowed } from "../services/desktop";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { videoCoverURL } from "../utils/format";
@@ -62,7 +56,7 @@ export default function EditVideoDialog({ video, onClose, onSaved }: Props) {
   // unlike the staged cover/title/notes).
   const clearLikes = async () => {
     try {
-      const updated = await clearVideoLikes(video.id);
+      const updated = await client.clearVideoLikes(video.id);
       onSaved(updated);
     } catch (e) {
       setError(String(e));
@@ -80,7 +74,7 @@ export default function EditVideoDialog({ video, onClose, onSaved }: Props) {
       } else if (video.customCoverAt > 0) {
         await resetVideoCover(video.id);
       }
-      const updated = await updateVideoInfo(video.id, title, notes);
+      const updated = await client.updateVideoInfo(video.id, title, notes);
       onSaved(updated);
       onClose();
     } catch (e) {

@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  actorFillStatus,
-  mergeActors,
-  startActorFill,
-  unmergeActor,
-} from "../services/api";
+import { actorFillStatus, mergeActors, startActorFill, unmergeActor } from "../services/desktop";
 import { invalidate } from "../services/live";
 import { useLiveQuery } from "../hooks/useLiveQuery";
 import type { ActorFillStatus, ActorSummary } from "../types";

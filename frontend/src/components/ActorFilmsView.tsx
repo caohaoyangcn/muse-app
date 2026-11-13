@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { likeVideo } from "../services/api";
+import { client } from "../services/desktop";
 import { invalidate } from "../services/live";
 import type { ActorProfile, CardSize, SortDir, SortKey, Video, ViewMode } from "../types";
 import { beginVideoDrag } from "../utils/dragGhost";
@@ -91,7 +91,7 @@ export default function ActorFilmsView({
   // query re-reads and the card follows.
   const handleLike = useCallback(
     (id: number) => {
-      likeVideo(id)
+      client.likeVideo(id)
         .then(() => invalidate())
         .catch((e) => onNotify(`点赞失败：${String(e)}`, "error"));
     },

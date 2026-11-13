@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Group } from "../types";
-import { videoGroupIDs } from "../services/api";
+import { videoGroupIDs } from "../services/desktop";
 import FlyoutShell from "../ui/flyout-shell";
 import { cn } from "../lib/utils";
 

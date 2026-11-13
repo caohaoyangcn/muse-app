@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { JavDuplicateGroup, Video } from "../../types";
-import { coverURL } from "../../services/http";
+import { coverURL } from "../../services/web";
 import { useJavDuplicates } from "../../views/duplicates/useJavDuplicates";
 import { videoMeta, videoName } from "../videoDisplay";
 import { ContentDuplicateView } from "./ContentDuplicateView";

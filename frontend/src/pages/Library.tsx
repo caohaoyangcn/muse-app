@@ -33,33 +33,7 @@ import WorkspaceTabs, {
   type WorkspaceTabGroup,
   type WorkspaceTabItem,
 } from "../components/WorkspaceTabs";
-import {
-  addVideoToGroup,
-  addVideos,
-  addWatchDir,
-  copyPath,
-  createGroup,
-  deleteGroup,
-  likeVideo,
-  listCloudConnections,
-  listGroups,
-  listVideos,
-  openContainingFolder,
-  openCloudPage,
-  openVideo,
-  pickVideoFiles,
-  pickWatchDir,
-  refreshStatus,
-  refreshVolumes,
-  removeVideo,
-  renameGroup,
-  reorderGroups,
-  searchVideos,
-  setGroupParent,
-  setVideoGroups,
-  suggestGroupsForVideos,
-  videosInGroup,
-} from "../services/api";
+import { client, addVideoToGroup, addVideos, addWatchDir, copyPath, createGroup, deleteGroup, listCloudConnections, openContainingFolder, openCloudPage, openVideo, pickVideoFiles, pickWatchDir, refreshStatus, refreshVolumes, renameGroup, reorderGroups, setGroupParent, setVideoGroups, suggestGroupsForVideos, videosInGroup } from "../services/desktop";
 import { invalidate } from "../services/live";
 import { useLiveQuery } from "../hooks/useLiveQuery";
 import type {
@@ -243,7 +217,7 @@ export default function Library({
   // The list read model: the whole library, or one group's members. A search
   // replaces the source with its results, as before.
   const fetchLibraryVideos = useCallback(async (view: ViewFilter, search: string) => {
-    const found = search ? await searchVideos(search) : await listVideos();
+    const found = search ? await client.searchVideos(search) : await client.listVideos();
     if (view.kind === "group") {
       const ids = new Set(await videosInGroup(view.id));
       return found.filter((v) => ids.has(v.id));
@@ -274,7 +248,7 @@ export default function Library({
     },
   );
 
-  const groupsQuery = useLiveQuery(listGroups, "groups", {
+  const groupsQuery = useLiveQuery(client.listGroups, "groups", {
     onError: (e) => pushToast({ kind: "error", message: "加载分组失败", details: [String(e)] }),
   });
 
@@ -1367,7 +1341,7 @@ export default function Library({
     setRemoveTarget(null);
     dropFromSelection(target.id);
     try {
-      await removeVideo(target.id);
+      await client.removeVideo(target.id);
       closeDetail(target.id);
       pushToast({ kind: "info", message: `已将“${videoDisplayName(target)}”移入回收站` });
       // The removed video may have belonged to groups, and its card has to
@@ -1389,7 +1363,7 @@ export default function Library({
     setMissingOpen(null);
     dropFromSelection(target.id);
     try {
-      await removeVideo(target.id);
+      await client.removeVideo(target.id);
       closeDetail(target.id);
       pushToast({ kind: "info", message: `已将“${videoDisplayName(target)}”移入回收站` });
       invalidate();
@@ -1493,7 +1467,7 @@ export default function Library({
   // The click only writes; the live query re-reads the count.
   const handleLike = useCallback(
     (id: number) => {
-      likeVideo(id)
+      client.likeVideo(id)
         .then(() => invalidate())
         .catch((e) => pushToast({ kind: "error", message: "点赞失败", details: [String(e)] }));
     },

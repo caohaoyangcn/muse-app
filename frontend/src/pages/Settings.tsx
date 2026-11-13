@@ -1,34 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  getServerPort,
-  serverStatus,
-  setServerPort,
-  listWatchDirs,
-  addWatchDir,
-  removeWatchDir,
-  pickWatchDir,
-  rescanWatchDirs,
-  getJavBusCookieStatus,
-  setJavBusCookie,
-  clearJavBusCookie,
-  getFC2CookieStatus,
-  setFC2Cookie,
-  clearFC2Cookie,
-  getScrapeProxy,
-  setScrapeProxy,
-  getTrashRetentionDays,
-  setTrashRetentionDays,
-  listTrash,
-  purgeExpiredTrash,
-  scrapeVideosJav,
-  listCloudConnections,
-  archiveCloudConnection,
-  enableCloudConnection,
-  saveCloudConnection,
-  deleteCloudConnection,
-  testCloudConnection,
-  cloudStorageAvailable,
-} from "../services/api";
+import { client, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
 import type {
   CloudConnection,
   CloudConnectionInput,
@@ -302,7 +273,7 @@ function TrashSection() {
 
   const load = useCallback(async () => {
     try {
-      const [retention, trash] = await Promise.all([getTrashRetentionDays(), listTrash()]);
+      const [retention, trash] = await Promise.all([getTrashRetentionDays(), client.listTrash()]);
       setDays(String(retention));
       setCount(trash.videos.length);
       setError(null);

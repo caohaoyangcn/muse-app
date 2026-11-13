@@ -3,7 +3,7 @@ import Library from "./pages/Library";
 import Settings from "./pages/Settings";
 import GuidedTour from "./components/GuidedTour";
 import { attachBackendEvents } from "./services/events";
-import { getTourSeen, setTourSeen } from "./services/api";
+import { getTourSeen, setTourSeen } from "./services/desktop";
 import { useTour } from "./hooks/useTour";
 import { applyZoom, readZoom, stepZoom, writeZoom, type ZoomLevel } from "./utils/zoom";
 

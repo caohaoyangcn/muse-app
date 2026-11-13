@@ -4,7 +4,7 @@ import type { Video } from "../types";
 import { cn } from "../lib/utils";
 import ErrorBoundary from "../ui/error-boundary";
 import { invalidate } from "../services/live";
-import { ApiError, likeVideo, markVideoOpened, removeVideo, updateVideoInfo } from "../services/http";
+import { client, ApiError, markVideoOpened } from "../services/web";
 import { ActorFilmsView } from "./components/ActorFilmsView";
 import { ActorIndexView } from "./components/ActorIndexView";
 import { DuplicateView } from "./components/DuplicateView";
@@ -381,7 +381,7 @@ export default function App() {
     };
     setBusy(true);
     try {
-      await removeVideo(removedID);
+      await client.removeVideo(removedID);
       toast(`已将「${videoName(removeTarget)}」移入回收站`);
       forget();
     } catch (e) {
@@ -395,7 +395,7 @@ export default function App() {
   const like = useCallback(
     async (target: Video) => {
       try {
-        const next = await likeVideo(target.id);
+        const next = await client.likeVideo(target.id);
         toast(`已点赞「${videoName(next)}」♥ ${next.likeCount}`);
         invalidate();
         return next;
@@ -560,7 +560,7 @@ export default function App() {
           onSave={async (title, notes) => {
             setBusy(true);
             try {
-              await updateVideoInfo(editVideo.id, title, notes);
+              await client.updateVideoInfo(editVideo.id, title, notes);
               invalidate();
               setEditVideo(null);
               toast("已保存");

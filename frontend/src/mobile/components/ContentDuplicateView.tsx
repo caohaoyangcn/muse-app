@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { ContentDuplicateGroup, ContentDuplicateMember, Video } from "../../types";
-import { coverURL } from "../../services/http";
+import { coverURL } from "../../services/web";
 import {
   scanStatusText,
   useContentDuplicates,
