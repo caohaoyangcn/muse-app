@@ -90,12 +90,16 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 
 | 步骤 | 内容 |
 |---|---|
-| 1.1 | `services/client.ts` 定义 `MuseClient` 接口，覆盖桌面 91 个导出的能力面 |
-| 1.2 | `client.wails.ts` 包装现有绑定，保持 `services/api.ts` 的辅助函数（URL 拼装等）不变 |
-| 1.3 | `client.http.ts` 包装现有 fetch，`mobile/api.ts` 降级为薄层 |
-| 1.4 | 两个入口注入各自实现，视图通过接口取用 |
+| 1.0 | 把 LAN 传输从 `mobile/api.ts` 移到 `services/http.ts`，让 L2 全部落在 `services/`，避免 `services → mobile` 的反向依赖 |
+| 1.1 | `services/client.ts` 定义 `MuseClient` 接口：**两平台交集的 26 个能力**，不是桌面 91 个导出的并集 |
+| 1.2 | `client.wails.ts` 包装现有绑定，`services/api.ts` 及其辅助函数保持不变 |
+| 1.3 | `client.http.ts` 包装 `services/http.ts`，负责移动端命名（`javDetail` → `videoJav` 等）的映射 |
+| 1.4 | 两个入口注入各自实现；`TrashView` 两平台改为通过 `client.*` 取数，作为接线验收样板 |
+| 1.5 | 错误类型统一：移动端 `ApiError` 与 Wails 拒绝字符串目前不共享，视图只能按 `Error.message` 处理 |
 
-验收：移动端能调用的能力与接口声明的差额被显式标为 `Unsupported`，不再体现为"文件里没有这个函数"。
+验收：视图不再 import 任何传输模块（`services/api.ts` 或 `services/http.ts`），只 import `services/client.ts`；移动端 bundle 中不出现任何 Wails 绑定符号。
+
+**接口边界的判定规则**：只有当两个平台都能执行、且返回形状一致时才进 `MuseClient`。已知的三个例外及其处置见 §8。
 
 ### 阶段 2：按视图迁移（主体）
 
@@ -156,10 +160,12 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 | 0 | 0.2 `ui/` 迁移 | 已完成 | `6118dfc` | 2026-11-13 |
 | 0 | 0.3 补齐原子 | 已改判为按需创建（随 2/3 落地） | — | — |
 | 0 | 0.4 规则入文档 | 已完成 | 随本文档提交 | 2026-11-13 |
-| 1 | 1.1 接口定义 | 待开始 | — | — |
-| 1 | 1.2 Wails adapter | 待开始 | — | — |
-| 1 | 1.3 HTTP adapter | 待开始 | — | — |
-| 1 | 1.4 入口注入 | 待开始 | — | — |
+| 1 | 1.0 传输归位 | 已完成 | `207ef70` | 2026-11-13 |
+| 1 | 1.1 接口定义 | 已完成 | `e8bcffd` | 2026-11-13 |
+| 1 | 1.2 Wails adapter | 已完成 | `e8bcffd` | 2026-11-13 |
+| 1 | 1.3 HTTP adapter | 已完成 | `e8bcffd` | 2026-11-13 |
+| 1 | 1.4 入口注入 + TrashView 接线 | 已完成 | `1f462dd` | 2026-11-13 |
+| 1 | 1.5 错误类型统一 | 待开始 | — | — |
 | 2 | TrashView | 待开始 | — | — |
 | 2 | DuplicateView | 待开始 | — | — |
 | 2 | ContentDuplicateView | 待开始 | — | — |
@@ -176,6 +182,9 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 - **2026-11-13**：不合并构建入口。理由：Wails 绑定、`go:embed` 产物、history 路由三处分歧真实存在，合并会把平台判断塞进每个组件。
 - **2026-11-13**：不做桌面端响应式改造。桌面窗口拉窄是独立需求，不在本计划内。
 - **2026-11-13**：不引入第三方组件库（含 Astryx）。理由见评估：Beta 0.7.x 版本锁死、+45KB gzip 全局 CSS、视频墙/右键菜单/拖拽等核心场景它不覆盖，收益集中在可选交互组件，而自建 `ui/` 已能覆盖。
+- **2026-11-13**：`MuseClient` 取两平台**交集**（26 项），不复制桌面 91 个导出。理由：接口一旦收录浏览器做不到的能力，移动端就只能返回假的 `Unsupported`，反而把"缺失"藏起来；平台专属能力留在各自模块，缺失是显式的 import 不存在。
+- **2026-11-13**：`videosInGroup` 不进接口。桌面返回 `number[]`（id 列表，配合已加载的全量列表在内存里过滤），移动端返回 `Video[]`（服务端直接给对象）。形状不一致，等阶段 2 做 Library 视图模型时再定统一形状，避免现在拍脑袋。
+- **2026-11-13**：`markVideoOpened` 不进接口。桌面录制播放由 `OpenVideo` 在 Go 侧完成，移动端因为播放交给外部 App，需要单独 `POST /opened`。这是播放链路的合理分叉，记入 §3 允许分叉清单。
 - **2026-11-13**：`components/ui/` 提升为 `src/ui/`。理由：让"共享层"在目录上可见，并可被机械检查。
 
 ## 9. 变更记录
@@ -184,4 +193,5 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 |---|---|
 | 2026-11-13 | 初稿：确立分层、阶段 0-4、度量与目录规则 |
 | 2026-11-13 | 阶段 0 完成：抽出 `frontend/src/theme.css`（两份 token 定义合一，构建产物哈希不变）；`components/ui/` 提升为 `src/ui/`（40 个文件的 import 已改写，产物哈希不变）；目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` |
+| 2026-11-13 | 阶段 1 主体完成（1.5 错误类型统一留待后续）：`mobile/api.ts` → `services/http.ts`（纯移动，产物字节不变）；新增 `services/client.ts`（26 项交集契约）与两个 adapter；两入口注入；`TrashView` 两平台改写为 `client.*`，桌面 +2.1 KB / 移动 +2.1 KB，移动 bundle 仍不含 Wails 符号 |
 | 2026-11-13 | 0.3 改判：不再预先补齐六个空原子，改为随阶段 2/3 的真实消费者落地，避免留下无人调用的组件 |
