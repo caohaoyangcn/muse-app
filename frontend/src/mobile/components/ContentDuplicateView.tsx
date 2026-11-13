@@ -1,26 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
-import type { ContentDuplicateGroup, ContentDuplicateMember, ContentScanStatus, Video } from "../../types";
+import type { ContentDuplicateGroup, ContentDuplicateMember, Video } from "../../types";
+import { coverURL } from "../../services/http";
 import {
-  ApiError,
-  confirmContentDuplicate,
-  contentScanStatus,
-  coverURL,
-  ignoreContentDuplicate,
-  listContentDuplicates,
-  removeVideo,
-  reverifyContentDuplicate,
-  scanContentDuplicates,
-} from "../../services/http";
-import { invalidate } from "../../services/live";
-import { useLiveQuery } from "../../hooks/useLiveQuery";
+  scanStatusText,
+  useContentDuplicates,
+} from "../../views/duplicates/useContentDuplicates";
 import { videoMeta, videoName } from "../videoDisplay";
 import { ConfirmSheet } from "./Sheet";
 import { EmptyState, ErrorState, Loading } from "./States";
 import { cn } from "../../lib/utils";
-
-// Stable identity for the empty worklist.
-const NO_GROUPS: ContentDuplicateGroup[] = [];
 
 /**
  * 内容重复 on the phone: the favorites that hold byte-identical files, grouped by
@@ -40,116 +29,38 @@ export function ContentDuplicateView({
   onOpenVideo: (v: Video) => void;
   onToast: (message: string, tone?: "info" | "error") => void;
 }) {
-  const [includeIgnored, setIncludeIgnored] = useState(false);
-  const [scan, setScan] = useState<ContentScanStatus | null>(null);
   const [pendingKeep, setPendingKeep] = useState<{ group: ContentDuplicateGroup; keep: Video } | null>(
     null,
   );
-  const [busy, setBusy] = useState(false);
 
-  const { data, loading, error, reload } = useLiveQuery(
-    () => listContentDuplicates(includeIgnored).then((list) => list ?? NO_GROUPS),
-    `content-duplicates:${includeIgnored}`,
-  );
-  const groups = data ?? NO_GROUPS;
+  const {
+    groups,
+    activeCount,
+    loading,
+    error,
+    reload,
+    includeIgnored,
+    setIncludeIgnored,
+    scan,
+    busy,
+    startScan,
+    keepCopy,
+    keepAll,
+    reverify,
+    confirmGroup,
+  } = useContentDuplicates({
+    notify: (notice) => onToast(notice.text, notice.kind === "error" ? "error" : "info"),
+  });
 
-  useEffect(() => {
-    void contentScanStatus().then(setScan).catch(() => {});
-  }, []);
-
-  // The pass runs on the desktop; the phone follows its progress by polling
-  // while it is running, which survives a phone that slept through the events.
-  useEffect(() => {
-    if (!scan?.running) return;
-    const timer = window.setInterval(() => {
-      void contentScanStatus()
-        .then((status) => {
-          setScan(status);
-          if (!status.running) reload();
-        })
-        .catch(() => {});
-    }, 1500);
-    return () => window.clearInterval(timer);
-  }, [scan?.running, reload]);
-
-  // A full-file confirmation can take minutes on a phone's connection to the
-  // desktop; while one is running, the group's own state is the progress report.
-  useEffect(() => {
-    if (!groups.some((g) => g.confirming)) return;
-    const timer = window.setInterval(() => reload(), 3000);
-    return () => window.clearInterval(timer);
-  }, [groups, reload]);
-
-  const startScan = useCallback(async () => {
-    try {
-      setScan(await scanContentDuplicates());
-      onToast("已开始扫描内容指纹");
-    } catch (e) {
-      onToast(e instanceof ApiError ? e.message : "无法开始扫描", "error");
-    }
-  }, [onToast]);
-
-  const confirmKeep = useCallback(async () => {
+  const confirmKeep = async () => {
     if (!pendingKeep) return;
     const { group, keep } = pendingKeep;
     setPendingKeep(null);
-    const removed = group.members.map((m) => m.video).filter((v) => v.id !== keep.id);
-    setBusy(true);
-    try {
-      for (const v of removed) await removeVideo(v.id);
-      onToast(`已保留「${videoName(keep)}」，移入回收站 ${removed.length} 个重复拷贝`);
-      invalidate();
-    } catch (e) {
-      onToast(e instanceof ApiError ? e.message : "移入回收站失败", "error");
-      reload();
-    } finally {
-      setBusy(false);
-    }
-  }, [pendingKeep, onToast, reload]);
-
-  const keepAll = useCallback(
-    async (group: ContentDuplicateGroup) => {
-      try {
-        await ignoreContentDuplicate(group.hash);
-        onToast("已保留全部拷贝");
-        reload();
-      } catch (e) {
-        onToast(e instanceof ApiError ? e.message : "忽略重复提示失败", "error");
-      }
-    },
-    [onToast, reload],
-  );
-
-  const reverify = useCallback(
-    async (group: ContentDuplicateGroup) => {
-      try {
-        await reverifyContentDuplicate(group.hash);
-        onToast("已重新读取内容指纹");
-        window.setTimeout(reload, 800);
-      } catch (e) {
-        onToast(e instanceof ApiError ? e.message : "重新校验失败", "error");
-      }
-    },
-    [onToast, reload],
-  );
-
-  const confirm = useCallback(
-    async (group: ContentDuplicateGroup) => {
-      try {
-        await confirmContentDuplicate(group.hash);
-        onToast("已开始完整校验，逐字节读取整份文件，大文件较慢");
-        reload();
-      } catch (e) {
-        onToast(e instanceof ApiError ? e.message : "完整校验失败", "error");
-      }
-    },
-    [onToast, reload],
-  );
+    await keepCopy(group, keep);
+  };
 
   if (loading) return <Loading />;
   if (error) return <ErrorState message={error} onRetry={reload} />;
-
-  const activeCount = groups.filter((g) => !g.ignored).length;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4">
@@ -217,7 +128,7 @@ export function ContentDuplicateView({
                         <button
                           className="rounded-full border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] active:bg-[var(--panel-2)] disabled:opacity-50"
                           disabled={group.confirming}
-                          onClick={() => void confirm(group)}
+                          onClick={() => void confirmGroup(group)}
                           type="button"
                         >
                           {group.confirming ? "校验中…" : "完整校验"}
@@ -323,32 +234,6 @@ function memberBadge(member: ContentDuplicateMember): string {
 /** A group with a member on an unplugged drive must not be cleaned up yet. */
 function groupDetached(group: ContentDuplicateGroup): boolean {
   return group.members.some((member) => member.volumeOffline);
-}
-
-/**
- * What the pass is doing, with the running phase's own counters. The size phase
- * reads every favorite's size and the comparing phase fingerprints only the ones
- * whose size is shared, so each phase reports its own pair — the comparing total
- * does not exist until the size pass ends.
- */
-function scanStatusText(status: ContentScanStatus | null): string {
-  if (!status) return "尚未扫描过内容指纹";
-  if (status.running) {
-    if (status.phase === "examining") {
-      return `正在检查文件大小… ${status.examined}/${status.examineTotal}`;
-    }
-    if (status.phase === "comparing") {
-      return `正在比对内容指纹… ${status.done}/${status.total}`;
-    }
-    return "正在准备扫描…";
-  }
-  if (status.finishedAt > 0) {
-    let text = `上次扫描：检查 ${status.examineTotal} 个文件`;
-    text += status.total > 0 ? ` · 比对 ${status.total} 个` : " · 无需比对内容";
-    if (status.failed > 0) text += ` · ${status.failed} 个无法读取`;
-    return text;
-  }
-  return "尚未扫描过内容指纹";
 }
 
 /** Byte sizes as the phone shows them (no dependency on the desktop formatter). */

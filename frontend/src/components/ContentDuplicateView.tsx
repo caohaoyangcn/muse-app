@@ -1,16 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { EventsOn } from "../../wailsjs/runtime";
-import {
-  confirmContentDuplicate,
-  contentScanStatus,
-  ignoreContentDuplicate,
-  listContentDuplicates,
-  removeVideo,
-  reverifyContentDuplicate,
-  scanContentDuplicates,
-} from "../services/api";
-import { invalidate } from "../services/live";
-import { useLiveQuery } from "../hooks/useLiveQuery";
 import type { ContentDuplicateGroup, ContentDuplicateMember, ContentScanStatus, Video } from "../types";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
@@ -24,9 +13,13 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
-
-// Stable identity for the empty worklist.
-const NO_GROUPS: ContentDuplicateGroup[] = [];
+import {
+  filterContentGroups,
+  scanProgress,
+  scanStatusText,
+  useContentDuplicates,
+  type ConfirmProgress,
+} from "../views/duplicates/useContentDuplicates";
 
 /**
  * 内容重复 panel: the favorites that hold byte-identical files, grouped by the
@@ -58,142 +51,59 @@ export default function ContentDuplicatePanel({
   onNotify: (message: string, kind: "success" | "error") => void;
 }) {
   const [keyword, setKeyword] = useState("");
-  const [includeIgnored, setIncludeIgnored] = useState(false);
-  const [scan, setScan] = useState<ContentScanStatus | null>(null);
-  const [confirmProgress, setConfirmProgress] = useState<{
-    hash: string;
-    done: number;
-    total: number;
-  } | null>(null);
   const [pendingKeep, setPendingKeep] = useState<{ group: ContentDuplicateGroup; keep: Video } | null>(
     null,
   );
-  const [busy, setBusy] = useState(false);
 
-  // The backend re-checks every member against the disk while it builds this
-  // list, so the badges below describe the files as they are right now.
-  const fetchGroups = useCallback(
-    () => listContentDuplicates(includeIgnored).then((list) => list ?? []),
-    [includeIgnored],
+  // 逐字节校验的进度只有桌面有事件通道；浏览器那边靠 group.confirming 与重读。
+  const subscribeConfirmProgress = useCallback(
+    (onProgress: (progress: ConfirmProgress | null) => void) => {
+      const offProgress = EventsOn(
+        "fingerprint:confirm:progress",
+        (data?: { hash?: string; done?: number; total?: number }) => {
+          if (!data?.hash || typeof data.done !== "number" || typeof data.total !== "number") return;
+          onProgress({ hash: data.hash, done: data.done, total: data.total });
+        },
+      );
+      const offDone = EventsOn("fingerprint:confirm:done", () => onProgress(null));
+      return () => {
+        offProgress();
+        offDone();
+      };
+    },
+    [],
   );
-  const { data, loading, error, reload } = useLiveQuery(
-    fetchGroups,
-    `content-duplicates:${includeIgnored}`,
-  );
-  const groups = data ?? NO_GROUPS;
 
-  useEffect(() => {
-    void contentScanStatus().then(setScan).catch(() => {});
-    const offProgress = EventsOn("fingerprint:scan:progress", (status?: ContentScanStatus) => {
-      if (status) setScan(status);
-    });
-    // The scan and the full-file confirmation both change what this list says;
-    // the view only contributes the progress display, the data comes from the
-    // live query.
-    const offDone = EventsOn("fingerprint:scan:done", () => {
-      void contentScanStatus().then(setScan).catch(() => {});
-      invalidate();
-    });
-    // A full-file confirmation reads whole files, so its progress is reported
-    // separately and the list is rebuilt once it lands.
-    const offConfirm = EventsOn(
-      "fingerprint:confirm:progress",
-      (data?: { hash?: string; done?: number; total?: number }) => {
-        if (!data?.hash || typeof data.done !== "number" || typeof data.total !== "number") return;
-        setConfirmProgress({ hash: data.hash, done: data.done, total: data.total });
-      },
-    );
-    const offConfirmDone = EventsOn("fingerprint:confirm:done", () => {
-      setConfirmProgress(null);
-      invalidate();
-    });
-    return () => {
-      offProgress();
-      offDone();
-      offConfirm();
-      offConfirmDone();
-    };
-  }, []);
+  const {
+    groups,
+    activeCount,
+    loading,
+    error,
+    reload,
+    includeIgnored,
+    setIncludeIgnored,
+    scan,
+    confirmProgress,
+    busy,
+    startScan,
+    keepCopy,
+    keepAll,
+    reverify,
+    confirmGroup,
+  } = useContentDuplicates({
+    subscribeConfirmProgress,
+    onResolved,
+    notify: (notice) => onNotify(notice.text, notice.kind === "error" ? "error" : "success"),
+  });
 
-  const filtered = useMemo(() => {
-    const needle = keyword.trim().toLowerCase();
-    if (!needle) return groups;
-    return groups.filter(
-      (group) =>
-        group.hash.toLowerCase().includes(needle) ||
-        group.members.some((m) => m.video.fileName.toLowerCase().includes(needle)),
-    );
-  }, [groups, keyword]);
-
-  const startScan = async () => {
-    try {
-      setScan(await scanContentDuplicates());
-      onNotify("已开始扫描内容指纹，可继续使用其它功能", "success");
-    } catch (e) {
-      onNotify(`无法开始扫描：${String(e)}`, "error");
-    }
-  };
+  const filtered = useMemo(() => filterContentGroups(groups, keyword), [groups, keyword]);
 
   const confirmKeep = async () => {
     if (!pendingKeep) return;
     const { group, keep } = pendingKeep;
     setPendingKeep(null);
-    const removed = group.members.map((m) => m.video).filter((v) => v.id !== keep.id);
-    setBusy(true);
-    try {
-      for (const v of removed) {
-        await removeVideo(v.id);
-      }
-      onNotify(
-        removed.length === 1
-          ? `已保留「${keep.fileName}」，移入回收站 1 个重复拷贝`
-          : `已保留「${keep.fileName}」，移入回收站 ${removed.length} 个重复拷贝`,
-        "success",
-      );
-      onResolved(removed.map((v) => v.id));
-      reload();
-    } catch (e) {
-      onNotify(`移入回收站失败：${String(e)}`, "error");
-      reload();
-    } finally {
-      setBusy(false);
-    }
+    await keepCopy(group, keep);
   };
-
-  const keepAll = async (group: ContentDuplicateGroup) => {
-    try {
-      await ignoreContentDuplicate(group.hash);
-      onNotify(group.members.length > 2 ? "已保留全部拷贝" : "已保留两份拷贝", "success");
-      reload();
-    } catch (e) {
-      onNotify(`忽略重复提示失败：${String(e)}`, "error");
-    }
-  };
-
-  const reverify = async (group: ContentDuplicateGroup) => {
-    try {
-      await reverifyContentDuplicate(group.hash);
-      onNotify("已重新读取内容指纹，请稍候刷新", "success");
-      // The workers recompute in the background; give them a moment before the
-      // list is rebuilt, otherwise it would still show the old verdict.
-      window.setTimeout(reload, 800);
-    } catch (e) {
-      onNotify(`重新校验失败：${String(e)}`, "error");
-    }
-  };
-
-  const confirm = async (group: ContentDuplicateGroup) => {
-    try {
-      await confirmContentDuplicate(group.hash);
-      setConfirmProgress({ hash: group.hash, done: 0, total: group.members.length });
-      onNotify("已开始完整校验（逐字节读取，大文件较慢）", "success");
-      reload();
-    } catch (e) {
-      onNotify(`完整校验失败：${String(e)}`, "error");
-    }
-  };
-
-  const activeCount = groups.filter((g) => !g.ignored).length;
 
   return (
     <>
@@ -285,7 +195,7 @@ export default function ContentDuplicatePanel({
                   keepBlocked={group.members.some((member) => member.volumeOffline)}
                   progress={confirmProgress?.hash === group.hash ? confirmProgress : null}
                   onReverify={() => void reverify(group)}
-                  onConfirm={() => void confirm(group)}
+                  onConfirm={() => void confirmGroup(group)}
                   onKeepAll={() => void keepAll(group)}
                 />
               </header>
@@ -419,40 +329,6 @@ function ScanBar({ status, onScan }: { status: ContentScanStatus | null; onScan:
       </Button>
     </div>
   );
-}
-
-/**
- * What the pass is doing, with the running phase's own counters. The two phases
- * count different things — sizes read, then contents compared — so a phase's
- * total only appears once that phase has one: the comparing total does not exist
- * until the size pass ends.
- */
-function scanStatusText(status: ContentScanStatus | null): string {
-  if (!status) return "尚未扫描过内容指纹";
-  if (status.running) {
-    if (status.phase === "examining") {
-      return `正在检查文件大小… ${status.examined}/${status.examineTotal}`;
-    }
-    if (status.phase === "comparing") {
-      return `正在比对内容指纹… ${status.done}/${status.total}`;
-    }
-    return "正在准备扫描…";
-  }
-  if (status.finishedAt > 0) {
-    let text = `上次扫描：检查 ${status.examineTotal} 个文件`;
-    text += status.total > 0 ? ` · 比对 ${status.total} 个` : " · 无需比对内容";
-    if (status.failed > 0) text += ` · ${status.failed} 个无法读取`;
-    return text;
-  }
-  return "尚未扫描过内容指纹";
-}
-
-/** The running phase's progress, which is what the bar plots. */
-function scanProgress(status: ContentScanStatus | null): { done: number; total: number } | null {
-  if (!status?.running) return null;
-  if (status.phase === "examining") return { done: status.examined, total: status.examineTotal };
-  if (status.phase === "comparing") return { done: status.done, total: status.total };
-  return null;
 }
 
 /** One copy of duplicated content, with the action that keeps it alone. */
