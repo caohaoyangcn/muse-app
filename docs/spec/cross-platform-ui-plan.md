@@ -126,8 +126,9 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 |---|---|---|
 | 3.1 | `ui/Sheet`：`BottomSheet`、`SheetAction`、`ConfirmSheet` 从 `mobile/components/Sheet.tsx` 迁入，动画随组件走（`ui/sheet.css`），补 `Escape` 与 `aria-modal` | 移动端行为不变；桌面 bundle 不含该 CSS |
 | 3.2 | `ui/Toast`：合并两端提示条（桌面三态 + 详情列表、移动两态 + 自动消失） | 两端提示外观与消失时机一致；`aria-live="polite"` |
-| 3.3 | `ui/ActionMenu`：按 `useMediaQuery('(max-width: 767px)')` 渲染 Popover 或底部 Sheet，替换三个手写右键菜单（437 行） | 子菜单 hover 延迟、飞行窗锚定与右溢翻转、视口钳制三项不退化；键盘可完整操作 |
-| 3.4 | ARIA 收口：`role`、`aria-label`、`aria-live`、焦点回收，覆盖菜单、提示、抽屉 | 交互组件全部可键盘操作，读屏可读 |
+| 3.3 | `ui/MenuSurface`：视口钳制、外点/Esc/blur 关闭、子菜单 hover 延迟与锚定，替换三个手写右键菜单（437 行） | 子菜单 hover 延迟、飞行窗锚定与右溢翻转、视口钳制三项不退化 |
+| 3.4 | 菜单键盘导航：方向键/Home/End、Tab 关闭、打开时聚焦首项、关闭后焦点归还；`role="menu"` + `aria-label` | 菜单可纯键盘操作，且不把方向键漏给背后的片库网格 |
+| 3.5 | 抽屉的焦点管理：打开时移入、关闭时归还、内部循环 | 读屏用户不会跑出抽屉 |
 
 验收：`src/components/ContextMenu.tsx`、`GroupContextMenu.tsx`、`TabContextMenu.tsx` 删除或被薄封装取代。
 
@@ -163,6 +164,8 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 | 2 ContentDuplicateView | 两平台实现行数 | 581 + 365 → 457 + 250 + 231（共享逻辑），扫描状态机与保留/忽略/重校验单一实现 |
 | 2 ActorIndexView / ActorFilmsView | 四个壳合计 | 774 → 710 + 82（共享逻辑），档案来源与筛选语义统一 |
 | 2 ScrapeTaskView | 两平台实现行数 | 165 + 110 → 123 + 95 + 95（共享逻辑），分组名与状态文案统一 |
+| 3.1–3.2 | 手写交互组件 | Sheet 143 → `ui/sheet.tsx` 161；两份 Toast 71 → `ui/toast.tsx` 79 |
+| 3.3–3.4 | 三个右键菜单 | 437 → 221（菜单自身）+ 159（`ui/MenuSurface`），重复的关闭/钳制/hover 逻辑归零 |
 
 ## 6. 风险与回滚
 
@@ -196,8 +199,9 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 | 2 | ScrapeTaskView | 已完成 | `5536412` | 2026-11-13 |
 | 3 | 3.1 `ui/Sheet` | 已完成 | `6163498` | 2026-11-13 |
 | 3 | 3.2 `ui/Toast` | 已完成 | `97c2e75` | 2026-11-13 |
-| 3 | 3.3 `ui/ActionMenu` + 替换三个菜单 | 待开始 | — | — |
-| 3 | 3.4 ARIA 收口 | 待开始 | — | — |
+| 3 | 3.3 `ui/MenuSurface` + 替换三个菜单 | 已完成 | `ae574cf` | 2026-11-13 |
+| 3 | 3.4 菜单键盘导航与 ARIA | 已完成 | `430fae7` | 2026-11-13 |
+| 3 | 3.5 抽屉的焦点管理 | 待开始 | — | — |
 | 4 | manifest / gallery / 检查脚本 | 待开始 | — | — |
 
 状态取值：待开始 / 进行中 / 已完成 / 已放弃（附原因）。
@@ -207,6 +211,8 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 - **2026-11-13**：不合并构建入口。理由：Wails 绑定、`go:embed` 产物、history 路由三处分歧真实存在，合并会把平台判断塞进每个组件。
 - **2026-11-13**：不做桌面端响应式改造。桌面窗口拉窄是独立需求，不在本计划内。
 - **2026-11-13**：不引入第三方组件库（含 Astryx）。理由见评估：Beta 0.7.x 版本锁死、+45KB gzip 全局 CSS、视频墙/右键菜单/拖拽等核心场景它不覆盖，收益集中在可选交互组件，而自建 `ui/` 已能覆盖。
+- **2026-11-13**：三个菜单合并成 `ui/MenuSurface` 时**保留 `FlyoutShell`**，没有重写它的坐标计算。它处理的是"飞行窗相对子菜单项锚定、上下翻转、左右换边、以及两者之间的透明桥"，是一段被三个菜单依赖了很久的成熟逻辑；重写它等于重新踩一遍已经被注释掉的坑（桥盖住菜单项、翻转后鼠标路径断开）。菜单层只吸收三个菜单重复的"钳制 + 关闭 + hover 意图"，共 216 行。
+- **2026-11-13**：菜单自己接管方向键，并在 `handleKeyDown` 里 `stopPropagation`。片库网格在 window 上监听方向键做键盘导航，菜单打开时若事件继续冒泡，背后的网格会跟着动 —— 这原本是个潜在 bug，顺手一起修了。
 - **2026-11-13**：提示条用**一个组件 + 落位参数**，不是两套。`top-right` 保留桌面的三态与详情列表，`bottom` 保留移动端的单行横幅；类型 `ToastItem` 与状态色映射只有一份，`aria-live` 也只需补一次。
 - **2026-11-13**：基元的样式随组件走（`ui/sheet.tsx` 直接 `import "./sheet.css"`），不再把动画塞进平台样式表。这样只有真正引入该组件的 bundle 才带上它的 CSS —— 桌面端没有任何地方用 Sheet，构建产物里的 CSS 一个字节都没变。
 - **2026-11-13**：任务看板的分组名统一用「进行中 / 已完成 / 失败」。原来桌面是「排队中 / 已成功 / 已失败」、移动是「进行中 / 已完成 / 失败」，两套词描述同一个枚举；取短的那套，因为它要挤在标签按钮里。单条任务的状态文字（排队中 / 刮削中 / 等待重试 / 未识别到番号 …）两端共用同一张表，移动端因此不再直接显示 `running`、`no_code` 这类原始值。
@@ -228,6 +234,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 |---|---|
 | 2026-11-13 | 初稿：确立分层、阶段 0-4、度量与目录规则 |
 | 2026-11-13 | 阶段 0 完成：抽出 `frontend/src/theme.css`（两份 token 定义合一，构建产物哈希不变）；`components/ui/` 提升为 `src/ui/`（40 个文件的 import 已改写，产物哈希不变）；目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` |
+| 2026-11-13 | 阶段 3 第三、四步：三个手写右键菜单（437 行）合并到 `ui/menu.tsx` 的 `MenuSurface`，三个菜单自身缩到 221 行；`FlyoutShell` 上移到 `ui/` 复用而非重写；菜单获得方向键导航、首项聚焦与关闭后焦点归还，顺带修掉"菜单打开时方向键漏给片库网格"的潜在问题 |
 | 2026-11-13 | 阶段 3 第二步：`ui/toast.tsx` 收编两端的提示条（`ToastStack`，两种落位：桌面右上带详情列表 / 移动底部单行），删除 `components/Toasts.tsx` 与 `mobile/components/Toasts.tsx`；`fade` 动画抽到 `ui/motion.css` 由 toast 与 sheet 共用；容器补 `aria-live="polite"` |
 | 2026-11-13 | 阶段 3 第一步：`BottomSheet` / `SheetAction` / `ConfirmSheet` 迁入 `ui/sheet.tsx`（143 行 → 166 行，多出的是 `Escape` 处理与 `aria-modal`），动画从 `mobile.css` 移到 `ui/sheet.css` 由组件自己引入；7 个移动端引用点改写，桌面 bundle 零变化 |
 | 2026-11-13 | **阶段 2 完成**（6/6 视图）：`ScrapeTaskView` 下沉到 `views/scrape/useScrapeTasks.ts`，桌面 165→123 行、移动 110→95 行；移动端此前直接显示 `t.status` 原始值，现在与桌面共用同一张状态文案表。阶段 2 合计：六个共享视图模型 + 通知类型 685 行，六对壳从 3388 行降到 2812 行（净 +109 行，全部是共享层的注释与契约；重复的取数与写操作归零） |
