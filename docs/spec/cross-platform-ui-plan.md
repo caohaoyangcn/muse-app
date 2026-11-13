@@ -1,0 +1,186 @@
+# 桌面端与移动端共享改造计划
+
+> 状态：进行中（阶段 0 实施中）。本文是这次改造的**唯一方向锚点**：范围、分层、阶段划分与验收标准都以此为准；每完成一个阶段，更新 §7 进度看板与 §9 变更记录。
+>
+> 修订关系：本文**修正** `mobile-web-design.md` §2 的结论。该文档当时判定"不做响应式"，因此移动端独立成一个应用、只共享类型与工具函数。结论中"两套壳必须分开"仍然成立，但"UI 层完全不共享"已被证明代价过高，本文改为共享 L1-L4、保留 L5。
+
+## 1. 问题
+
+同一仓库里实际存在两个应用，而它们本应有 80% 共享。
+
+| 维度 | 桌面端 | 移动端 | 共享 |
+|---|---|---|---|
+| 入口 | `index.html` → `main.tsx` → `App.tsx` | `mobile.html` → `mobile/main.tsx` → `mobile/App.tsx` | 否 |
+| 数据 | `services/api.ts` 410 行 / 91 个导出（Wails 绑定） | `mobile/api.ts` 223 行 / 30 个导出（fetch） | 否，重复实现 |
+| 主题 | `style.css` 内 `:root` 12 个变量 | `mobile.css` 内同样 12 个变量（注释自述 "mirror the desktop app"） | 否，手工同步 |
+| 组件 | `components/` 40 个 | `mobile/components/` 19 个 | 仅 3 个叶子组件 |
+| 导航 | 内存 `backStack`/`forwardStack` + 工作区标签 | 浏览器 history + 底部标签 + 入栈屏 | 否（**应当保持不同**） |
+
+三个具体症状：
+
+1. **桌面端没有响应式能力**。全仓只有 3 个文件使用真实断点类，`useMediaQuery` / `matchMedia` 零出现。桌面布局在窄视口下是"坏掉"，不是"没调好"。
+2. **功能面缺失**。设置页、云浏览、新手引导、分组建议在移动端为 0，割裂感有一半来自功能缺口而非排版。
+3. **结构卡点**。`pages/Library.tsx` 2010 行承载约 90 个 state，同时是应用壳、视图路由与全部视图；`mobile/App.tsx` 607 行与其对应。任何适配都要先拆开它。
+
+## 2. 目标与非目标
+
+**目标**
+
+- 新增一个功能时，业务逻辑与展示基元只写一遍；平台差异收敛在两个壳和少数形态差异上。
+- 让"移动端缺什么"成为可查清的清单，而不是靠用户发现。
+- 建立防止再次漂移的机械约束（目录规则、清单文件、对照页）。
+
+**非目标**
+
+- 不合并构建入口。Wails 绑定、`go:embed webui` 产物、浏览器 history 路由这三处分歧是真实的。
+- 不把桌面端改造成响应式单页。桌面窗口可以拉窄，但不是这次的目标；若日后需要，属于 L5 的独立需求。
+- 不追求 100% 共享。导航壳、视频播放、外部播放器、safe-area 本就应当分离。
+- 不引入新的 UI 组件库。自定义基元继续自持。
+
+## 3. 目标架构
+
+```
+L5 壳（不共享，允许分叉）
+   src/App.tsx            桌面：侧栏 + 工作区标签 + 右侧详情面板
+   src/mobile/App.tsx     移动：底部标签 + 压栈屏 + 底部 Sheet
+
+L4 原子（共享）           src/ui/
+   Button Input Dialog Sheet Toast ActionMenu ListRow EmptyState Spinner …
+
+L3 视图模型（共享）       src/views/<name>/
+   use<Name>.ts           取数、筛选、排序、变更操作，无 JSX
+   <Name>Desktop.tsx      桌面展示
+   <Name>Mobile.tsx       移动展示
+
+L2 数据（共享接口，双实现）src/services/
+   client.ts              MuseClient 接口（唯一契约）
+   client.wails.ts        Wails 绑定实现（桌面入口注入）
+   client.http.ts         fetch /api 实现（移动入口注入）
+
+L1 主题（共享）           src/theme.css  唯一 token 来源
+```
+
+### 目录规则（可机械检查）
+
+| 规则 | 理由 |
+|---|---|
+| `src/ui/**` 只能 import React、`lib/utils`、自身 | 原子层不得依赖业务与平台 |
+| `src/views/*/use*.ts` 只能 import `services/client`、`types`、`utils`、`hooks` | 视图模型与平台解耦 |
+| `src/mobile/**` 不得 import `src/components/**` | 防止反向依赖桌面实现 |
+| `src/components/**` 视为桌面专属 | 需要共享的一律下沉到 `ui/` 或 `views/` |
+| 新组件必须先考虑 `src/ui/` | 禁止在业务文件里手搭基元 |
+
+### 允许分叉的清单
+
+导航与历史模型、视频播放与外部播放器调用、safe-area 与触屏手势、Wails 原生能力（文件选择器、剪贴板、系统文件夹）、桌面键盘快捷键与拖拽。以上差异必须在文档里写明，不允许以"顺手复制一份"的方式扩散到其他层。
+
+## 4. 阶段划分
+
+每个阶段独立可验收、独立提交。验收命令一律为 `cd frontend && npm run lint && npm run build && npm run build:mobile`。
+
+### 阶段 0：止血（基础设施）
+
+| 步骤 | 内容 | 验收 |
+|---|---|---|
+| 0.1 | 抽 `src/theme.css`，桌面 `style.css` 与移动 `mobile.css` 各自 `@import`；平台专属变量（`--ui-zoom` / `--safe-*`）留在各自文件 | 两份 token 定义变一份，构建产物视觉无变化 |
+| 0.2 | `components/ui/` → `src/ui/`，更新全部引用 | `tsc` 通过；`grep -r "components/ui" src` 为空 |
+| 0.3 | 补齐缺失原子：`Sheet`、`Toast`、`ActionMenu`、`ListRow`、`EmptyState`、`Spinner` | 新原子有 props 类型与无障碍属性 |
+| 0.4 | 目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` | 文档含规则表 |
+
+### 阶段 1：数据层统一
+
+| 步骤 | 内容 |
+|---|---|
+| 1.1 | `services/client.ts` 定义 `MuseClient` 接口，覆盖桌面 91 个导出的能力面 |
+| 1.2 | `client.wails.ts` 包装现有绑定，保持 `services/api.ts` 的辅助函数（URL 拼装等）不变 |
+| 1.3 | `client.http.ts` 包装现有 fetch，`mobile/api.ts` 降级为薄层 |
+| 1.4 | 两个入口注入各自实现，视图通过接口取用 |
+
+验收：移动端能调用的能力与接口声明的差额被显式标为 `Unsupported`，不再体现为"文件里没有这个函数"。
+
+### 阶段 2：按视图迁移（主体）
+
+按只读优先排序，每个视图一个提交：
+
+1. `TrashView`（桌面 414 / 移动 295 行，先做样板）
+2. `DuplicateView`（434 / 250）
+3. `ContentDuplicateView`（581 / 365）
+4. `ActorIndexView`（329 / 移动版）
+5. `ActorFilmsView`
+6. `ScrapeTaskView`
+
+每个视图的固定动作：抽出 `use<Name>.ts`；桌面与移动各留 150~200 行展示壳；删除重复的状态与取数逻辑。
+
+验收：同名视图两份展示合计行数显著低于原两份实现之和；两平台行为一致（人工对照 `/__gallery`）。
+
+### 阶段 3：交互形态自适应
+
+- `ui/ActionMenu`：内部按 `useMediaQuery('(max-width: 767px)')` 渲染 Popover 或底部 Sheet，业务侧只写一份调用。
+- 替换手写组件：三个右键菜单（437 行）、`Toasts`（42 行）、`mobile/components/Sheet`（143 行）。
+- 同步补齐 ARIA：`role`、`aria-label`、`aria-live`、焦点回收。
+
+验收：`src/components/ContextMenu.tsx`、`GroupContextMenu.tsx`、`TabContextMenu.tsx` 删除或被薄封装取代；键盘可完整操作菜单与提示。
+
+### 阶段 4：防漂移机制
+
+- `src/views/manifest.ts`：每个视图在 desktop / mobile 的支持状态，缺失显式标 `missing`。
+- dev-only `/__gallery` 路由：双栏 iframe 同时渲染两平台，肉眼对照。
+- 脚本 `scripts/check-shared-ui.mjs`：检查目录规则、裸 `<button>` 数量、同名视图行数差。
+- 上述检查接入 `npm run lint` 之后的手动流程与 `AGENTS.md`。
+
+## 5. 度量
+
+| 指标 | 现状 | 目标 |
+|---|---|---|
+| 视图逻辑份数 | 2 份/视图 | 1 份/视图 |
+| `ui/` 之外裸 `<button>` | 80 | 0 |
+| 同名视图两平台行数差 | 30%~45% | 仅展示层差异 |
+| 移动端缺失功能 | 4 个（设置、云浏览、引导、分组建议） | 显式记录在 manifest，允许长期缺失但必须可见 |
+| `aria-*` / `role` 覆盖 | 零散十几处 | 交互组件全覆盖 |
+| 重复 token 定义 | 2 份 | 1 份 |
+
+## 6. 风险与回滚
+
+| 风险 | 应对 |
+|---|---|
+| 移动端构建产物入库，改动会带来大 diff | 每个阶段单独提交，产物随源码同次提交 |
+| 抽 `client.ts` 时接口设计过度 | 以"现有 91 个导出"为上限，不做前瞻抽象 |
+| 视图迁移期间两平台行为分叉 | 一次只迁一个视图，其余保持原样；迁移完成的视图删除旧实现 |
+| `Library.tsx` 拆分牵动过多状态 | 先迁独立视图，最后才动 `Library.tsx` 本体 |
+| 阶段 0 的重命名造成大面积 import 改动 | 机械替换 + `tsc` 校验；如失败整体回滚该提交 |
+
+## 7. 进度看板
+
+| 阶段 | 步骤 | 状态 | 提交 | 日期 |
+|---|---|---|---|---|
+| 0 | 0.1 抽 `theme.css` | 待开始 | — | — |
+| 0 | 0.2 `ui/` 迁移 | 待开始 | — | — |
+| 0 | 0.3 补齐原子 | 待开始 | — | — |
+| 0 | 0.4 规则入文档 | 待开始 | — | — |
+| 1 | 1.1 接口定义 | 待开始 | — | — |
+| 1 | 1.2 Wails adapter | 待开始 | — | — |
+| 1 | 1.3 HTTP adapter | 待开始 | — | — |
+| 1 | 1.4 入口注入 | 待开始 | — | — |
+| 2 | TrashView | 待开始 | — | — |
+| 2 | DuplicateView | 待开始 | — | — |
+| 2 | ContentDuplicateView | 待开始 | — | — |
+| 2 | ActorIndexView | 待开始 | — | — |
+| 2 | ActorFilmsView | 待开始 | — | — |
+| 2 | ScrapeTaskView | 待开始 | — | — |
+| 3 | ActionMenu / 替换手写 | 待开始 | — | — |
+| 4 | manifest / gallery / 检查脚本 | 待开始 | — | — |
+
+状态取值：待开始 / 进行中 / 已完成 / 已放弃（附原因）。
+
+## 8. 决策记录
+
+- **2026-11-13**：不合并构建入口。理由：Wails 绑定、`go:embed` 产物、history 路由三处分歧真实存在，合并会把平台判断塞进每个组件。
+- **2026-11-13**：不做桌面端响应式改造。桌面窗口拉窄是独立需求，不在本计划内。
+- **2026-11-13**：不引入第三方组件库（含 Astryx）。理由见评估：Beta 0.7.x 版本锁死、+45KB gzip 全局 CSS、视频墙/右键菜单/拖拽等核心场景它不覆盖，收益集中在可选交互组件，而自建 `ui/` 已能覆盖。
+- **2026-11-13**：`components/ui/` 提升为 `src/ui/`。理由：让"共享层"在目录上可见，并可被机械检查。
+
+## 9. 变更记录
+
+| 日期 | 变更 |
+|---|---|
+| 2026-11-13 | 初稿：确立分层、阶段 0-4、度量与目录规则 |
