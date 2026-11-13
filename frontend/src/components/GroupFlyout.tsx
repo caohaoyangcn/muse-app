@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Group } from "../types";
 import { videoGroupIDs } from "../services/api";
-import FlyoutShell from "./FlyoutShell";
+import FlyoutShell from "../ui/flyout-shell";
 import { cn } from "../lib/utils";
 
 interface GroupFlyoutProps {
