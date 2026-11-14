@@ -17,6 +17,9 @@ func TestLookupKey(t *testing.T) {
 		{"FC2-1234567", "FC2-1234567"},
 		{"FC2-PPV-", "FC2-PPV-"},
 		{"SSIS-001-2", "SSIS-001-2"},
+		{"ABP\u200b-576", "ABP-576"},
+		{"\u3000ABP-576\u00a0", "ABP-576"},
+		{"ABP\u00a0576", "ABP 576"},
 		{"", ""},
 		{"   ", ""},
 	}

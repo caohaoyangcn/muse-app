@@ -1,0 +1,171 @@
+/* JavDB card helper.
+ *
+ * Every rule is scoped under .muse-javdb-* and uses !important on the few
+ * properties JavDB's own card styles set (size, position, colour). The extension
+ * must look the same on the light and dark theme without depending on the
+ * site's CSS variables.
+ */
+
+.muse-javdb-card {
+  position: relative !important;
+}
+
+.muse-javdb-badge {
+  position: absolute !important;
+  top: 6px !important;
+  right: 6px !important;
+  z-index: 20 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 22px !important;
+  height: 22px !important;
+  padding: 0 6px !important;
+  border-radius: 11px !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  background: rgba(17, 17, 20, 0.82) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+  color: #d9d9e0 !important;
+  font: 600 11px/1 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+  letter-spacing: 0.2px !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  transition: transform 120ms ease, background-color 120ms ease !important;
+  backdrop-filter: blur(4px);
+}
+
+.muse-javdb-badge:hover {
+  transform: scale(1.08);
+}
+
+.muse-javdb-badge[data-state="loading"] {
+  color: #b9b9c4 !important;
+}
+
+.muse-javdb-badge[data-state="found"] {
+  border-color: rgba(122, 217, 162, 0.55) !important;
+  background: rgba(24, 74, 50, 0.92) !important;
+  color: #b6f3ce !important;
+}
+
+.muse-javdb-badge[data-state="none"] {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background: rgba(40, 40, 46, 0.9) !important;
+  color: #9a9aa6 !important;
+}
+
+.muse-javdb-badge[data-state="trash"] {
+  border-color: rgba(224, 182, 79, 0.55) !important;
+  background: rgba(74, 58, 20, 0.92) !important;
+  color: #f3dca0 !important;
+}
+
+.muse-javdb-badge[data-state="offline"] {
+  border-color: rgba(224, 96, 79, 0.55) !important;
+  background: rgba(74, 26, 22, 0.92) !important;
+  color: #f3b3a8 !important;
+}
+
+.muse-javdb-badge[data-state="unknown"] {
+  border-style: dashed !important;
+  color: #8a8a96 !important;
+  cursor: help !important;
+}
+
+.muse-javdb-popover {
+  position: absolute !important;
+  z-index: 2147483000 !important;
+  width: min(380px, calc(100vw - 24px)) !important;
+  max-height: 420px !important;
+  overflow-y: auto !important;
+  padding: 8px !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: #17171b !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5) !important;
+  color: #e6e6ea !important;
+  font: 12px/1.45 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+}
+
+.muse-javdb-popover-title {
+  padding: 2px 4px 8px !important;
+  color: #b6f3ce !important;
+  font-weight: 600 !important;
+}
+
+.muse-javdb-match {
+  display: flex !important;
+  width: 100% !important;
+  gap: 8px !important;
+  align-items: flex-start !important;
+  padding: 6px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: inherit !important;
+  text-align: left !important;
+  cursor: pointer !important;
+}
+
+.muse-javdb-match:hover,
+.muse-javdb-match:focus-visible {
+  background: rgba(255, 255, 255, 0.07) !important;
+  outline: none !important;
+}
+
+.muse-javdb-match img {
+  width: 56px !important;
+  height: 84px !important;
+  object-fit: cover !important;
+  border-radius: 5px !important;
+  flex: 0 0 auto !important;
+  background: #26262c !important;
+}
+
+.muse-javdb-match-meta {
+  min-width: 0 !important;
+}
+
+.muse-javdb-match-name {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  color: #f0f0f4 !important;
+  font-weight: 600 !important;
+}
+
+.muse-javdb-match-detail,
+.muse-javdb-match-tags {
+  margin-top: 3px !important;
+  color: #9a9aa6 !important;
+}
+
+.muse-javdb-match-tags {
+  color: #e0b64f !important;
+}
+
+.muse-javdb-toast {
+  position: fixed !important;
+  left: 50% !important;
+  bottom: 28px !important;
+  z-index: 2147483001 !important;
+  max-width: min(520px, calc(100vw - 32px)) !important;
+  padding: 9px 14px !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  background: rgba(24, 24, 28, 0.95) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+  color: #e6e6ea !important;
+  font: 13px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+  opacity: 0 !important;
+  transform: translate(-50%, 8px) !important;
+  transition: opacity 160ms ease, transform 160ms ease !important;
+  pointer-events: none !important;
+}
+
+.muse-javdb-toast-visible {
+  opacity: 1 !important;
+  transform: translate(-50%, 0) !important;
+}

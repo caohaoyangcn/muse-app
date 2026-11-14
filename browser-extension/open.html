@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>正在打开 Muse…</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #141417;
+        color: #9a9aa6;
+        font: 13px/1.6 -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+      }
+      a {
+        color: #e0b64f;
+      }
+      code {
+        color: #e8e8ec;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <p>正在打开 Muse…</p>
+      <p id="fallback" hidden>
+        没有自动跳转。请手动打开：<br />
+        <a id="link" href="#"><code id="target"></code></a>
+      </p>
+    </div>
+    <script src="open.js" type="module"></script>
+  </body>
+</html>
