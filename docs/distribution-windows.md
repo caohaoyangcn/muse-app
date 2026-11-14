@@ -23,7 +23,8 @@ go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
 1. `wails build -platform windows/amd64 -clean -ldflags "-s -w"` 交叉编译出 `build/bin/Muse.exe`；
 2. 首次运行从 [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) 下载 **LGPL** 版
    Windows FFmpeg 并缓存在 `.cache/ffmpeg-win64-shared/`（约 78 MB，之后复用）；
-3. 组装 `dist/Muse-<版本>-win64/`，写入 CRLF 换行的 `README.txt` 和许可证文件；
+3. 组装 `dist/Muse-<版本>-win64/`，写入 CRLF 换行的 `README.txt` 和许可证文件，并把
+   `browser-extension/` 一起复制进去（打包前会跑 `node scripts/check-extension.mjs`）；
 4. 压成 `dist/Muse-<版本>-win64.zip`，打印 sha256。
 
 在 Apple Silicon Mac 上交叉编译是**已验证可用**的：Wails v2.15 的 Windows 端
@@ -40,7 +41,8 @@ Muse-1.0.0-win64/
 ├── avcodec-63.dll 等 7 个 DLL   # 仅 shared 版本需要
 ├── README.txt             # 给朋友看的首次运行说明（含 SmartScreen、防火墙）
 ├── FFmpeg-LICENSE.txt     # LGPL 许可证，再分发时必须保留
-└── THIRD-PARTY-NOTICES.txt
+├── THIRD-PARTY-NOTICES.txt
+└── browser-extension/     # JavDB 浏览器扩展（可选，Chrome「加载已解压的扩展程序」）
 ```
 
 两种 FFmpeg 打包方式，按分发渠道挑一个：

@@ -10,6 +10,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - `backend/video/`、`backend/group/`、`backend/jav/`、`backend/watch/`、`backend/thumbnail/`、`backend/settings/` —— 各领域模型的 model/repository/service 代码，测试（`*_test.go`）与源码同目录
 - `backend/server/` —— 局域网 Web 服务（SPA + JSON API + Range 串流）；`webui/` 内嵌静态资源
 - `frontend/src/` —— 两种客户端共用一份源码：`ui/` 是跨平台基元层（`Button`、`Input`、`Dialog` 等），`components/` 是桌面专属业务组件，`mobile/` 是局域网移动壳；`services/client.ts` 是两端共用契约、`services/desktop.ts` / `services/web.ts` 是平台门面（壳的唯一取数入口），`types.ts`、`utils/`、`hooks/` 为共享代码；`frontend/wailsjs/` 为生成产物，勿手改
+- `browser-extension/` —— JavDB 浏览器扩展（MV3，无构建步骤）：番号只读页面渲染的 `.video-title strong`，不做正则解析；它只调用只读端点 `POST /api/extension/check`（见 `docs/spec/javdb-browser-extension.md`）。改站点匹配域名时必须同步 `backend/server/extension.go` 的来源白名单，`scripts/check-extension.mjs` 会检查
 - `docs/spec/` 与根目录 `spec-v1.md` / `spec-v1.1.md` —— 设计文档
 
 ## 构建、测试与开发命令

@@ -71,6 +71,15 @@
   - 设计文档：`docs/spec/mobile-web-design.md`。
   - 后续可扩展：鉴权/口令、HTTPS、更多具备公开播放协议的专用客户端。
 
+- [x] **JavDB 浏览器扩展（卡片一键查收藏）**
+  - ✅ `browser-extension/`（Manifest V3，无构建步骤）：JavDB 影片卡片右上角角标，悬停查询该番号是否已收藏，点开可见命中文件并跳转 Muse 详情。
+  - ✅ 番号直接读页面渲染的 `.video-title strong`，扩展内**不做**任何从标题猜番号的正则；没有片号字段的卡片显示 `?` 且不查询。
+  - ✅ 只读端点 `POST /api/extension/check`（`api.Library.MatchJavCodes`）：已刮削按番号匹配，未刮削按文件名首个候选匹配，回收站条目单独标记。CORS 只对这一个端点开放，且限定 JavDB 域名。
+  - ✅ 桌面端「设置 → 浏览器扩展」：服务状态、测试查询、安装步骤与端口提示。
+  - ✅ `scripts/check-extension.mjs` 与打包脚本联动，检查 manifest/脚本与来源白名单一致性。
+  - ⚠️ 端口固定 8899；不改写操作、不支持手机浏览器。
+  - 设计文档：`docs/spec/javdb-browser-extension.md`。
+
 - [x] **单一 API 门面（backend/api）**
   - ✅ 新增 `api.Library`：封装读+写编排，桌面(Wails `app.go`) 与 局域网 HTTP (`server.go`) 共用同一份业务逻辑，杜绝行为漂移。
   - ✅ `RemoveVideo`（含清除组成员）、`VideosInGroup`（id→完整对象）等跨服务编排收敛到门面。

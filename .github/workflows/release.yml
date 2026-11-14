@@ -98,6 +98,12 @@ jobs:
       - name: Backend tests
         run: go test ./...
 
+      - name: Check the browser extension
+        # No build step: the script proves the scripts parse, the manifest's
+        # files exist, and the JavDB origin list still matches the server's
+        # allowlist in backend/server/extension.go.
+        run: node scripts/check-extension.mjs
+
       - name: Cache FFmpeg
         uses: actions/cache@v4
         with:

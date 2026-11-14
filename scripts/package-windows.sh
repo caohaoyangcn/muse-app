@@ -7,6 +7,7 @@
 #   ffprobe.exe         anything (see backend/platform/tools.go: exe dir first)
 #   README.txt          first-run notes for non-technical users
 #   FFmpeg-LICENSE.txt  LGPL license text (required when redistributing)
+#   browser-extension/  optional Chrome/Edge extension for JavDB (load unpacked)
 #
 # Usage:
 #   scripts/package-windows.sh
@@ -125,6 +126,14 @@ if [ "${#FFMPEG_FILES[@]}" -gt 0 ]; then
 fi
 cp packaging/README-Windows.txt "$STAGE/README.txt"
 cp packaging/THIRD-PARTY-NOTICES.txt "$STAGE/THIRD-PARTY-NOTICES.txt"
+
+# The JavDB extension ships as an unpacked folder: the user points Chrome's
+# "Load unpacked" at it. It has no build step, but it is worth checking that its
+# scripts parse and that its origin list still matches the server's allowlist.
+step "Checking the browser extension"
+node scripts/check-extension.mjs
+rm -rf "$STAGE/browser-extension"
+cp -r browser-extension "$STAGE/browser-extension"
 
 # Windows users should be able to read these in Notepad; LF-only text files are
 # fine on Windows 10 1903+ but CRLF removes any doubt.
