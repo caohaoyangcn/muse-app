@@ -6,6 +6,7 @@ import { configureClient } from './services/client'
 import { wailsClient } from './services/client.wails'
 import App from './App'
 import ErrorBoundary from './ui/error-boundary'
+import { AppTheme } from './ui/theme'
 
 // Bind the Wails-backed transport before anything renders. Views read through
 // services/client.ts, so they never touch the generated bindings directly.
@@ -21,8 +22,10 @@ const root = createRoot(container!)
 
 root.render(
     <React.StrictMode>
-        <ErrorBoundary scope="Muse Video" variant="page">
-            <App/>
-        </ErrorBoundary>
+        <AppTheme>
+            <ErrorBoundary scope="Muse Video" variant="page">
+                <App/>
+            </ErrorBoundary>
+        </AppTheme>
     </React.StrictMode>
 )

@@ -6,8 +6,19 @@
  * `--ui-zoom` + `--wails-drop-target` belong to the desktop shell, `--safe-*` to
  * the touch client.
  *
+ * The design-system stylesheets are imported here for the same reason: one edit
+ * covers both bundles. Their rules land in the layers src/style.css declares
+ * (`reset` → `astryx-base` → `astryx-theme`), all of them below Tailwind's
+ * `utilities`, so a Tailwind class on a component still wins over its built-in
+ * style. Importing them after `@import "tailwindcss"` instead would silently
+ * invert that and make every className override on an Astryx component a no-op.
+ *
  * These are read by Tailwind arbitrary values such as `bg-[var(--panel)]`, so
  * keep the names stable; renaming one is a repo-wide change. */
+@import "@astryxdesign/core/reset.css";
+@import "@astryxdesign/core/astryx.css";
+@import "@astryxdesign/theme-neutral/theme.css";
+
 :root {
   --bg: #17171b;
   --panel: #1d1d23;
@@ -20,4 +31,44 @@
   --accent-hover: #8f74ff;
   --danger: #e5534b;
   --radius: 10px;
+}
+
+/* Astryx resolves its components from its own token names. Pointing them at the
+ * product tokens above is what keeps one palette across the design system, the
+ * desktop shell and the LAN client — restyling the app in one edit still means
+ * editing this file.
+ *
+ * Unlayered on purpose: Astryx ships its defaults inside `@layer astryx-theme`,
+ * and an unlayered declaration outranks every layer, so this wins without
+ * `!important` or a more specific selector. Keep it that way — moving this
+ * block into a layer would silently lose some of the overrides. */
+[data-astryx-theme] {
+  color-scheme: dark;
+
+  --color-background-body: var(--bg);
+  --color-background-surface: var(--panel-2);
+  --color-background-card: var(--card);
+  --color-background-popover: var(--panel);
+  --color-background-muted: var(--panel);
+
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--muted);
+
+  --color-border: var(--border);
+  --color-border-emphasized: var(--border);
+
+  --color-accent: var(--accent);
+  --color-accent-muted: color-mix(in srgb, var(--accent) 22%, transparent);
+  --color-on-accent: #ffffff;
+  --color-icon-accent: var(--accent);
+  --color-text-accent: var(--accent);
+
+  --color-error: var(--danger);
+  --color-error-muted: color-mix(in srgb, var(--danger) 22%, transparent);
+
+  --radius-element: var(--radius);
+  --radius-container: calc(var(--radius) + 2px);
+
+  --font-family-body: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-family-heading: "Segoe UI", system-ui, -apple-system, sans-serif;
 }

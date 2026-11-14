@@ -1,6 +1,13 @@
-@import "tailwindcss";
+/* Same layer order as the desktop entry (src/style.css): Tailwind's engine
+ * layers, Astryx's layers, `utilities` last. Keep the two files in step — a
+ * class that wins on the desktop must not lose here. */
+@layer theme, base, components, reset, astryx-base, astryx-theme, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
 @import "../range.css";
 @import "../theme.css";
+@import "tailwindcss/utilities.css" layer(utilities);
 
 /* Touch-only shell values. Product tokens (colours, radius) come from
    ../theme.css, shared with the desktop app so the two clients stay visually

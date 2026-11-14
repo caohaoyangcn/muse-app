@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App";
 import ErrorBoundary from "../ui/error-boundary";
+import { AppTheme } from "../ui/theme";
 import { configureClient } from "../services/client";
 import { httpClient } from "../services/client.http";
 import "./mobile.css";
@@ -13,8 +14,10 @@ configureClient(httpClient);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ErrorBoundary scope="Muse Video" variant="page">
-      <App />
-    </ErrorBoundary>
+    <AppTheme>
+      <ErrorBoundary scope="Muse Video" variant="page">
+        <App />
+      </ErrorBoundary>
+    </AppTheme>
   </StrictMode>,
 );

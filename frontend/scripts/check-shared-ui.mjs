@@ -78,6 +78,17 @@ forbid({
 // 移动端不得 import 桌面组件：需要共享就下沉到 ui/ 或 views/。
 forbid({ rule: "mobile/ 不得 import 桌面组件", inDir: "mobile", forbidden: ["components"] });
 
+// 设计系统只经 ui/ 暴露。裸包名不走 resolveSpec（相对路径才有目标），所以单独查
+// 一次：业务层直接 import @astryxdesign，ui/ 这道接缝就名存实亡了。
+for (const file of files) {
+  if (file.rel.startsWith("src/ui/")) continue;
+  for (const spec of importsOf(file.source)) {
+    if (spec.startsWith("@astryxdesign/")) {
+      problems.push(`${file.rel}: 不得直接 import 设计系统（改为经 src/ui/ 暴露）`);
+    }
+  }
+}
+
 // 视图模型不得关心渲染层。
 forbid({ rule: "views/ 不得 import 渲染层", inDir: "views", forbidden: ["components", "mobile"] });
 

@@ -1,6 +1,16 @@
-@import "tailwindcss";
+/* Layer order, declared once for the whole desktop bundle: Tailwind's engine
+ * layers, then Astryx's own, then `utilities` last. Tailwind's all-in-one
+ * `@import "tailwindcss"` would put `utilities` before Astryx's layers, which
+ * makes every Tailwind class passed to an Astryx component lose to the
+ * component's built-in style (measured: `h-[80px]` on an Astryx Button stayed
+ * 32px). The split below is the order Astryx documents for Tailwind v4. */
+@layer theme, base, components, reset, astryx-base, astryx-theme, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
 @import "./range.css";
 @import "./theme.css";
+@import "tailwindcss/utilities.css" layer(utilities);
 
 /* Desktop-only shell values. Product tokens (colours, radius) live in theme.css
    so the Wails app and the LAN web client cannot drift apart. */
