@@ -98,7 +98,7 @@ func extensionOriginAllowed(origin string) bool {
 	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
 		return true
 	}
-	if host == "javdb.com" || host == "jav.app" {
+	if host == "javdb.com" || host == "www.javdb.com" || host == "jav.app" {
 		return true
 	}
 	if strings.HasSuffix(host, ".jav.app") {

@@ -135,7 +135,7 @@ Origin: https://javdb.com
 只有 `/api/extension/check` 带 CORS，且只在来源属于下列之一时回写
 `Access-Control-Allow-Origin`：
 
-- `javdb.com`（永久域名）
+- `javdb.com`、`www.javdb.com`（永久域名，含默认的 www 主机）
 - `javdb<数字>.com`、`app.javdb<数字>.com`（官方轮换的镜像）
 - `jav.app`、`*.jav.app`
 - `localhost` / `127.0.0.1` / `[::1]`（开发时的本地样例页）
@@ -143,12 +143,20 @@ Origin: https://javdb.com
 其余来源一律不写头（浏览器自行拦截）；来自非法来源的预检回 `403`。响应始终带
 `Vary: Origin`，且**不允许凭据**（端点不收 Cookie，服务端也没有会话）。
 
-**域名白名单有两处，必须同步修改**：
+### 域名白名单有两处，含义不同
 
-1. `browser-extension/manifest.json` 的 `content_scripts[].matches`
-2. `backend/server/extension.go` 的 `extensionOriginAllowed`
+| 位置 | 作用 | 能写什么 |
+|---|---|---|
+| `browser-extension/manifest.json` 的 `content_scripts[].matches` | 扩充在哪些页面注入 | 只能是**合法 match pattern** |
+| `backend/server/extension.go` 的 `extensionOriginAllowed` | 服务端接受哪些 `Origin` | 任意判断逻辑 |
 
-`scripts/check-extension.mjs` 会检查两者是否对得上（CI 与打包脚本都会跑）。
+**match pattern 的 host 通配符只能是整个最左标签**（`*.jav.app` 合法，
+`*.javdb*.com` 非法，Chrome 会直接报 `Invalid host wildcard` 并拒绝加载扩展）。
+因此编号镜像 `javdb581.com` 这类域名**无法**写成 match pattern，当前不列在 manifest
+里：镜像页需要手动把该域名加进 `matches`，此时服务端的编号镜像规则已经允许它。
+
+`scripts/check-extension.mjs` 同时校验三件事（CI 与打包脚本都会跑）：
+match pattern 语法合法、manifest 里每个 host 在服务端都被允许、编号镜像规则仍在。
 
 现有 `/api/*` 保持同源行为，有回归测试锁死（`TestAPIExtensionCORSIsScoped`）。
 
@@ -225,13 +233,13 @@ node scripts/check-extension.mjs       # manifest/脚本/来源白名单一致�
 
 | 文件 | 作用 |
 |---|---|
-| `browser-extension/manifest.json` | MV3 清单、权限、内容脚本匹配（白名单之一） |
+| `browser-extension/manifest.json` | MV3 清单、权限、内容脚本匹配（match pattern 语法受限，见 §5） |
 | `browser-extension/content.js` | 读页面番号、角标、浮层、批合并与缓存 |
 | `browser-extension/background.js` | 唯一联网的地方：`check` / `openVideo` / `testConnection` |
 | `browser-extension/config.js` | Muse 地址与超时（三个上下文共用） |
 | `browser-extension/options.html` / `.js` | 地址配置、连接测试、安装说明 |
 | `browser-extension/open.html` / `.js` | 打开 Muse 详情的跳板页 |
-| `backend/server/extension.go` | 端点、CORS 包装、来源白名单（白名单之二） |
+| `backend/server/extension.go` | 端点、CORS 包装、来源白名单（见 §5） |
 | `backend/api/library.go` | `MatchJavCodes`：番号匹配与结果投影 |
 | `backend/jav/check.go` | `JavCodeCheck` / `JavCodeMatch` / `LookupKey` |
 | `frontend/src/pages/Settings.tsx` | 「浏览器扩展」设置页 |

@@ -29,6 +29,7 @@ func TestExtensionOriginAllowed(t *testing.T) {
 		want   bool
 	}{
 		{"https://javdb.com", true},
+		{"https://www.javdb.com", true},
 		{"https://javdb582.com", true},
 		{"https://app.javdb581.com", true},
 		{"https://javdb2.com", true},

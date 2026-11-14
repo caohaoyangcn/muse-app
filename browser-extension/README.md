@@ -54,5 +54,8 @@ Muse 后端统一回答，细节见 `docs/spec/javdb-browser-extension.md`。
 ## 已知限制
 
 - 只支持桌面 Chrome / Edge（Manifest V3）；手机浏览器不能安装扩展。
+- 只注入 `javdb.com` / `www.javdb.com` / `jav.app` 及其子域。JavDB 的编号镜像
+  （如 `javdb581.com`）无法写成合法的 match pattern（host 通配符只能是整个最左标签），
+  需要使用时把该域名加进 `manifest.json` 的 `matches`；Muse 端已允许这些镜像来源。
 - JavDB 改版导致卡片结构变化时，角标可能不出现：`content.js` 顶部的
   `CARD_SELECTOR` / `CODE_SELECTOR` 两行是唯一需要改的地方。

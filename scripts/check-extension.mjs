@@ -59,10 +59,49 @@ for (const rel of referenced) {
   if (!existsSync(path.join(extDir, rel))) fail(`manifest.json: referenced file is missing: ${rel}`);
 }
 
+// ---------- match patterns are valid for Chrome ----------
+// Chrome accepts a wildcard only as the whole leftmost label ("*.example.com");
+// an embedded one ("*.javdb*.com") makes the whole manifest invalid, which the
+// browser reports as "Invalid host wildcard". Validate every pattern here so a
+// load failure is never the first feedback.
+// Host permissions may carry an explicit port, content-script matches may not
+// (and adding one would be a mistake: it would stop matching after a port change).
+const MATCH_PATTERN = /^(\*|https?):\/\/(\*|(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*)(:([0-9]+|\*))?\/?(\/.*)?$/i;
+const SHARED_SPECIAL = ["*", "*/*", "<all_urls>"];
+const contentMatches = (manifest.content_scripts ?? []).flatMap((cs) => cs.matches ?? []);
+for (const pattern of contentMatches) {
+  if (SHARED_SPECIAL.includes(pattern)) continue;
+  if (!MATCH_PATTERN.test(pattern)) {
+    fail(`manifest.json: invalid match pattern ${pattern} (a wildcard may only be the whole leftmost host label, e.g. *.jav.app)`);
+    continue;
+  }
+  const host = pattern.replace(/^\*:\/\//, "").replace(/\/.*$/, "");
+  if (host.includes("*") && !host.startsWith("*.")) {
+    fail(`manifest.json: invalid host wildcard in ${pattern} — use *.domain.tld, not *.domain*.tld`);
+  }
+  if (host.startsWith("*.") && host.slice(2).includes("*")) {
+    fail(`manifest.json: invalid host wildcard in ${pattern} — only one wildcard label is allowed`);
+  }
+}
+
 const hostPermissions = manifest.host_permissions ?? [];
 for (const required of ["http://127.0.0.1:8899/*", "http://localhost:8899/*"]) {
   if (!hostPermissions.includes(required)) {
     fail(`manifest.json: host_permissions must include ${required}`);
+  }
+}
+for (const pattern of hostPermissions) {
+  if (!SHARED_SPECIAL.includes(pattern) && !MATCH_PATTERN.test(pattern)) {
+    fail(`manifest.json: invalid host_permissions pattern ${pattern}`);
+  }
+}
+
+// Content-script matches must not pin a port: the page is whatever port the
+// site serves, and a pinned one would silently stop matching.
+for (const pattern of contentMatches) {
+  const port = pattern.replace(/^\*:\/\//, "").replace(/\/.*$/, "").split(":")[1];
+  if (port && port !== "*") {
+    fail(`manifest.json: content_scripts matches ${pattern} pins a port; use *://host/* instead`);
   }
 }
 
@@ -78,20 +117,40 @@ if (/[a-z]\{2,6\}/i.test(content) || /-\[\]_ ?\?\[0-9\]/.test(content)) {
 }
 
 // ---------- the two origin lists agree ----------
+// The content script only runs on the hosts the manifest lists; the server only
+// answers the origins extension.go allows. A host that runs the script but is
+// missing from the allowlist renders badges that can never load.
 const serverGo = readFileSync(path.join(root, "backend", "server", "extension.go"), "utf8");
-const matches = (manifest.content_scripts ?? []).flatMap((cs) => cs.matches ?? []);
-for (const pattern of matches) {
-  const host = pattern.replace(/^\*:\/\//, "").replace(/\/\*$/, "");
-  // "*://*.javdb*.com/*" → the allowlist must handle javdb.com and the numbered
-  // mirrors; "*://javdb.com/*" → the permanent domain; "*://jav.app/*" → the app
-  // domain. Each of the three shapes has a named counterpart in extension.go.
-  const handled =
-    (host === "javdb.com" && serverGo.includes('host == "javdb.com"')) ||
-    (host === "jav.app" && serverGo.includes('host == "jav.app"')) ||
-    (host === "*.javdb*.com" && serverGo.includes('strings.CutSuffix(host, ".com")'));
-  if (!handled) {
-    fail(`origin list drift: manifest matches ${pattern}, but backend/server/extension.go has no counterpart — update both`);
+const allowlistBody = serverGo.slice(
+  serverGo.indexOf("func extensionOriginAllowed"),
+  serverGo.indexOf("func isDigits"),
+);
+for (const pattern of contentMatches) {
+  const host = pattern.replace(/^\*:\/\//, "").replace(/\/.*$/, "").toLowerCase();
+  const covered = (() => {
+    if (host === "javdb.com") return serverGo.includes('host == "javdb.com"');
+    if (host === "www.javdb.com") return serverGo.includes('host == "www.javdb.com"');
+    if (host === "jav.app") return serverGo.includes('host == "jav.app"');
+    // "*.jav.app" is covered by the subdomain suffix rule.
+    if (host === "*.jav.app") return allowlistBody.includes('strings.HasSuffix(host, ".jav.app")');
+    return false;
+  })();
+  if (!covered) {
+    fail(
+      `origin list drift: the manifest runs on ${host}, but backend/server/extension.go does not allow that origin — add it to extensionOriginAllowed and the manifest together`,
+    );
   }
+}
+
+// The numbered mirrors (javdb581.com, app.javdb582.com) cannot be expressed as a
+// match pattern — "*://javdb*.com/*" is not a valid host wildcard, which is why
+// the manifest does not list them. That means the server's numbered-mirror rule
+// is the only thing keeping a mirror page from being blocked once its domain is
+// added to the manifest; keep both halves of it present.
+const mirrorRule = allowlistBody.indexOf('strings.CutSuffix(host, ".com")');
+const digitsGuard = allowlistBody.indexOf("isDigits(label)");
+if (mirrorRule === -1 || digitsGuard === -1) {
+  fail("extension.go: the numbered-mirror origin rule is missing — mirrors would be refused even after the manifest lists them");
 }
 
 process.exit(report());

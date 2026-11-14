@@ -34,8 +34,9 @@
     {
       "matches": [
         "*://javdb.com/*",
-        "*://*.javdb*.com/*",
-        "*://jav.app/*"
+        "*://www.javdb.com/*",
+        "*://jav.app/*",
+        "*://*.jav.app/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],

@@ -8,8 +8,17 @@
 // work, and the page already tells us which work it is.
 (() => {
   // Site structure. Only these two selectors describe where the code lives;
-  // a JavDB redesign should be a two-line change here.
-  const CARD_SELECTOR = ".movie-list .item a.box, #videos .item a.box, .movie-list a.box[href^='/v/'], #videos a.box[href^='/v/']";
+  // a JavDB redesign should be a one-line change to CARD_SELECTOR and one to
+  // CODE_SELECTOR.
+  //
+  // CARD_SELECTOR deliberately does not name a list container (.movie-list,
+  // #videos): JavDB renders the same card markup on search, actor, ranking and
+  // home pages, and pinning a container makes the extension silently do
+  // nothing on every page that uses another one. A card is "an /v/ link whose
+  // title carries the rendered code", which is the property actually relied on
+  // — and it excludes the site's many other /v/ links (nav, recommendations)
+  // because those have no .video-title.
+  const CARD_SELECTOR = "a.box[href^='/v/']";
   const CODE_SELECTOR = ".video-title strong";
   const TITLE_SELECTOR = ".video-title";
 
