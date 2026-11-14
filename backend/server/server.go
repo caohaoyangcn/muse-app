@@ -212,6 +212,12 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/duplicates/content/confirm", s.handleConfirmContentDuplicate)
 	mux.HandleFunc("GET /api/actors", s.handleListActors)
 	mux.HandleFunc("GET /api/actors/videos", s.handleVideosByActor)
+	// The JavDB browser extension asks whether the works on a page are already
+	// collected. It is the one cross-origin route (see extension.go): read-only,
+	// and CORS-scoped to JavDB origins.
+	extensionCheck := withExtensionCORS(http.HandlerFunc(s.handleExtensionCheck))
+	mux.Handle("POST /api/extension/check", extensionCheck)
+	mux.Handle("OPTIONS /api/extension/check", extensionCheck)
 
 	// Writes (API reachable; no Web front-end control).
 	mux.HandleFunc("POST /api/videos", s.handleAddVideos)

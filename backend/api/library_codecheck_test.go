@@ -99,9 +99,9 @@ func TestMatchJavCodes(t *testing.T) {
 	lib, ids := newCheckFacade(t, []checkFixture{
 		{fileName: "abp-576.mp4", code: "ABP-576"},
 		{fileName: "ABP-576 1080p.mkv", code: "ABP-576"},
-		{fileName: "ipx-633.mp4"},          // never scraped: matched by name
-		{fileName: "ABC-123-1.mp4"},        // episode 1, never scraped
-		{fileName: "ABC-123-2.mp4"},        // episode 2, never scraped
+		{fileName: "ipx-633.mp4"},   // never scraped: matched by name
+		{fileName: "ABC-123-1.mp4"}, // episode 1, never scraped
+		{fileName: "ABC-123-2.mp4"}, // episode 2, never scraped
 		{fileName: "FC2-PPV-4970405.mkv", code: "FC2-4970405"},
 		{fileName: "ssis-001.mp4", code: "SSIS-001", trashed: true},
 		{fileName: "unrelated.mp4", code: "MIDE-999"},

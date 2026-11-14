@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -251,41 +250,6 @@ func (r *stubVideoRepo) ListVideoIDs() ([]int64, error) {
 	return ids, nil
 }
 
-// stubGroupRepo satisfies group.GroupRepository minimally.
-type stubGroupRepo struct{}
-
-func (r *stubGroupRepo) Create(name string, pos int, parentID *int64, at int64) (*group.Group, error) {
-	return &group.Group{ID: 1, Name: name, ParentID: parentID}, nil
-}
-func (r *stubGroupRepo) Get(id int64) (*group.Group, error) {
-	if id == 7 { // distinct id used by an add-to-group test
-		return &group.Group{ID: 7, Name: "g7"}, nil
-	}
-	return &group.Group{ID: id, Name: "g"}, nil
-}
-func (r *stubGroupRepo) FindByName(name string) (*group.Group, error) {
-	return &group.Group{ID: 1, Name: name}, nil
-}
-func (r *stubGroupRepo) List() ([]group.Group, error)                 { return nil, nil }
-func (r *stubGroupRepo) Rename(id int64, name string, at int64) error { return nil }
-func (r *stubGroupRepo) Delete(id int64) error                        { return nil }
-func (r *stubGroupRepo) SetPositions(ids []int64) error               { return nil }
-func (r *stubGroupRepo) SetParent(id int64, parentID *int64, at int64) error {
-	return nil
-}
-func (r *stubGroupRepo) Children(parentID int64) ([]int64, error) { return nil, nil }
-func (r *stubGroupRepo) VideosInGroups(groupIDs []int64) ([]int64, error) {
-	return nil, nil
-}
-func (r *stubGroupRepo) Members(videoID int64) ([]int64, error)       { return nil, nil }
-func (r *stubGroupRepo) SetMembers(videoID int64, ids []int64) error  { return nil }
-func (r *stubGroupRepo) AddVideoToGroup(videoID, groupID int64) error { return nil }
-func (r *stubGroupRepo) VideosInGroup(groupID int64) ([]int64, error) { return nil, nil }
-func (r *stubGroupRepo) ClearVideoMembers(videoID int64) error        { return nil }
-func (r *stubGroupRepo) GroupNamesForVideos(videoIDs []int64) (map[int64][]string, error) {
-	return map[int64][]string{}, nil
-}
-
 func newTestServer(t *testing.T) (*Server, string /*dataDir*/, string /*base url*/) {
 	t.Helper()
 	dir := t.TempDir()
@@ -322,18 +286,6 @@ func newTestServer(t *testing.T) (*Server, string /*dataDir*/, string /*base url
 	t.Cleanup(func() { _ = srv.Stop() })
 	// Use the loopback URL for the test client.
 	return srv, dir, fmt.Sprintf("http://127.0.0.1:%d", info.Port)
-}
-
-// listenLoopback keeps a test server off every network interface and out of the
-// host firewall. Binding 0.0.0.0 makes Windows Firewall ask whether to allow the
-// freshly built test binary — once per run, because every build lands in a new
-// temp path — and a real netsh call would edit the developer's rules. The tests
-// only ever talk to 127.0.0.1.
-func listenLoopback(srv *Server) {
-	srv.listen = func(string, string) (net.Listener, error) {
-		return net.Listen("tcp", "127.0.0.1:0")
-	}
-	srv.firewall = nil
 }
 
 // newMetadataServer starts a server holding a single favorite with the given
