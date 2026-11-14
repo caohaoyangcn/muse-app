@@ -396,8 +396,8 @@ export default function VideoDetailPanel({
         </>
       )}
 
-      <Dialog open={coverPreviewOpen} onOpenChange={setCoverPreviewOpen}>
-        <DialogContent className="w-[min(900px,calc(100vw-48px))] max-w-[calc(100vw-48px)] p-4">
+      <Dialog open={coverPreviewOpen} width="min(900px, calc(100vw - 48px))" onOpenChange={setCoverPreviewOpen}>
+        <DialogContent className="p-4">
           <DialogTitle className="sr-only">封面大图</DialogTitle>
           <DialogDescription className="sr-only">查看当前影片的完整封面</DialogDescription>
           <div className="flex max-h-[calc(100vh-96px)] min-h-[240px] items-center justify-center overflow-auto rounded-[var(--radius)] bg-black/30 p-2">

@@ -104,8 +104,8 @@ export default function GroupSuggestDialog({
   );
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="w-[520px]">
+    <Dialog open width={520} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
         <div className="flex items-baseline justify-between gap-3">
           <DialogHeader>
             <DialogTitle>加入分组建议</DialogTitle>

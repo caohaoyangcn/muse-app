@@ -100,8 +100,8 @@ export default function AddSourceDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="w-[520px] gap-0 p-0" onKeyDown={onKeyDown}>
+    <Dialog open={open} width={520} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="gap-0 p-0" onKeyDown={onKeyDown}>
         <DialogHeader className="px-5 pb-3 pt-5 pr-10">
           <DialogTitle>添加视频</DialogTitle>
           <DialogDescription>选择来源</DialogDescription>

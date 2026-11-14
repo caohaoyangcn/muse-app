@@ -1,48 +1,79 @@
 import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
+import { Button as AstryxButton } from "@astryxdesign/core/Button";
+
 import { cn } from "../lib/utils";
 
-const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] border text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:pointer-events-none disabled:opacity-50",
-  {
-    variants: {
-      variant: {
-        default:
-          "border-[var(--border)] bg-[var(--panel-2)] text-[var(--text)] hover:border-[var(--accent)]",
-        primary:
-          "border-transparent bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]",
-        danger:
-          "border-transparent bg-[var(--danger)] text-white hover:brightness-110",
-        ghost:
-          "border-transparent bg-transparent text-[var(--muted)] hover:bg-[var(--border)] hover:text-[var(--text)]",
-      },
-      size: {
-        default: "h-9 px-3.5 py-2",
-        sm: "h-8 px-2.5 text-xs",
-        lg: "h-10 px-5 text-[15px]",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  },
-);
+/**
+ * The one button in the app, on Astryx.
+ *
+ * The props are the Moss-era ones on purpose — `variant="primary|danger|ghost"`,
+ * `size`, plain `<button>` attributes, children as the visible content — so the
+ * ~20 call sites keep reading naturally and only this file knows the design
+ * system's vocabulary. The mapping is one-way:
+ *
+ *   default → secondary    primary → primary
+ *   danger  → destructive  ghost   → ghost
+ *
+ * Text goes through `children`, not Astryx's `label`: call sites mix text with
+ * icons and counts, which a `label: string` cannot express. The accessible name
+ * is derived from those children (see `textOf`) and passed as `aria-label`, so a
+ * button with an icon and a word is still announced as that word.
+ */
+const VARIANTS = {
+  default: "secondary",
+  primary: "primary",
+  danger: "destructive",
+  ghost: "ghost",
+} as const;
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+const SIZES = {
+  default: "md",
+  sm: "sm",
+  lg: "lg",
+} as const;
+
+export type ButtonVariant = keyof typeof VARIANTS;
+export type ButtonSize = keyof typeof SIZES;
+
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+}
+
+/** Visible text of a children tree, ignoring elements that carry no words. */
+function textOf(node: React.ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join(" ");
+  if (React.isValidElement<{ children?: React.ReactNode }>(node)) return textOf(node.props.children);
+  return "";
+}
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, type = "button", ...props }, ref) => (
-    <button
-      ref={ref}
-      type={type}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  ),
+  ({ className, variant = "default", size = "default", type = "button", children, ...props }, ref) => {
+    // Astryx takes the accessible name as `label` and the visible content as
+    // `children`; when the two differ it emits `aria-label` itself. Passing both
+    // is therefore the whole adapter: icon+text rows keep their words, and a
+    // text-only button still reads as its text.
+    const text = props["aria-label"] ?? textOf(children);
+    const { disabled, ...rest } = props;
+
+    return (
+      <AstryxButton
+        ref={ref}
+        type={type}
+        label={text}
+        variant={VARIANTS[variant]}
+        size={SIZES[size]}
+        isDisabled={disabled}
+        className={cn("muse-button", className)}
+        {...rest}
+      >
+        {children}
+      </AstryxButton>
+    );
+  },
 );
 Button.displayName = "Button";
 
-export { Button, buttonVariants };
+export { Button };

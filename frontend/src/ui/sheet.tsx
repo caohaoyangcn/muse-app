@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
+import { BottomSheet as AstryxBottomSheet } from "@astryxdesign/core/BottomSheet";
 
 import { cn } from "../lib/utils";
-import { useEscape, useFocusTrap } from "./overlay";
-import "./motion.css";
-import "./sheet.css";
+import { Button } from "./button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./dialog";
 
 /**
  * A bottom sheet — the touch stand-in for the desktop app's context menus and
- * dialogs. Everything the desktop reaches through right-click or a modal lives
- * here on a phone, and it is the mobile form of `ui/ActionMenu`.
+ * dialogs. Astryx supplies the surface (scrim, focus trap, Escape, the
+ * slide-up motion and the drag handle), so this module only lays out what the
+ * dashboards put in it.
  */
 export function BottomSheet({
   open,
@@ -21,39 +22,23 @@ export function BottomSheet({
   onClose: () => void;
   children: ReactNode;
 }) {
-  useEscape(open, onClose);
-  const panelRef = useFocusTrap(open);
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 flex flex-col justify-end">
-      <button
-        aria-label="关闭"
-        className="fade-enter absolute inset-0 bg-black/55"
-        onClick={onClose}
-        tabIndex={-1}
-        type="button"
-      />
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        className="sheet-enter relative max-h-[85dvh] rounded-t-2xl border-t border-[var(--border)] bg-[var(--panel)] pb-[var(--safe-bottom)] outline-none"
-        aria-label={title}
-        aria-modal="true"
-        role="dialog"
-      >
-        <div className="flex items-center justify-between px-4 pb-2 pt-4">
-          <div className="text-base font-semibold">{title}</div>
-          <button
-            className="-mr-2 rounded-full px-3 py-1 text-sm text-[var(--muted)] active:bg-[var(--panel-2)]"
-            onClick={onClose}
-            type="button"
-          >
-            完成
-          </button>
-        </div>
-        <div className="scroll-area max-h-[70dvh] px-2 pb-3">{children}</div>
+    <AstryxBottomSheet
+      isOpen={open}
+      onOpenChange={(next) => !next && onClose()}
+      label={title ?? "操作"}
+      // Sheets are edge-to-edge on purpose; each row brings its own padding.
+      padding={0}
+      height="85dvh"
+    >
+      <div className="flex items-center justify-between px-4 pb-2 pt-3">
+        <div className="text-base font-semibold">{title}</div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          完成
+        </Button>
       </div>
-    </div>
+      <div className="scroll-area max-h-[70dvh] px-2 pb-[var(--safe-bottom)]">{children}</div>
+    </AstryxBottomSheet>
   );
 }
 
@@ -74,19 +59,19 @@ export function SheetAction({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
+      variant="ghost"
+      disabled={disabled}
       className={cn(
-        "flex w-full items-center gap-3 rounded-[var(--radius)] px-3 py-3 text-left text-[15px] active:bg-[var(--panel-2)] disabled:opacity-40",
+        "flex h-auto w-full items-center justify-start gap-3 rounded-[var(--radius)] px-3 py-3 text-left text-[15px]",
         danger ? "text-[var(--danger)]" : "text-[var(--text)]",
       )}
-      disabled={disabled}
       onClick={onClick}
-      type="button"
     >
       {icon ? <span className="w-5 text-center text-[var(--muted)]">{icon}</span> : null}
       <span className="flex-1">{label}</span>
       {hint ? <span className="text-xs text-[var(--muted)]">{hint}</span> : null}
-    </button>
+    </Button>
   );
 }
 
@@ -110,51 +95,22 @@ export function ConfirmSheet({
   onConfirm: () => void;
   onClose: () => void;
 }) {
-  useEscape(open, onClose);
-  const panelRef = useFocusTrap(open);
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-      <button
-        aria-label="关闭"
-        className="fade-enter absolute inset-0 bg-black/60"
-        onClick={onClose}
-        tabIndex={-1}
-        type="button"
-      />
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        className="fade-enter relative w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-5 outline-none"
-        aria-label={title}
-        aria-modal="true"
-        role="alertdialog"
-      >
-        <div className="text-base font-semibold">{title}</div>
+    <Dialog open={open} width={380} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent label={title}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
         {message ? (
           <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{message}</p>
         ) : null}
-        <div className="mt-5 flex gap-3">
-          <button
-            className="flex-1 rounded-[var(--radius)] border border-[var(--border)] py-2.5 text-sm active:bg-[var(--panel-2)]"
-            onClick={onClose}
-            type="button"
-          >
-            取消
-          </button>
-          <button
-            className={cn(
-              "flex-1 rounded-[var(--radius)] py-2.5 text-sm font-medium text-white disabled:opacity-50",
-              danger ? "bg-[var(--danger)]" : "bg-[var(--accent)]",
-            )}
-            disabled={busy}
-            onClick={onConfirm}
-            type="button"
-          >
+        <DialogFooter className="mt-5">
+          <Button onClick={onClose}>取消</Button>
+          <Button variant={danger ? "danger" : "primary"} disabled={busy} onClick={onConfirm}>
             {busy ? "处理中…" : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

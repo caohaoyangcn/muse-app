@@ -1,5 +1,6 @@
+import { Toast, ToastViewport } from "@astryxdesign/core/Toast";
+
 import { cn } from "../lib/utils";
-import "./motion.css";
 
 export type ToastKind = "success" | "info" | "error";
 
@@ -18,16 +19,15 @@ const ACCENT: Record<ToastKind, string> = {
 };
 
 /**
- * Transient messages. One stack for both clients, two placements:
+ * Transient messages, hosted by Astryx's toast layer.
  *
- * - `top-right` — the desktop card, with the details list (a toast there reports
- *   what failed in a list form, e.g. which files were skipped).
- * - `bottom` — the phone banner, sitting just above the home indicator. No
- *   details: it disappears in under three seconds and the first line is all
- *   anyone reads.
+ * Astryx owns the stacking, the live region and the enter/exit motion; the card
+ * itself is ours (`renderContent`), because the two clients want different
+ * cards: the desktop one carries a details list and a colour-coded left edge,
+ * the phone one is a single line above the home indicator.
  *
- * `aria-live="polite"` is on the container, so a screen reader announces each
- * arrival without stealing focus from whatever the user is doing.
+ * The list stays controlled (`toasts` in, `onDismiss` out) — that is what lets
+ * the app keep one stack per shell and dismiss a toast by tapping it.
  */
 export function ToastStack({
   toasts,
@@ -41,40 +41,56 @@ export function ToastStack({
   if (toasts.length === 0) return null;
   const bottom = placement === "bottom";
   return (
+    // The stack is anchored here, not by Astryx: `ToastViewport` lays the cards
+    // out but does not take them out of flow, and the two shells dock it in
+    // different corners (desktop top-right, phone above the home indicator).
     <div
-      aria-live="polite"
       className={cn(
-        "flex flex-col gap-2",
+        "pointer-events-none z-[400]",
         bottom
-          ? "pointer-events-none fixed inset-x-3 bottom-[calc(var(--safe-bottom)+16px)] z-30"
-          : "fixed right-4 top-4 z-[400] w-[340px] gap-2.5",
+          ? "fixed inset-x-3 bottom-[calc(var(--safe-bottom)+16px)]"
+          : "fixed right-4 top-4 w-[340px]",
       )}
     >
+      <ToastViewport position={bottom ? "bottomStart" : "topEnd"}>
       {toasts.map((toast) => (
-        <div
+        <Toast
           key={toast.id}
-          onClick={onDismiss ? () => onDismiss(toast.id) : undefined}
-          className={cn(
-            bottom
-              ? "fade-enter rounded-[var(--radius)] border px-3 py-2 text-sm shadow-lg"
-              : "cursor-pointer rounded-lg border border-[var(--border)] border-l-[3px] bg-[var(--panel-2)] px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.45)]",
-            bottom && toast.kind === "error"
-              ? "border-[var(--danger)] bg-[var(--danger)] text-white"
-              : bottom
-                ? "border-[var(--border)] bg-[var(--panel-2)] text-[var(--text)]"
-                : ACCENT[toast.kind],
+          type={toast.kind === "error" ? "error" : "info"}
+          body={toast.message}
+          // The app decides when a toast goes away; a failure list should stay
+          // until it has been read.
+          isAutoHide={false}
+          autoHideDuration={0}
+          onDismiss={() => onDismiss?.(toast.id)}
+          renderContent={({ body }) => (
+            <div
+              onClick={onDismiss ? () => onDismiss(toast.id) : undefined}
+              className={cn(
+                "pointer-events-auto",
+                bottom
+                  ? "fade-enter rounded-[var(--radius)] border px-3 py-2 text-sm shadow-lg"
+                  : "cursor-pointer rounded-lg border border-[var(--border)] border-l-[3px] bg-[var(--panel-2)] px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.45)]",
+                bottom && toast.kind === "error"
+                  ? "border-[var(--danger)] bg-[var(--danger)] text-white"
+                  : bottom
+                    ? "border-[var(--border)] bg-[var(--panel-2)] text-[var(--text)]"
+                    : ACCENT[toast.kind],
+              )}
+            >
+              <div className={bottom ? undefined : "font-medium"}>{body}</div>
+              {!bottom && toast.details && toast.details.length > 0 && (
+                <ul className="mt-2 list-disc pl-[18px] text-xs leading-relaxed break-words text-[var(--muted)]">
+                  {toast.details.map((detail, i) => (
+                    <li key={i}>{detail}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
-        >
-          <div className={bottom ? undefined : "font-medium"}>{toast.message}</div>
-          {!bottom && toast.details && toast.details.length > 0 && (
-            <ul className="mt-2 list-disc pl-[18px] text-xs leading-relaxed text-[var(--muted)] break-words">
-              {toast.details.map((detail, i) => (
-                <li key={i}>{detail}</li>
-              ))}
-            </ul>
-          )}
-        </div>
+        />
       ))}
+      </ToastViewport>
     </div>
   );
 }

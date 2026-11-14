@@ -85,8 +85,8 @@ export default function EditVideoDialog({ video, onClose, onSaved }: Props) {
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="flex w-[620px] flex-col">
+    <Dialog open width={620} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="flex flex-col">
         <DialogHeader>
           <DialogTitle>编辑影片信息</DialogTitle>
           <DialogDescription className="sr-only">编辑影片标题、备注和封面</DialogDescription>

@@ -1,95 +1,124 @@
 import * as React from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
 import { cn } from "../lib/utils";
+import { X } from "lucide-react";
+import { Dialog as AstryxDialog } from "@astryxdesign/core/Dialog";
 
-const Dialog = DialogPrimitive.Root;
-const DialogTrigger = DialogPrimitive.Trigger;
-const DialogPortal = DialogPrimitive.Portal;
-const DialogClose = DialogPrimitive.Close;
+import { Button } from "./button";
 
-const DialogOverlay = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Overlay
-    ref={ref}
-    className={cn(
-      "fixed inset-0 z-[300] bg-black/55",
-      className,
-    )}
-    {...props}
-  />
-));
-DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
+/**
+ * Modal dialog, on Astryx.
+ *
+ * Astryx owns the hard half — the native `<dialog>` with `showModal()`, the top
+ * layer, the scrim, the focus trap, Escape/purpose handling and the entrance
+ * motion. This module keeps the compound shape the app already uses
+ * (`Dialog` + `DialogContent` + `DialogHeader`/`DialogTitle`/`Footer`) so the ten
+ * dialogs read the same, and adds the two things Astryx leaves to the caller:
+ * the close button and the dialog's accessible name.
+ *
+ * Width is a prop, not a class: Astryx writes its width as an inline custom
+ * property, which a `w-[620px]` utility on the same element would not beat.
+ */
+type DialogContextValue = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  width?: number | string;
+};
 
-const DialogContent = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-1/2 top-1/2 z-[301] grid max-h-[calc(100vh-48px)] w-[440px] max-w-[calc(100vw-48px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel-2)] p-5 text-[var(--text)] shadow-[0_12px_40px_rgba(0,0,0,0.5)] focus:outline-none",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-1 text-[var(--muted)] opacity-70 transition-opacity hover:bg-[var(--border)] hover:text-[var(--text)] hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]">
-        <X className="h-4 w-4" />
-        <span className="sr-only">关闭</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
-DialogContent.displayName = DialogPrimitive.Content.displayName;
+const DialogContext = React.createContext<DialogContextValue | null>(null);
+const TitleIdContext = React.createContext<string | undefined>(undefined);
 
-const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+export function Dialog({
+  open,
+  onOpenChange,
+  width,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Preferred surface width; numbers are pixels. */
+  width?: number | string;
+  children: React.ReactNode;
+}) {
+  const value = React.useMemo(() => ({ open, onOpenChange, width }), [open, onOpenChange, width]);
+  return <DialogContext.Provider value={value}>{children}</DialogContext.Provider>;
+}
+
+export interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** Accessible name when the dialog has no `DialogTitle`. */
+  label?: string;
+}
+
+export const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
+  ({ className, children, label, ...props }, ref) => {
+    const context = React.useContext(DialogContext);
+    if (!context) throw new Error("DialogContent 必须在 Dialog 内使用");
+    const titleId = React.useId();
+
+    return (
+      <AstryxDialog
+        isOpen={context.open}
+        onOpenChange={context.onOpenChange}
+        width={context.width}
+        // Call sites bring their own padding when they need edge-to-edge rows
+        // (a header divider, a list, a footer bar); the token step is the default.
+        padding={4}
+        aria-labelledby={label ? undefined : titleId}
+        aria-label={label}
+        className={className}
+      >
+        <TitleIdContext.Provider value={titleId}>
+          <div ref={ref} className="relative" {...props}>
+            {children}
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="关闭"
+              className="absolute right-0 top-0 -m-1 text-[var(--muted)]"
+              onClick={() => context.onOpenChange(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </TitleIdContext.Provider>
+      </AstryxDialog>
+    );
+  },
+);
+DialogContent.displayName = "DialogContent";
+
+export const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn("flex flex-col space-y-1.5", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 
-const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+export const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn("flex justify-end gap-2", className)} {...props} />
 );
 DialogFooter.displayName = "DialogFooter";
 
-const DialogTitle = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Title>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
->(({ className, ...props }, ref) => (
-  <DialogPrimitive.Title
-    ref={ref}
-    className={cn("text-base font-semibold leading-none", className)}
-    {...props}
-  />
-));
-DialogTitle.displayName = DialogPrimitive.Title.displayName;
+export const DialogTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
+  ({ className, ...props }, ref) => {
+    const titleId = React.useContext(TitleIdContext);
+    return (
+      <h2
+        ref={ref}
+        id={titleId}
+        className={cn("text-base font-semibold leading-none", className)}
+        {...props}
+      />
+    );
+  },
+);
+DialogTitle.displayName = "DialogTitle";
 
-const DialogDescription = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Description>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
+export const DialogDescription = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description
+  <p
     ref={ref}
     className={cn("text-sm leading-relaxed text-[var(--muted)]", className)}
     {...props}
   />
 ));
-DialogDescription.displayName = DialogPrimitive.Description.displayName;
-
-export {
-  Dialog,
-  DialogTrigger,
-  DialogPortal,
-  DialogClose,
-  DialogOverlay,
-  DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
-  DialogDescription,
-};
+DialogDescription.displayName = "DialogDescription";

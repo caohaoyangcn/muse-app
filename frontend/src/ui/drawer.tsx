@@ -1,24 +1,19 @@
 import type { ReactNode } from "react";
+import { Drawer as AstryxDrawer } from "@astryxdesign/core/Drawer";
 
 import { cn } from "../lib/utils";
-import { useEscape, useFocusTrap } from "./overlay";
-import "./motion.css";
-import "./drawer.css";
+import { Button } from "./button";
 
 /**
- * A panel that slides in over the page from an edge — the touch counterpart of
- * the desktop sidebar. It is the same transient surface as `BottomSheet`, just
- * opened from the side: backdrop, focus trap, Escape, and focus returned to
- * whatever opened it.
+ * A panel that slides in from an edge — the touch counterpart of the desktop
+ * sidebar. Astryx's Drawer supplies the surface: the native dialog, the scrim,
+ * the focus trap, Escape and the slide motion, all of which used to be hand
+ * written in `overlay.ts`.
  *
- * The panel does not own its content. A shell supplies a header (brand or title
- * plus a close control), the navigation rows, and an optional footer, because a
- * drawer on a phone holds navigation while a drawer on a tablet may hold
- * filters — the surface is the shared part, the contents are the shell's.
- *
- * Safe-area padding stays with the caller: the panel is `fixed`, so it is laid
- * out against the viewport and cannot inherit the shell's own insets. Pass
- * `pt-[var(--safe-top)] pb-[var(--safe-bottom)]` where those variables exist.
+ * The panel still does not own its content. A shell supplies a header (brand or
+ * title plus a close control), the navigation rows and an optional footer,
+ * because a drawer on a phone holds navigation while a drawer on a tablet may
+ * hold filters — the surface is the shared part.
  */
 export function Drawer({
   open,
@@ -35,33 +30,19 @@ export function Drawer({
   side?: "left" | "right";
   className?: string;
 }) {
-  useEscape(open, onClose);
-  const panelRef = useFocusTrap(open);
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 flex">
-      <button
-        aria-label="关闭"
-        className="fade-enter absolute inset-0 bg-black/55"
-        onClick={onClose}
-        tabIndex={-1}
-        type="button"
-      />
-      <div
-        ref={panelRef}
-        aria-label={title}
-        aria-modal="true"
-        className={cn(
-          "relative flex h-full w-[min(82vw,320px)] flex-col border-[var(--border)] bg-[var(--panel)] outline-none",
-          side === "left" ? "drawer-enter-left border-r" : "drawer-enter-right ml-auto border-l",
-          className,
-        )}
-        role="dialog"
-        tabIndex={-1}
-      >
-        {children}
-      </div>
-    </div>
+    <AstryxDrawer
+      isOpen={open}
+      onOpenChange={(next) => !next && onClose()}
+      side={side === "left" ? "start" : "end"}
+      label={title ?? "导航"}
+      // The shells bring their own safe-area padding and edge-to-edge rows.
+      padding={0}
+      width="min(82vw, 320px)"
+      className={className}
+    >
+      {children}
+    </AstryxDrawer>
   );
 }
 
@@ -85,16 +66,14 @@ export function DrawerRow({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
       aria-current={active ? "page" : undefined}
+      variant="ghost"
       className={cn(
-        "relative flex w-full shrink-0 items-center gap-3 rounded-[var(--radius)] px-3 py-2.5 text-left text-[15px] transition-colors active:bg-[var(--panel-2)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]",
-        active
-          ? "bg-[rgba(124,92,255,0.12)] text-[var(--text)]"
-          : "text-[var(--muted)]",
+        "relative flex h-auto w-full shrink-0 items-center justify-start gap-3 rounded-[var(--radius)] px-3 py-2.5 text-left text-[15px]",
+        active ? "bg-[rgba(124,92,255,0.12)] text-[var(--text)]" : "text-[var(--muted)]",
       )}
       onClick={onClick}
-      type="button"
     >
       {active ? (
         <span
@@ -114,7 +93,7 @@ export function DrawerRow({
       ) : null}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {hint ? <span className="shrink-0 text-xs text-[var(--muted)]">{hint}</span> : null}
-    </button>
+    </Button>
   );
 }
 

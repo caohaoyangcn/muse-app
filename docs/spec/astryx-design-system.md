@@ -43,14 +43,24 @@ Tailwind v4 的 `@import "tailwindcss"` 会把 `utilities` 排在 Astryx 的 lay
 
 token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScript，与 `theme.css` 形成两份调色板。除非将来需要 Astryx 从品牌色推导完整色阶，再用 `astryx theme build` 生成主题包。
 
-## 采用顺序
+## 已完成的替换（`frontend/src/ui/`）
 
-1. **已完成**：provider、样式表、layer 顺序、token 桥接、目录规则。
-2. 基础件内部替换，对外 props 不变：`ui/button.tsx`（`variant` 映射 `primary|secondary|ghost|destructive`）、`ui/input.tsx`。注意 Astryx `Button` 用 `label: string` 而非 children，文本与图标混排的调用点需要逐个处理。
-3. 浮动层：`ui/dialog.tsx` → Astryx Dialog，可一并去掉 `@radix-ui/react-dialog`（当前仅此一处依赖）。
-4. 高价值复杂组件：`Typeahead`、`MultiSelector`、`Tokenizer`、`TreeList`、`Table`、`CommandPalette`、`SegmentedControl`、`BottomSheet`（移动端）。
-5. 不动：卡片、栅格、外壳布局——这些是 Muse 自己的形态。
+| 模块 | Astryx 组件 | 对外 API | 适配说明 |
+|---|---|---|---|
+| `button.tsx` | `Button` | 不变（`variant` / `size` / children） | 文字经 `children` 传入；`label` 取 children 的纯文本，图标+文字按钮由 Astryx 自动产出 `aria-label`。`default→secondary`、`danger→destructive` |
+| `input.tsx` | `TextInput` | 不变（原生 input props） | 事件转回原生 `onChange(event)`；`id` 透传给真输入框，外部 `<label htmlFor>` 关联保留；`number` 无对应字段，降级为 `text + inputMode=numeric` |
+| `dialog.tsx` | `Dialog` | 不变（`open`/`onOpenChange` + Header/Title/Description/Footer） | 宽度改为 `<Dialog width>`（Astryx 用内联自定义属性写宽度，`w-[…]` 类打不过）；关闭按钮与 `aria-labelledby` 由本层补 |
+| `toast.tsx` | `Toast` + `ToastViewport` | 不变（受控 `toasts`） | 卡片用 `renderContent` 保住左色条与详情列表；堆叠与进动画交给 Astryx，锚点仍由本层定位（viewport 不脱离文档流） |
+| `drawer.tsx` | `Drawer` | 不变 | `side` 映射 `start`/`end`；行改为 `Button` |
+| `sheet.tsx` | `BottomSheet` + `Dialog` | 不变 | `ConfirmSheet` 改用 Astryx Dialog；行改为 `Button` |
+
+随之删除：`ui/overlay.ts`（聚焦陷阱与 Escape 由 Astryx 负责）、`ui/sheet.css`、`ui/drawer.css`、`@radix-ui/react-dialog` 依赖。
+
+## 刻意没有替换的
+
+- **`ui/menu.tsx` + `ui/flyout-shell.tsx`**：右键菜单在**任意坐标**打开，且带 hover-intent 子面板（`renderFlyout(anchor)` 自定义 JSX）。Astryx 的 `ContextMenu` 是「在触发区域右键」，子菜单走条目数据，替换等于重写三个菜单包装器与两个 flyout 组件，收益不抵风险。行本身已用 Astryx `Button`。
+- **`ui/sidebar.tsx`、`ui/sticky-bar.tsx`、`ui/NavIcon.tsx`、`backup-badge.tsx`、`restored-badge.tsx`、`error-boundary.tsx`**：这些是 Muse 自己的外壳与业务徽标，不是设计系统里的基元，替换会改掉信息架构而不是样式。
 
 ## 复验方法
 
-spike 页面与 `scripts/astryx-spike.mjs` 是一次性验证工具，未进版本库。要复验二点（zoom 下浮动层位置、`className` 是否仍能覆盖），照上面的 layer 顺序起一个 Vite 页面，在 0.8 / 1.0 / 1.5 三档分别打开 Dialog、Popover，读 `getBoundingClientRect()` 与 `window.innerWidth/innerHeight` 比对即可。
+`scripts/ui-check.mjs` + 一个 spike 页面是一次性验证工具，未进版本库：起 dev server 后在 1× / 1.5× 下打开对话框、底部抽屉、侧边抽屉、toast，并断言 `dialog:modal`、`aria-labelledby` 指向标题、`label[for]` 关联、受控输入回写、Escape 关闭。要复验时照本文件第一二节的 layer 顺序起页面即可。

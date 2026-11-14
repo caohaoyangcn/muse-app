@@ -173,8 +173,8 @@ export default function CloudBrowserDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="flex h-[620px] w-[780px] flex-col gap-0 p-0">
+    <Dialog open={open} width={780} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="flex h-[620px] flex-col gap-0 p-0">
         <DialogHeader className="shrink-0 border-b border-[var(--border)] px-5 pb-3.5 pt-5 pr-12">
           <DialogTitle className="flex items-center gap-2">
             <Cloud className="h-[18px] w-[18px] text-[var(--accent)]" aria-hidden />
