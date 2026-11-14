@@ -3,7 +3,7 @@
 // The content script runs inside javdb.com, so a fetch() from there would be a
 // cross-origin request subject to the page's CSP. The worker runs in the
 // extension's own context and uses the host permission instead.
-import { CHECK_TIMEOUT_MS, loadMuseBaseURL, normalizeBaseURL } from "./config.js";
+import { CHECK_TIMEOUT_MS, hasOriginPermission, loadMuseBaseURL } from "./config.js";
 
 /**
  * Asks Muse whether the given 番号 (exactly as rendered on the page) are
@@ -11,13 +11,18 @@ import { CHECK_TIMEOUT_MS, loadMuseBaseURL, normalizeBaseURL } from "./config.js
  *
  * Resolves — never rejects — with one of:
  *   { ok: true, codes: [{ code, matches: [...] }] }
- *   { ok: false, reason: "offline" | "timeout" | "http", status?, message? }
+ *   { ok: false, reason: "noPermission" | "offline" | "timeout" | "http", status?, message?, base? }
  */
 async function checkCodes(codes) {
   const wanted = Array.isArray(codes) ? codes.filter((c) => typeof c === "string" && c) : [];
   if (wanted.length === 0) return { ok: true, codes: [] };
 
   const base = await loadMuseBaseURL();
+  // A custom port is not covered by manifest.json's host permissions until the
+  // user grants it on the options page; say so instead of reporting "offline".
+  if (!(await hasOriginPermission(base))) {
+    return { ok: false, reason: "noPermission", base, message: "扩展没有访问该地址的权限" };
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
   try {
@@ -36,16 +41,16 @@ async function checkCodes(codes) {
       } catch {
         // A non-JSON error body keeps the status-based message.
       }
-      return { ok: false, reason: "http", status: res.status, message };
+      return { ok: false, reason: "http", status: res.status, message, base };
     }
     const body = await res.json();
     return { ok: true, codes: Array.isArray(body?.codes) ? body.codes : [] };
   } catch (error) {
     if (error && error.name === "AbortError") {
-      return { ok: false, reason: "timeout", message: "Muse 查询超时" };
+      return { ok: false, reason: "timeout", message: "Muse 查询超时", base };
     }
     // A refused connection is the normal case when Muse is closed.
-    return { ok: false, reason: "offline", message: "无法连接 Muse" };
+    return { ok: false, reason: "offline", message: "无法连接 Muse", base };
   } finally {
     clearTimeout(timer);
   }
@@ -78,9 +83,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
   if (message.type === "testConnection") {
     // The options page uses this to prove the whole path end to end.
-    checkCodes(["ABP-576"]).then(async (result) => {
-      sendResponse({ ...result, base: normalizeBaseURL(await loadMuseBaseURL()) });
+    checkCodes(["ABP-576"]).then((result) => {
+      sendResponse(result);
     });
+    return true;
+  }
+  if (message.type === "permission") {
+    // Reported to the content script so a missing grant is explained rather
+    // than shown as "Muse 未连接".
+    (async () => {
+      const base = await loadMuseBaseURL();
+      sendResponse({ base, granted: await hasOriginPermission(base) });
+    })();
     return true;
   }
   return false;

@@ -25,7 +25,11 @@
   // A page that renders no cards is either not a listing page or a redesign;
   // the observer keeps watching instead of giving up.
   const RESCAN_DELAY_MS = 10000;
-  const HOVER_BATCH_MS = 200;
+  // Cards are queried as soon as they render; this window only folds one burst
+  // of DOM inserts into a single request.
+  const BATCH_WINDOW_MS = 200;
+  // The endpoint answers at most this many codes per request.
+  const MAX_BATCH = 100;
   const CACHE_TTL_MS = 60000;
 
   /** @type {Map<string, {result: any, at: number}>} */
@@ -90,10 +94,21 @@
   }
 
   function stateFor(result) {
-    if (!result) return { state: "idle", label: "·", title: "Muse：悬停查询是否已收藏" };
+    if (!result) return { state: "idle", label: "·", title: "Muse：等待查询" };
     if (result.ok === false) {
+      if (result.reason === "noPermission") {
+        return {
+          state: "offline",
+          label: "⚠",
+          title: `扩展没有访问 ${result.base} 的权限：请打开扩展「选项」，点「允许访问该地址」`,
+        };
+      }
       if (result.reason === "offline" || result.reason === "timeout") {
-        return { state: "offline", label: "⚠", title: "Muse 未连接（请确认 Muse 正在运行）" };
+        return {
+          state: "offline",
+          label: "⚠",
+          title: `Muse 未连接（${result.base ?? museBase}）：请确认 Muse 正在运行，并在扩展「选项」里填写正确地址`,
+        };
       }
       return { state: "offline", label: "⚠", title: `Muse 返回错误：${result.message ?? result.status}` };
     }
@@ -117,24 +132,28 @@
     return entry.result;
   }
 
-  /** Queues a code for the next batch; hovering several cards asks once. */
+  /**
+   * Queues a code for the next batch. Cards are queryable as soon as they are
+   * rendered, so a listing page asks about all of them at once; the 200 ms
+   * window only coalesces the burst into as few requests as the server accepts.
+   */
   function enqueue(code, card) {
     pendingCodes.add(code);
     card.dataset.musePending = "1";
     if (pendingTimer != null) return;
     pendingTimer = window.setTimeout(() => {
       pendingTimer = null;
-      const batch = Array.from(pendingCodes);
+      const queued = Array.from(pendingCodes);
       pendingCodes = new Set();
-      void runBatch(batch);
-    }, HOVER_BATCH_MS);
+      // The endpoint caps a batch; a long page simply takes more than one round
+      // trip instead of being rejected.
+      for (let i = 0; i < queued.length; i += MAX_BATCH) {
+        void runBatch(queued.slice(i, i + MAX_BATCH));
+      }
+    }, BATCH_WINDOW_MS);
   }
 
   async function runBatch(codes) {
-    for (const card of document.querySelectorAll("[data-muse-pending]")) {
-      delete card.dataset.musePending;
-      mark(card, { state: "loading", label: "…", title: "查询 Muse 中…" });
-    }
     let response;
     try {
       response = await chrome.runtime.sendMessage({ type: "check", codes });
@@ -157,23 +176,28 @@
   function announceOfflineOnce() {
     if (offlineAnnounced) return;
     offlineAnnounced = true;
-    // Do not nag: one toast per page, and the badges keep saying 未连接.
-    toast("Muse 未连接：请确认 Muse 正在运行，且未修改默认端口 8899。");
+    // Do not nag: one toast per page, and the badges keep saying 未连接. The
+    // message names the configured address, because a wrong port is the usual
+    // cause and the default one is not necessarily what the user runs.
+    toast(`Muse 未连接：请确认 Muse 正在运行，并在扩展选项里填写正确的服务地址（当前 ${museBase}）。`);
   }
 
-  /** Repaints every badge on the page from the cache (and queues misses). */
+  /** Repaints every badge on the page from the cache. */
   function refreshBadges() {
     for (const card of document.querySelectorAll(CARD_SELECTOR)) {
-      if (card.dataset.musePending) continue;
+      const badge = ensureBadge(card);
       const code = readCode(card);
       if (!code) {
-        setBadge(ensureBadge(card), "unknown", "?", "该卡片没有番号字段");
+        setBadge(badge, "unknown", "?", "该卡片没有番号字段");
+        cardState.set(card, { code: "", result: null });
         continue;
       }
       const result = cached(code);
+      if (!result) continue; // still queued or in flight; the next round paints it
       const view = stateFor(result);
-      setBadge(ensureBadge(card), view.state, view.label, view.title);
+      setBadge(badge, view.state, view.label, view.title);
       cardState.set(card, { code, result });
+      if (card.dataset.musePending) delete card.dataset.musePending;
     }
   }
 
@@ -321,6 +345,12 @@
 
   // ---------- wiring ----------
 
+  /**
+   * Paints a badge for every card on the page and queues the ones that have not
+   * been answered yet. The status is the point of the extension, so it is
+   * fetched eagerly: a page of 40 cards costs one batched request, and the user
+   * never has to hover to learn anything.
+   */
   function decorate() {
     const cards = document.querySelectorAll(CARD_SELECTOR);
     if (cards.length === 0) return 0;
@@ -334,8 +364,9 @@
       }
       const result = cached(code);
       if (!result) {
-        setBadge(badge, "idle", "·", "Muse：悬停查询是否已收藏");
+        setBadge(badge, "loading", "…", "查询 Muse 中…");
         cardState.set(card, { code, result: null });
+        enqueue(code, card);
       } else {
         const view = stateFor(result);
         setBadge(badge, view.state, view.label, view.title);
@@ -345,13 +376,13 @@
     return cards.length;
   }
 
+  // Hover is only a hint for a card whose query is still in flight; it never
+  // gates the query itself.
   function onCardEnter(event) {
     const card = event.target instanceof Element ? event.target.closest(CARD_SELECTOR) : null;
     if (!card) return;
     const state = cardState.get(card);
-    if (!state || !state.code) return;
-    if (state.result) return;
-    mark(card, { state: "loading", label: "…", title: "查询 Muse 中…" });
+    if (!state || !state.code || state.result) return;
     enqueue(state.code, card);
   }
 

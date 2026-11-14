@@ -35,6 +35,17 @@ type extensionResponse struct {
 // browser extension. It is read-only: nothing the extension sends can change
 // the library, which is what makes serving it cross-origin acceptable.
 func (s *Server) handleExtensionCheck(w http.ResponseWriter, r *http.Request) {
+	// The CORS check only protects the response the page can read; it does not
+	// stop the request itself. A hostile page can put one of our allowed origins
+	// in an Origin header (it controls its own fetch), and if the request is
+	// answered the whole library leaks — through no-cors response bytes, an
+	// error-message oracle in the popover, or DNS rebinding. The Host header is
+	// the one a page cannot set, and this server only ever binds a loopback name
+	// or a LAN address, so anything else is not meant for us.
+	if !extensionHostAllowed(r.Host) {
+		httpError(w, http.StatusForbidden, "请通过本机地址访问")
+		return
+	}
 	var body extensionRequest
 	if err := decodeJSON(r, &body); err != nil {
 		httpError(w, http.StatusBadRequest, "无效的请求体")
@@ -48,6 +59,26 @@ func (s *Server) handleExtensionCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, extensionResponse{Codes: results})
+}
+
+// extensionHostAllowed reports whether the request was addressed to a host this
+// server owns: a loopback name (the desktop app's own URL) or a private LAN
+// address (the address the mobile UI is opened with). Everything else — most
+// importantly a public name an attacker can point at a visitor's loopback
+// address by DNS rebinding — is refused.
+func extensionHostAllowed(hostport string) bool {
+	host := hostport
+	if parsed, _, err := net.SplitHostPort(hostport); err == nil {
+		host = parsed
+	}
+	host = strings.ToLower(strings.Trim(host, "[]"))
+	if host == "localhost" {
+		return true
+	}
+	if parsed := net.ParseIP(host); parsed != nil {
+		return parsed.IsLoopback() || parsed.IsPrivate()
+	}
+	return false
 }
 
 // withExtensionCORS adds CORS headers to one handler when the caller is a

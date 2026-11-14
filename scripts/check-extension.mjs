@@ -90,6 +90,26 @@ for (const required of ["http://127.0.0.1:8899/*", "http://localhost:8899/*"]) {
     fail(`manifest.json: host_permissions must include ${required}`);
   }
 }
+// Muse lets the user move the LAN server to any port. The options page takes the
+// port as a number and asks Chrome for access to it, so both halves of that have
+// to exist: the optional host permission to request, and a port field to type.
+const optionalHosts = manifest.optional_host_permissions ?? [];
+for (const required of ["http://127.0.0.1:*/*", "http://localhost:*/*"]) {
+  if (!optionalHosts.includes(required)) {
+    fail(`manifest.json: optional_host_permissions must include ${required} (custom LAN ports)`);
+  }
+}
+const optionsHtml = readFileSync(path.join(extDir, "options.html"), "utf8");
+if (!/id="port"/.test(optionsHtml)) {
+  fail("options.html: a port field (id=\"port\") is how a custom port is entered");
+}
+const configSource = readFileSync(path.join(extDir, "config.js"), "utf8");
+if (!/requestOriginPermission/.test(configSource)) {
+  fail("config.js: a custom port needs chrome.permissions.request from the options page");
+}
+if (!(manifest.permissions ?? []).includes("storage")) {
+  fail("manifest.json: the storage permission is required for the Muse address");
+}
 for (const pattern of hostPermissions) {
   if (!SHARED_SPECIAL.includes(pattern) && !MATCH_PATTERN.test(pattern)) {
     fail(`manifest.json: invalid host_permissions pattern ${pattern}`);
@@ -114,6 +134,14 @@ if (!content.includes('const CODE_SELECTOR = ".video-title strong"')) {
 // guessing 番号 from titles again; that is the design this extension avoids.
 if (/[a-z]\{2,6\}/i.test(content) || /-\[\]_ ?\?\[0-9\]/.test(content)) {
   fail("content.js: looks like a 番号 extraction regex — read the page field instead");
+}
+// The badge is the product: status must be fetched when cards render, never
+// gated behind a hover. decorate() has to queue every card it cannot answer yet.
+if (!/function decorate\(\)[\s\S]{0,1400}enqueue\(code, card\)/.test(content)) {
+  fail("content.js: decorate() must queue every un-answered card, so status is fetched without hovering");
+}
+if (/"idle", "·", "Muse：悬停/.test(content)) {
+  fail("content.js: the idle badge still tells the user to hover");
 }
 
 // ---------- the two origin lists agree ----------

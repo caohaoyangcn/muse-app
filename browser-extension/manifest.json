@@ -5,6 +5,7 @@
   "description": "在 JavDB 影片卡片上查看该番号是否已收藏到本机 Muse。只读，不上传任何数据。",
   "minimum_chrome_version": "102",
   "permissions": ["storage"],
+  "optional_host_permissions": ["http://127.0.0.1:*/*", "http://localhost:*/*"],
   "host_permissions": [
     "http://127.0.0.1:8899/*",
     "http://localhost:8899/*"

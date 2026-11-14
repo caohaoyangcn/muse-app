@@ -21,6 +21,35 @@ import (
 	"muse-app/backend/video"
 )
 
+// The Host guard is what actually stops a hostile page from reading the
+// library: Origin is caller-controlled, Host is not.
+func TestExtensionHostAllowed(t *testing.T) {
+	cases := []struct {
+		host string
+		want bool
+	}{
+		{"127.0.0.1:8899", true},
+		{"localhost:8899", true},
+		{"localhost", true},
+		{"[::1]:8899", true},
+		{"192.168.1.20:8899", true},
+		{"10.0.0.5:8899", true},
+		{"172.16.4.4:8899", true},
+
+		{"evil.example:8899", false},
+		{"javdb.com", false},
+		{"attacker.test:80", false},
+		{"8.8.8.8:8899", false},
+		{"0.0.0.0:8899", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := extensionHostAllowed(c.host); got != c.want {
+			t.Errorf("extensionHostAllowed(%q) = %v, want %v", c.host, got, c.want)
+		}
+	}
+}
+
 // The CORS allowlist is the security boundary of the extension endpoint: a
 // JavDB page may call it, anything else may not.
 func TestExtensionOriginAllowed(t *testing.T) {

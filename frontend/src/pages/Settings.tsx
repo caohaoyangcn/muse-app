@@ -685,6 +685,17 @@ function ExtensionSection() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(true);
+
+  const copyBase = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(false);
+      window.setTimeout(() => setCopied(true), 1600);
+    } catch {
+      // Clipboard unavailable: the value is visible and selectable anyway.
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -720,12 +731,15 @@ function ExtensionSection() {
 
   const port = server?.running ? server.port : DEFAULT_PORT;
   const lanURL = server?.urls?.find((u) => !u.startsWith("http://localhost:"));
+  // A LAN address is what the phone opens, so the extension can use it too
+  // (same network, same server). The loopback URL is the fallback.
+  const lanAddress = server?.running ? (lanURL ?? `http://127.0.0.1:${server.port}`) : "";
 
   return (
     <section className="max-w-[640px]">
       <h2 className="mb-1.5 text-base font-semibold">浏览器扩展</h2>
       <p className="mb-5 max-w-[560px] leading-relaxed text-[var(--muted)]">
-        安装 JavDB 助手扩展后，JavDB 的影片卡片右上角会出现一个状态角标：鼠标移上去即可看到该番号是否已收藏到 Muse、收藏的是哪几个文件。番号直接取自页面渲染的片号，扩展只读取，不会修改收藏库，也不会把番号发到本机以外的地址。
+        安装 JavDB 助手扩展后，JavDB 的影片卡片右上角会出现一个状态角标：无需悬停，打开页面就会显示该番号是否已收藏到 Muse、收藏的是哪几个文件。番号直接取自页面渲染的片号，扩展只读取，不会修改收藏库，也不会把番号发到本机以外的地址。
       </p>
 
       <div className="max-w-[560px]">
@@ -735,13 +749,47 @@ function ExtensionSection() {
             <>
               <span className="text-[#7ad9a2]">运行中</span>
               <span className="text-[var(--muted)]">
-                · 扩展连接 http://127.0.0.1:{server.port}
+                · 端口 {server.port}
+                {server.port !== DEFAULT_PORT ? "（非默认端口）" : ""}
               </span>
             </>
           ) : (
             <span className="text-[#e0b64f]">
               未运行；扩展在服务启动前无法查询（顶部「📱 局域网访问」可启动）。
             </span>
+          )}
+        </div>
+
+        <div
+          className={cn(
+            "mb-4 rounded-[var(--radius)] border px-3 py-2.5 text-[13px] leading-relaxed",
+            server?.running
+              ? "border-[var(--border)] bg-[var(--panel)]"
+              : "border-[#e0b64f55] bg-[var(--panel)] text-[#e0b64f]",
+          )}
+        >
+          {server?.running ? (
+            <>
+              <div className="text-[var(--muted)]">扩展需要连接的 Muse 地址：</div>
+              <div className="mt-1 flex items-center gap-2">
+                <code className="min-w-0 flex-1 truncate rounded bg-[var(--panel-2)] px-1.5 py-0.5">
+                  {lanAddress || "—"}
+                </code>
+                <Button
+                  className="shrink-0"
+                  onClick={() => void copyBase(lanAddress)}
+                  disabled={!lanAddress || !copied}
+                >
+                  {copied ? "已复制 ✓" : "复制"}
+                </Button>
+              </div>
+              <div className="mt-1.5 text-[12px] text-[var(--muted)]">
+                打开扩展的「选项」页，把它粘贴到「服务地址」并保存即可。端口已随服务端配置同步，
+                改端口不需要改扩展文件。
+              </div>
+            </>
+          ) : (
+            "启动局域网服务后才能得到扩展地址。"
           )}
         </div>
 
@@ -767,22 +815,27 @@ function ExtensionSection() {
               打开右上角「开发者模式」。
             </li>
             <li>点「加载已解压的扩展程序」，选中该文件夹。</li>
-            <li>
-              保持 Muse 运行，打开 JavDB 任意列表页，把鼠标移到卡片右上角的角标上即可查询。
-            </li>
+            <li>右键扩展图标 →「选项」，粘贴上面的 Muse 地址并保存。</li>
+            <li>打开 JavDB 任意列表页，卡片角标会自动显示是否已收藏。</li>
           </ol>
         </div>
 
         <div className="mt-6 border-t border-[var(--border)] pt-5">
           <h3 className="text-sm font-semibold">端口</h3>
           <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--muted)]">
-            扩展固定连接 <code>127.0.0.1:{DEFAULT_PORT}</code>，当前服务端口为{" "}
-            <code>{port}</code>
-            {server?.running && server.port !== DEFAULT_PORT
-              ? "。两者不一致，角标会显示「未连接」：请在上方「服务器」里改回默认端口并重启服务器，或重新安装一个指向该端口的扩展。"
-              : server?.running
-                ? "，与扩展一致。"
-                : "，与扩展一致（服务启动后生效）。"}
+            {server?.running ? (
+              <>
+                当前服务端口为 <code>{port}</code>
+                {port !== DEFAULT_PORT
+                  ? "（非默认端口）：扩展默认连接 8899，请把上面的地址填进扩展选项。"
+                  : "，与扩展默认值一致，多数情况下无需手动配置。"}
+              </>
+            ) : (
+              <>
+                服务未运行。启用后会在这里给出准确地址（端口默认为{" "}
+                <code>{DEFAULT_PORT}</code>，可在「服务器」里修改）。
+              </>
+            )}
             {lanURL ? ` 本机之外的设备也可通过 ${lanURL} 访问收藏库。` : ""}
           </p>
         </div>

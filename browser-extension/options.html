@@ -10,28 +10,42 @@
     <main>
       <h1>Muse 收藏助手 for JavDB</h1>
       <p class="lede">
-        在 JavDB 影片卡片右上角显示状态角标：悬停查询该番号是否已收藏到本机 Muse。
+        JavDB 的影片卡片右上角会显示状态角标，打开页面即直接给出结果，无需悬停。
         扩展只读取，不修改收藏库，也不会把番号发送到本机以外的地址。
       </p>
 
       <section>
-        <h2>Muse 地址</h2>
-        <label for="base">服务地址</label>
-        <div class="row">
-          <input id="base" type="url" spellcheck="false" placeholder="http://127.0.0.1:8899" />
-          <button id="save" type="button">保存</button>
-          <button id="reset" type="button" class="ghost">恢复默认</button>
-        </div>
+        <h2>Muse 端口</h2>
         <p class="hint">
-          Muse 默认在 <code>127.0.0.1:8899</code> 提供局域网服务。扩展的站点权限只覆盖该端口的
-          <code>127.0.0.1</code> 与 <code>localhost</code>，因此填其它端口时查询会失败；如确实需要，
-          请在 <code>chrome://extensions</code> 里重新加载本扩展后修改 manifest 的
-          <code>host_permissions</code>。
+          填写 Muse「设置 → 服务器」里显示的端口。默认是 <code>8899</code>；改过端口就填改后的数字。
         </p>
         <div class="row">
-          <button id="test" type="button">测试连接</button>
+          <label for="host" class="field">
+            <span>主机</span>
+            <input id="host" type="text" spellcheck="false" inputmode="url" placeholder="127.0.0.1" />
+          </label>
+          <label for="port" class="field narrow">
+            <span>端口</span>
+            <input id="port" type="number" min="1" max="65535" inputmode="numeric" placeholder="8899" />
+          </label>
+        </div>
+        <p class="hint">
+          将连接：<code id="preview">http://127.0.0.1:8899</code>
+        </p>
+        <div class="row">
+          <button id="save" type="button">保存</button>
+          <button id="reset" type="button" class="ghost">恢复默认</button>
+          <button id="test" type="button" class="ghost">测试连接</button>
+        </div>
+        <p id="access" class="hint"></p>
+        <div class="row">
+          <button id="grant" type="button" hidden>允许访问该地址</button>
           <span id="status" class="status" role="status" aria-live="polite"></span>
         </div>
+        <p class="hint">
+          默认端口开箱可用。填其它端口时，浏览器要求你亲自点一次「允许访问该地址」——这是一次性的，
+          之后不再询问。主机限定为本机（127.0.0.1 / localhost）。
+        </p>
       </section>
 
       <section>
@@ -41,12 +55,17 @@
             打开 <code>chrome://extensions</code>（Edge 为 <code>edge://extensions</code>），打开右上角「开发者模式」。
           </li>
           <li>点「加载已解压的扩展程序」，选择 Muse 目录下的 <code>browser-extension</code> 文件夹。</li>
-          <li>启动 Muse（局域网服务随应用自动开启），打开 JavDB 任意列表页。</li>
-          <li>把鼠标移到卡片右上角角标：<span class="badge found">✓</span> 已收藏、
-            <span class="badge none">✗</span> 未收藏、<span class="badge trash">🗑</span> 仅在回收站、
-            <span class="badge offline">⚠</span> Muse 未连接、<span class="badge unknown">?</span> 卡片没有番号。</li>
-          <li>点击角标可以看到命中的收藏，并在新标签页打开 Muse 详情。</li>
+          <li>右键扩展图标 →「选项」，确认端口与 Muse 一致。</li>
+          <li>启动 Muse，打开 JavDB 任意列表页，角标会自动显示结果。</li>
         </ol>
+        <p class="hint">
+          角标含义：<span class="badge found">✓</span> 已收藏、
+          <span class="badge trash">🗑</span> 仅在回收站、
+          <span class="badge none">✗</span> 未收藏、
+          <span class="badge offline">⚠</span> 连不上 Muse、
+          <span class="badge unknown">?</span> 卡片没有番号。
+          点击角标可以查看命中的收藏，并在新标签页打开 Muse 详情。
+        </p>
       </section>
 
       <section>
