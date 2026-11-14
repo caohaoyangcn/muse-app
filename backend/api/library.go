@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -606,6 +607,198 @@ func (l *Library) VideoJavTask(videoID int64) (*jav.Task, error) {
 		return nil, fmt.Errorf("jav service not configured")
 	}
 	return l.jav.GetTask(videoID)
+}
+
+// MaxJavCodeCheckCodes bounds one MatchJavCodes batch. A JavDB listing page
+// renders tens of cards; the limit keeps a runaway client from turning the
+// endpoint into a whole-library probe.
+const MaxJavCodeCheckCodes = 100
+
+// MatchJavCodes answers "is this work in the library?" for 番号 supplied by an
+// outside caller (the JavDB browser extension). The codes are read off the
+// page, so this method takes them verbatim — LookupKey only strips case and
+// spacing, it never extracts anything.
+//
+// A favorite matches on either side of its own lifecycle: the 番号 the scraper
+// recorded (video_jav.code) or, for a favorite that has not been scraped yet,
+// the code candidates its file name spells out — the same candidates 查重
+// groups on, so the extension and the duplicate panel agree on what a work is.
+// Only the first file-name candidate counts: a name like
+// "hhd800.com@ABW-180.mp4" carries an unrelated leading token, and reading the
+// second candidate as the work would report false matches.
+//
+// Trashed and archived favorites are returned with InTrash set instead of being
+// hidden: "the record is in the recycle bin" is a different answer from "not
+// collected", and only the caller can decide what to show.
+//
+// Results follow the request order, with repeats from the request dropped. The
+// read is read-only and safe to call concurrently.
+func (l *Library) MatchJavCodes(codes []string) ([]jav.JavCodeCheck, error) {
+	wanted := make([]string, 0, len(codes))
+	index := make(map[string]int, len(codes))
+	// Part keys ("ABC-123-1") whose base code happened to be asked for as well.
+	// The base slot stays reserved for the bare work, so the index mapping is
+	// completed after every request code has been registered.
+	partBase := make(map[string]string, len(codes))
+	for _, raw := range codes {
+		key := jav.LookupKey(raw)
+		if key == "" {
+			continue
+		}
+		if _, seen := index[key]; seen {
+			continue
+		}
+		if len(wanted) >= MaxJavCodeCheckCodes {
+			return nil, fmt.Errorf("一次最多查询 %d 个番号", MaxJavCodeCheckCodes)
+		}
+		index[key] = len(wanted)
+		wanted = append(wanted, key)
+		// "ABC-123-1" also has to reach a favorite whose unscraped name is
+		// keyed as ABC-123 + part 1, and "ABC-123-1" must not be reached by the
+		// bare work ABC-123 — the episodes are separate works, exactly as 查重
+		// treats them.
+		if base := jav.ExtractNameCodes(key + ".mp4"); len(base) > 0 && base[0].Part != "" {
+			partBase[key] = base[0].Code
+		}
+	}
+	for partKey, base := range partBase {
+		if _, taken := index[base]; !taken {
+			index[base] = index[partKey]
+		}
+	}
+	results := make([]jav.JavCodeCheck, len(wanted))
+	for i, key := range wanted {
+		results[i] = jav.JavCodeCheck{Code: key, Matches: []jav.JavCodeMatch{}}
+	}
+	if len(wanted) == 0 {
+		return results, nil
+	}
+
+	videos, err := l.videos.List()
+	if err != nil {
+		return nil, err
+	}
+	// A favorite reaches the index through its 番号 or its file name. The
+	// recorded 番号 is authoritative; the file name only speaks for a favorite
+	// the scraper has not reached yet, and then only its first code candidate
+	// ("hhd800.com@ABW-180.mp4" names the site before the work — reading the
+	// second candidate would report false matches).
+	//
+	// The name contributes its base code and, for an episode, the 番号 + part
+	// key 查重 groups on. A caller who names the episode ("ABC-123-1") is mapped
+	// to the part key, which only an episode file carries, so the bare work
+	// ABC-123 is not reported for it.
+	keysByVideo := make(map[int64][]string, len(videos))
+	record := func(v *video.Video) {
+		keys := make([]string, 0, 2)
+		if key := jav.LookupKey(v.JavCode); key != "" {
+			if part := jav.PartForFile(v.FileName, v.JavCode); part != "" {
+				keys = append(keys, jav.DuplicateKey(key, part))
+			} else {
+				keys = append(keys, key)
+			}
+		} else if candidates := jav.ExtractNameCodes(v.FileName); len(candidates) > 0 {
+			first := candidates[0]
+			if code := jav.LookupKey(first.Code); code != "" {
+				if first.Part != "" {
+					keys = append(keys, jav.DuplicateKey(code, first.Part))
+				} else {
+					keys = append(keys, code)
+				}
+			}
+		}
+		keysByVideo[v.ID] = keys
+	}
+	model := l.loadVideoReadModel()
+	for i := range videos {
+		model.apply(&videos[i])
+		record(&videos[i])
+	}
+	// Trashed and archived rows live outside List(); they are read so a binned
+	// copy is reported as binned rather than as absent. The read model only
+	// speaks for live favorites, so their 番号 is looked up on its own below.
+	trashed, err := l.videos.ListTrash()
+	if err != nil {
+		l.log.Warn("load recycle bin for code check failed", "err", err)
+	}
+	archived, err := l.videos.ListArchived()
+	if err != nil {
+		l.log.Warn("load archive for code check failed", "err", err)
+	}
+	bin := make([]video.Video, 0, len(trashed)+len(archived))
+	bin = append(bin, trashed...)
+	bin = append(bin, archived...)
+	for i := range bin {
+		record(&bin[i])
+	}
+
+	for _, v := range videos {
+		l.matchJavCode(&v, false, keysByVideo[v.ID], index, results)
+	}
+	for i := range bin {
+		l.matchJavCode(&bin[i], true, keysByVideo[bin[i].ID], index, results)
+	}
+	for i := range results {
+		sort.SliceStable(results[i].Matches, func(a, b int) bool {
+			left, right := results[i].Matches[a], results[i].Matches[b]
+			if left.CreatedAt != right.CreatedAt {
+				return left.CreatedAt > right.CreatedAt
+			}
+			return left.VideoID > right.VideoID
+		})
+	}
+	return results, nil
+}
+
+// matchJavCode records v under every queried code it holds.
+func (l *Library) matchJavCode(v *video.Video, inTrash bool, keys []string, index map[string]int, results []jav.JavCodeCheck) {
+	// A favorite can be reached by both its recorded code and its file name, and
+	// two names can resolve to one queried code; it is reported once per code.
+	reported := make(map[int]struct{}, len(keys))
+	for _, key := range keys {
+		pos, ok := index[key]
+		if !ok {
+			continue
+		}
+		if _, done := reported[pos]; done {
+			continue
+		}
+		reported[pos] = struct{}{}
+		results[pos].Matches = append(results[pos].Matches, javCodeMatchOf(v, inTrash))
+	}
+}
+
+// javCodeMatchOf projects a favorite into the card-sized shape the extension
+// needs. The caller has already filled the read-model fields.
+func javCodeMatchOf(v *video.Video, inTrash bool) jav.JavCodeMatch {
+	label := v.Title
+	if strings.TrimSpace(label) == "" {
+		label = v.JavCode
+	}
+	if strings.TrimSpace(label) == "" {
+		label = v.FileName
+	}
+	actors := v.Actors
+	if actors == nil {
+		actors = []string{}
+	}
+	return jav.JavCodeMatch{
+		Code:          v.JavCode,
+		VideoID:       v.ID,
+		InTrash:       inTrash,
+		FileName:      v.FileName,
+		Label:         label,
+		JavCode:       v.JavCode,
+		Width:         v.Width,
+		Height:        v.Height,
+		FileSize:      v.FileSize,
+		Actors:        actors,
+		CoverPath:     v.ScrapedCoverPath,
+		SourceName:    v.SourceName,
+		VolumeOffline: v.VolumeOffline,
+		Status:        v.Status,
+		CreatedAt:     v.CreatedAt,
+	}
 }
 
 // ListJavTaskOverviews returns the latest persisted scrape task for every
