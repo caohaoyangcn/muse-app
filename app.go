@@ -357,6 +357,14 @@ func (a *App) SetVideoScrapedCoverAllowed(id int64, allowed bool) (*video.Video,
 
 func (a *App) VideoJav(videoID int64) (*jav.Detail, error)   { return a.lib.VideoJav(videoID) }
 func (a *App) VideoJavTask(videoID int64) (*jav.Task, error) { return a.lib.VideoJavTask(videoID) }
+
+// CheckJavCodes answers "is this work already collected?" for 番号 taken from a
+// JavDB page. The desktop settings page uses it to prove that the same query
+// the browser extension makes over HTTP works from inside the app.
+func (a *App) CheckJavCodes(codes []string) ([]jav.JavCodeCheck, error) {
+	return a.lib.MatchJavCodes(codes)
+}
+
 func (a *App) ListJavTaskOverviews() ([]jav.TaskOverview, error) {
 	return a.lib.ListJavTaskOverviews()
 }

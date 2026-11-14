@@ -29,6 +29,8 @@ export function ArchiveCloudConnection(arg1:number):Promise<number>;
 
 export function BrowseCloud(arg1:number,arg2:string):Promise<Array<cloud.Entry>>;
 
+export function CheckJavCodes(arg1:Array<string>):Promise<Array<jav.JavCodeCheck>>;
+
 export function ClearArchivedSource(arg1:number):Promise<number>;
 
 export function ClearArchivedVideos():Promise<number>;

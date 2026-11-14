@@ -24,6 +24,9 @@ export type ActorProfile = jav.ActorProfile;
 /** 演员档案补全（补全演员信息）的进度。 */
 export type ActorFillStatus = jav.ActorFillStatus;
 export type JavDuplicateGroup = jav.DuplicateGroup;
+// 浏览器扩展查询一个番号在收藏库中的结果：命中的收藏（含回收站条目标记）。
+export type JavCodeCheck = jav.JavCodeCheck;
+export type JavCodeMatch = jav.JavCodeMatch;
 // 内容重复（部分哈希去重）：同一份字节被收藏了两份。与番号查重是不同维度，两者
 // 可以同时命中同一组文件。
 export type ContentDuplicateGroup = video.ContentDuplicateGroup;

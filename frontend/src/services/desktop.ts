@@ -18,6 +18,7 @@ export {
   addWatchDir,
   archiveCloudConnection,
   browseCloud,
+  checkJavCodes,
   clearArchivedSource,
   clearFC2Cookie,
   clearJavBusCookie,

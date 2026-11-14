@@ -38,6 +38,10 @@ export function BrowseCloud(arg1, arg2) {
   return window['go']['main']['App']['BrowseCloud'](arg1, arg2);
 }
 
+export function CheckJavCodes(arg1) {
+  return window['go']['main']['App']['CheckJavCodes'](arg1);
+}
+
 export function ClearArchivedSource(arg1) {
   return window['go']['main']['App']['ClearArchivedSource'](arg1);
 }

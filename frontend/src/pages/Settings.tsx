@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { client, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
+import { client, checkJavCodes, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
 import type {
   CloudConnection,
   CloudConnectionInput,
   CloudTestResult,
+  ServerStartInfo,
   WatchedDir,
 } from "../types";
 import { BrowserOpenURL } from "../../wailsjs/runtime";
@@ -14,7 +15,7 @@ import { Input } from "../ui/input";
 import { cn } from "../lib/utils";
 import { ArrowRight, Cloud, Keyboard } from "lucide-react";
 
-type SectionKey = "guide" | "server" | "watch" | "trash" | "cloud" | "proxy" | "javbus" | "fc2";
+type SectionKey = "guide" | "server" | "watch" | "trash" | "cloud" | "proxy" | "javbus" | "fc2" | "extension";
 
 const DEFAULT_PORT = 8899;
 const DEFAULT_TRASH_RETENTION_DAYS = 14;
@@ -30,6 +31,7 @@ const NAV: { key: SectionKey; label: string }[] = [
   { key: "proxy", label: "网络代理" },
   { key: "javbus", label: "JavBus" },
   { key: "fc2", label: "FC2CMADB" },
+  { key: "extension", label: "浏览器扩展" },
 ];
 
 /**
@@ -97,6 +99,7 @@ export default function Settings({
           {active === "proxy" && <ProxySection />}
           {active === "javbus" && <JavBusSection />}
           {active === "fc2" && <FC2Section />}
+          {active === "extension" && <ExtensionSection />}
         </main>
       </div>
     </div>
@@ -667,6 +670,123 @@ function JavBusSection() {
           {error && <p className={cn("mt-2.5 text-[13px]", error.includes("没有需要") ? "text-[var(--muted)]" : "text-[var(--danger)]")}>{error}</p>}
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * 浏览器扩展: installs and explains the JavDB helper. The section answers two
+ * practical questions — "is the LAN server this extension talks to up?" and
+ * "does the query actually work?" — and repeats the port constraint, because a
+ * changed port silently breaks every badge.
+ */
+function ExtensionSection() {
+  const [server, setServer] = useState<ServerStartInfo | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setServer(await serverStatus());
+    } catch (e) {
+      setServer({ running: false, urls: [], local: "", port: 0, error: String(e) });
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // "ABP-576" is a stable, well-known work; the test is about the query path,
+  // not about whether this particular title is collected.
+  const probe = async () => {
+    setTesting(true);
+    setTestResult(null);
+    setTestError(null);
+    try {
+      const [result] = await checkJavCodes(["ABP-576"]);
+      setTestResult(
+        result && result.matches.length > 0
+          ? `查询成功 ✓ 库中命中 ${result.matches.length} 条 ABP-576`
+          : "查询成功 ✓ 库中没有 ABP-576（同样说明查询链路可用）",
+      );
+    } catch (e) {
+      setTestError(String(e));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const port = server?.running ? server.port : DEFAULT_PORT;
+  const lanURL = server?.urls?.find((u) => !u.startsWith("http://localhost:"));
+
+  return (
+    <section className="max-w-[640px]">
+      <h2 className="mb-1.5 text-base font-semibold">浏览器扩展</h2>
+      <p className="mb-5 max-w-[560px] leading-relaxed text-[var(--muted)]">
+        安装 JavDB 助手扩展后，JavDB 的影片卡片右上角会出现一个状态角标：鼠标移上去即可看到该番号是否已收藏到 Muse、收藏的是哪几个文件。番号直接取自页面渲染的片号，扩展只读取，不会修改收藏库，也不会把番号发到本机以外的地址。
+      </p>
+
+      <div className="max-w-[560px]">
+        <div className="mb-4 flex items-center gap-2 text-[13px]">
+          <span className="text-[var(--muted)]">局域网服务：</span>
+          {server?.running ? (
+            <>
+              <span className="text-[#7ad9a2]">运行中</span>
+              <span className="text-[var(--muted)]">
+                · 扩展连接 http://127.0.0.1:{server.port}
+              </span>
+            </>
+          ) : (
+            <span className="text-[#e0b64f]">
+              未运行；扩展在服务启动前无法查询（顶部「📱 局域网访问」可启动）。
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2.5">
+          <Button onClick={() => void probe()} disabled={testing}>
+            {testing ? "测试中…" : "测试查询"}
+          </Button>
+          <Button onClick={() => void load()}>刷新服务状态</Button>
+        </div>
+        {testResult && <p className="mt-2.5 text-[13px] text-[#7ad9a2]">{testResult}</p>}
+        {testError && <p className="mt-2.5 text-[13px] text-[var(--danger)]">{testError}</p>}
+
+        <div className="mt-6 border-t border-[var(--border)] pt-5">
+          <h3 className="text-sm font-semibold">安装</h3>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-[13px] leading-relaxed text-[var(--muted)]">
+            <li>
+              找到 Muse 目录下的{" "}
+              <code className="rounded bg-[var(--panel-2)] px-1 py-0.5">browser-extension</code>{" "}
+              文件夹（便携版解压目录里与 <code>Muse.exe</code> 同级）。
+            </li>
+            <li>
+              打开 <code>chrome://extensions</code>（Edge 为 <code>edge://extensions</code>），
+              打开右上角「开发者模式」。
+            </li>
+            <li>点「加载已解压的扩展程序」，选中该文件夹。</li>
+            <li>
+              保持 Muse 运行，打开 JavDB 任意列表页，把鼠标移到卡片右上角的角标上即可查询。
+            </li>
+          </ol>
+        </div>
+
+        <div className="mt-6 border-t border-[var(--border)] pt-5">
+          <h3 className="text-sm font-semibold">端口</h3>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--muted)]">
+            扩展固定连接 <code>127.0.0.1:{DEFAULT_PORT}</code>，当前服务端口为{" "}
+            <code>{port}</code>
+            {server?.running && server.port !== DEFAULT_PORT
+              ? "。两者不一致，角标会显示「未连接」：请在上方「服务器」里改回默认端口并重启服务器，或重新安装一个指向该端口的扩展。"
+              : server?.running
+                ? "，与扩展一致。"
+                : "，与扩展一致（服务启动后生效）。"}
+            {lanURL ? ` 本机之外的设备也可通过 ${lanURL} 访问收藏库。` : ""}
+          </p>
+        </div>
+      </div>
     </section>
   );
 }

@@ -90,6 +90,7 @@ import {
   ClearFC2Cookie,
   GetFC2CookieStatus,
   SetFC2Cookie,
+  CheckJavCodes,
 } from "../../wailsjs/go/main/App";
 import type {
   AddVideoResult,
@@ -116,6 +117,7 @@ import type {
   FileScanStatus,
   VolumeChange,
   TrashSnapshot,
+  JavCodeCheck,
 } from "../types";
 
 /**
@@ -359,6 +361,14 @@ export const getFC2CookieStatus = (): Promise<FC2CookieStatus> => GetFC2CookieSt
 export const setFC2Cookie = (cookie: string): Promise<void> => SetFC2Cookie(cookie);
 
 export const clearFC2Cookie = (): Promise<void> => ClearFC2Cookie();
+
+/**
+ * 浏览器扩展查询用：某个番号（JavDB 页面渲染出来的片号）是否已在收藏库中。
+ * 与 HTTP 端点 `/api/extension/check` 共用同一个门面方法，所以设置页的「测试连接」
+ * 验证的就是扩展真正会走到的那条路径。
+ */
+export const checkJavCodes = (codes: string[]): Promise<JavCodeCheck[]> =>
+  CheckJavCodes(codes);
 
 /** 新手引导是否已经播放过（存在应用数据库里，不随 WebView 配置丢失）。 */
 export const getTourSeen = (): Promise<boolean> => GetTourSeen();
