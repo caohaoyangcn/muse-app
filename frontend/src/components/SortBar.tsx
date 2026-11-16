@@ -1,7 +1,7 @@
 import type { CardSize, SortDir, SortKey, ViewMode } from "../types";
-import { ArrowDown, ArrowUp } from "lucide-react";
 import { cn } from "../lib/utils";
-import { Button } from "../ui/button";
+import { ToggleButton, ToggleButtonGroup, Toolbar, toggleChipClass } from "../ui/astryx";
+import { Icon } from "../ui/icon";
 import ViewControls from "./ViewControls";
 
 // The sort fields with the direction each one starts in when first selected
@@ -19,10 +19,8 @@ const OPTIONS: { key: SortKey; label: string; defaultDir: SortDir }[] = [
  * default direction); clicking the active field again flips between ascending
  * and descending; the active field shows an arrow.
  *
- * The sort chips wrap inside their own group. When the card-size slider and the
- * grid/list toggle no longer fit beside them, they move to a second line at the
- * left instead of squeezing the chips; at full width they sit at the right.
- * A view without sort chips (最近播放) renders ViewControls standalone.
+ * Astryx's ToggleButtonGroup owns the single-selection/keyboard/ARIA behaviour;
+ * ViewControls owns density and grid/list.
  */
 export default function SortBar({
   sortBy,
@@ -45,48 +43,71 @@ export default function SortBar({
   showViewControls?: boolean;
   className?: string;
 }) {
+  const select = (value: string | null) => {
+    if (value === null) {
+      const dir: SortDir = sortDir === "asc" ? "desc" : "asc";
+      onChange(sortBy, dir);
+      return;
+    }
+    const option = OPTIONS.find((candidate) => candidate.key === value);
+    if (option) onChange(option.key, option.defaultDir);
+  };
+
   return (
-    <div className={cn("mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2", className)} role="toolbar" aria-label="排序与视图">
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2">
-        <span className="text-xs text-[var(--muted)]">排序</span>
-        {OPTIONS.map((opt) => {
-        const active = opt.key === sortBy;
-        const dir: SortDir = active ? sortDir : opt.defaultDir;
-        return (
-          <Button
-            key={opt.key}
-            size="sm"
-            className={cn(
-              "h-7 rounded-full px-3 text-xs text-[var(--muted)]",
-              active && "border-[var(--accent)] bg-[rgba(124,92,255,0.14)] text-[var(--text)]",
-            )}
-            onClick={() =>
-              active ? onChange(opt.key, dir === "asc" ? "desc" : "asc") : onChange(opt.key, opt.defaultDir)
-            }
-            title={
-              active
-                ? dir === "asc"
-                  ? `按${opt.label}升序，点击改为降序`
-                  : `按${opt.label}降序，点击改为升序`
-                : `按${opt.label}排序`
-            }
-          >
-            {opt.label}
-            {active && (dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
-          </Button>
-        );
-        })}
-      </div>
-      {showViewControls && (
-        <div className="shrink-0">
+    <Toolbar
+      className={cn("mb-3", className)}
+      endContent={
+        showViewControls ? (
           <ViewControls
-            view={view}
-            onViewChange={onViewChange}
             cardSize={cardSize}
             onCardSizeChange={onCardSizeChange}
+            onViewChange={onViewChange}
+            view={view}
           />
+        ) : undefined
+      }
+      label="排序与视图"
+      startContent={
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2">
+          <span className="text-xs text-[var(--muted)]">排序</span>
+          <ToggleButtonGroup
+            className="flex flex-wrap"
+            label="排序字段"
+            onChange={select}
+            size="sm"
+            type="single"
+            value={sortBy}
+          >
+            {OPTIONS.map((option) => {
+              const active = option.key === sortBy;
+              return (
+                <ToggleButton
+                  icon={
+                    active ? (
+                      <Icon
+                        className="size-3"
+                        name={sortDir === "asc" ? "arrow-up" : "arrow-down"}
+                      />
+                    ) : undefined
+                  }
+                  className={toggleChipClass}
+                  key={option.key}
+                  label={option.label}
+                  tooltip={
+                    active
+                      ? sortDir === "asc"
+                        ? `按${option.label}升序，点击改为降序`
+                        : `按${option.label}降序，点击改为升序`
+                      : `按${option.label}排序`
+                  }
+                  value={option.key}
+                />
+              );
+            })}
+          </ToggleButtonGroup>
         </div>
-      )}
-    </div>
+      }
+      variant="transparent"
+    />
   );
 }

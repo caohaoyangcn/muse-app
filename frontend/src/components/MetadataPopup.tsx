@@ -10,8 +10,7 @@ import {
 } from "../utils/format";
 import { cn } from "../lib/utils";
 import { videoDisplayName } from "../utils/videoName";
-import BackupBadge from "../ui/backup-badge";
-import RestoredBadge from "../ui/restored-badge";
+import { Badge } from "../ui/astryx";
 
 const GAP = 8;
 
@@ -76,8 +75,8 @@ export default function MetadataPopup({
     >
       <div className="mb-2 flex min-w-0 items-center gap-1.5">
         <div className="min-w-0 break-all font-semibold">{videoDisplayName(video)}</div>
-        {video.mosaicRestored && <RestoredBadge />}
-        {video.backedUp && <BackupBadge />}
+        {video.mosaicRestored && <Badge label="马赛克破解" variant="purple" />}
+        {video.backedUp && <Badge label="已备份" variant="success" />}
       </div>
       <dl className="m-0">
         {rows.map(([k, v]) => (

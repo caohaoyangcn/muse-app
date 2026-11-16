@@ -11,10 +11,9 @@ import {
   videoResolution,
 } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
-import BackupBadge from "../ui/backup-badge";
-import RestoredBadge from "../ui/restored-badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Badge } from "../ui/astryx";
 import {
   Dialog,
   DialogContent,
@@ -197,8 +196,8 @@ export default function VideoDetailPanel({
       <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-4">
         <div className="flex min-w-0 items-center gap-2">
           <h2 className="min-w-0 break-words text-xl font-semibold">{videoDisplayName(video)}</h2>
-          {video.mosaicRestored && <RestoredBadge className="text-xs" />}
-          {video.backedUp && <BackupBadge className="text-xs" />}
+          {video.mosaicRestored && <Badge label="马赛克破解" variant="purple" />}
+          {video.backedUp && <Badge label="已备份" variant="success" />}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {onPlay && (

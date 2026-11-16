@@ -2,7 +2,7 @@
 
 决定：引入 Meta 的 Astryx（`@astryxdesign/core` 0.7.15 + `theme-neutral`）作为设计系统，但**只从 `frontend/src/ui/` 暴露**，业务组件不直接 import。本文记录已验证的事实、必须遵守的两条规则，以及分批采用的顺序。
 
-> 全量替换自绘组件的逐项映射与分阶段方案见 [`astryx-migration-plan.md`](./astryx-migration-plan.md)。本文记录当前已采用的边界；迁移完成后需同步更新下方「刻意没有替换的」一节。
+> 全量替换自绘组件的逐项映射与分阶段方案见 [`astryx-migration-plan.md`](./astryx-migration-plan.md)。本文记录当前已采用的边界。2026-11-16 已完成 Phase 1 + Phase 2（移动端片库与原子层），桌面卡片/菜单/导航仍按计划迁移。
 
 ## 为什么只做接缝，不整体换皮
 
@@ -55,13 +55,20 @@ token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScri
 | `toast.tsx` | `Toast` + `ToastViewport` | 不变（受控 `toasts`） | 卡片用 `renderContent` 保住左色条与详情列表；堆叠与进动画交给 Astryx，锚点仍由本层定位（viewport 不脱离文档流） |
 | `drawer.tsx` | `Drawer` | 不变 | `side` 映射 `start`/`end`；行改为 `Button` |
 | `sheet.tsx` | `BottomSheet` + `Dialog` | 不变 | `ConfirmSheet` 改用 Astryx Dialog；行改为 `Button` |
+| `astryx.tsx` | `Badge`、`EmptyState`、`Spinner`、`Skeleton`、`Banner`、`Toolbar`、`SegmentedControl`、`ToggleButtonGroup`、`Slider`、`ClickableCard`、`AspectRatio`、`Grid`、`List`/`ListItem`、`Section`、`Divider` 等 | 直接 re-export | 业务层只经这个 barrel 取用；`toggleChipClass` 统一多选 Chip 的静态样式 |
+| `icon.tsx` | `Icon` + `registerIcons` | `name` 仍用 kebab-case | Muse SVG 注册为 `muse:*`；menu/close/warning/funnel/chevron 等直接映射 Astryx 内置语义名 |
+| `muse-icons.tsx` | — | — | Muse 自有 SVG 路径转成组件，交给 `Icon` 渲染；资产仍是唯一图形来源 |
 
-随之删除：`ui/overlay.ts`（聚焦陷阱与 Escape 由 Astryx 负责）、`ui/sheet.css`、`ui/drawer.css`、`@radix-ui/react-dialog` 依赖。
+随之删除：`ui/NavIcon.tsx`、`ui/backup-badge.tsx`、`ui/restored-badge.tsx`、`ui/sticky-bar.tsx`、`mobile/components/States.tsx`、`components/EmptyState.tsx`。
+
+随之删除的历史文件：`ui/overlay.ts`（聚焦陷阱与 Escape 由 Astryx 负责）、`ui/sheet.css`、`ui/drawer.css`、`@radix-ui/react-dialog` 依赖。
 
 ## 刻意没有替换的
 
 - **`ui/menu.tsx` + `ui/flyout-shell.tsx`**：右键菜单在**任意坐标**打开，且带 hover-intent 子面板（`renderFlyout(anchor)` 自定义 JSX）。Astryx 的 `ContextMenu` 是「在触发区域右键」，子菜单走条目数据，替换等于重写三个菜单包装器与两个 flyout 组件，收益不抵风险。行本身已用 Astryx `Button`。
-- **`ui/sidebar.tsx`、`ui/sticky-bar.tsx`、`ui/NavIcon.tsx`、`backup-badge.tsx`、`restored-badge.tsx`、`error-boundary.tsx`**：这些是 Muse 自己的外壳与业务徽标，不是设计系统里的基元，替换会改掉信息架构而不是样式。
+- **`ui/sidebar.tsx`**：分组树的拖拽排序/嵌套/投放规则是业务状态机；视觉行后续换 `SideNav`/`TreeList`（Phase 5）。
+- **`ui/error-boundary.tsx`**：React 错误边界必须是 class，Astryx 没有等价物；fallback 已改为 `EmptyState` + `Button`。
+- 其它 Phase 1/2 已替换的 `NavIcon`、业务徽标、StickyBar、移动端 States 不再保留。
 
 ## 复验方法
 

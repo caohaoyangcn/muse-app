@@ -8,7 +8,9 @@ import { compareLastOpened } from "../utils/sortVideos";
 import { readCardSize, readViewMode, writeCardSize, writeViewMode } from "../utils/viewPrefs";
 import SearchBar from "./SearchBar";
 import SortBar from "./SortBar";
-import { StickyBar } from "../ui/sticky-bar";
+import { Toolbar } from "../ui/astryx";
+import { Button } from "../ui/button";
+import { Icon } from "../ui/icon";
 import VideoGrid from "./VideoGrid";
 import VideoList from "./VideoList";
 import { useActorFilms } from "../views/actors/useActorFilms";
@@ -122,27 +124,36 @@ export default function ActorFilmsView({
 
   return (
     <div>
-      <StickyBar>
-        <button
-          type="button"
-          className="mr-1 underline-offset-2 hover:text-[var(--accent)] hover:underline"
-          onClick={onBack}
-          title="返回演员列表"
-        >
-          ← 演员
-        </button>
-        <span>
-          「{name}」 —{" "}
-          {loading
-            ? "…"
-            : filtering
-              ? `匹配 ${sortedVideos.length} / 共 ${videos.length} 个视频`
-              : `${videos.length} 个视频`}
-        </span>
-        <div className="ml-auto">
-          <SearchBar value={keyword} onChange={setKeyword} placeholder="筛选该演员影片" />
-        </div>
-      </StickyBar>
+      <Toolbar
+        className="sticky top-0 z-[5] mb-3 bg-[var(--bg)] px-0 py-3.5 text-[13px] text-[var(--muted)]"
+        label="演员作品筛选"
+        startContent={
+          <div className="flex w-full items-center gap-2">
+            <Button
+              aria-label="返回演员列表"
+              className="mr-1 h-auto px-0 text-[13px] text-[var(--muted)] hover:text-[var(--accent)]"
+              onClick={onBack}
+              size="sm"
+              variant="ghost"
+            >
+              <Icon className="size-3.5" name="arrow-left" />
+              演员
+            </Button>
+            <span>
+              「{name}」 —{" "}
+              {loading
+                ? "…"
+                : filtering
+                  ? `匹配 ${sortedVideos.length} / 共 ${videos.length} 个视频`
+                  : `${videos.length} 个视频`}
+            </span>
+            <div className="ml-auto">
+              <SearchBar value={keyword} onChange={setKeyword} placeholder="筛选该演员影片" />
+            </div>
+          </div>
+        }
+        variant="transparent"
+      />
       {profile && <ActorProfileHeader profile={profile} />}
       {loading ? (
         <div className="flex min-h-[320px] items-center justify-center text-[var(--muted)]">

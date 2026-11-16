@@ -1,21 +1,29 @@
 import type { Video } from "../../types";
+import {
+  AspectRatio,
+  Badge,
+  ClickableCard,
+  Grid,
+  List,
+  ListItem,
+  compactBadgeClass,
+} from "../../ui/astryx";
+import { Button } from "../../ui/button";
+import { Icon } from "../../ui/icon";
 import { useVirtualRows } from "../../hooks/useVirtualRows";
 import { cn } from "../../lib/utils";
-import BackupBadge from "../../ui/backup-badge";
-import { NavIcon } from "../../ui/NavIcon";
-import RestoredBadge from "../../ui/restored-badge";
 import { coverURL } from "../../services/web";
 import { videoMeta, videoName } from "../videoDisplay";
 
 /** The poster ratio. Every card shares it, so a row always has one height
  *  regardless of how long the title is — the text sits over the artwork. */
-const POSTER_ASPECT = "3 / 4";
+const POSTER_RATIO = 3 / 4;
 
 function Thumb({ v }: { v: Video }) {
   if (v.status === "missing" && !v.volumeOffline) {
     return (
       <div className="flex size-full items-center justify-center bg-[#101013] text-[var(--danger)]">
-        <NavIcon className="size-7 opacity-80" name="alert" />
+        <Icon className="size-7 opacity-80" name="alert" />
       </div>
     );
   }
@@ -40,41 +48,27 @@ function StatusBadges({ v }: { v: Video }) {
   if (!offline && !sourceOffline && !missing) return null;
   return (
     <div className="absolute left-2 top-2 flex max-w-[calc(100%-2.75rem)] flex-wrap gap-1">
-      {missing ? (
-        <span className="rounded-[5px] bg-[var(--danger)]/95 px-1.5 py-1 text-[10px] font-medium leading-none text-white">
-          文件缺失
-        </span>
-      ) : null}
-      {offline ? (
-        <span className="rounded-[5px] bg-[var(--danger)]/95 px-1.5 py-1 text-[10px] font-medium leading-none text-white">
-          磁盘未接入
-        </span>
-      ) : null}
-      {sourceOffline ? (
-        <span className="rounded-[5px] bg-[#e0b64f] px-1.5 py-1 text-[10px] font-medium leading-none text-black">
-          网盘离线
-        </span>
-      ) : null}
+      {missing ? <Badge label="文件缺失" variant="error" /> : null}
+      {offline ? <Badge label="磁盘未接入" variant="error" /> : null}
+      {sourceOffline ? <Badge label="网盘离线" variant="warning" /> : null}
     </div>
   );
 }
 
-function CardMenu({ onOpen, centered }: { onOpen: () => void; centered?: boolean }) {
+function CardMenu({ onOpen }: { onOpen: () => void }) {
   return (
-    <button
+    <Button
       aria-label="更多操作"
-      className={cn(
-        "absolute right-2 z-20 flex size-8 items-center justify-center rounded-full bg-black/55 text-white active:bg-black/80",
-        centered ? "top-1/2 -translate-y-1/2" : "top-2",
-      )}
-      onClick={(e) => {
-        e.stopPropagation();
+      className="absolute right-2 top-2 z-20 size-8 rounded-full bg-black/55 p-0 text-white active:bg-black/80"
+      onClick={(event) => {
+        event.stopPropagation();
         onOpen();
       }}
-      type="button"
+      size="sm"
+      variant="ghost"
     >
-      <NavIcon className="size-4" name="more-horizontal" />
-    </button>
+      <Icon className="size-4" name="more-horizontal" />
+    </Button>
   );
 }
 
@@ -84,8 +78,8 @@ function OverlayMeta({ v }: { v: Video }) {
     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-2.5 pb-2.5 pt-10">
       {v.mosaicRestored || v.backedUp ? (
         <div className="mb-1 flex flex-wrap gap-1">
-          {v.mosaicRestored ? <RestoredBadge /> : null}
-          {v.backedUp ? <BackupBadge /> : null}
+          {v.mosaicRestored ? <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" /> : null}
+          {v.backedUp ? <Badge className={compactBadgeClass} label="已备份" variant="success" /> : null}
         </div>
       ) : null}
       <div className="line-clamp-2 text-[13px] font-semibold leading-[1.25] text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.55)]">
@@ -95,7 +89,7 @@ function OverlayMeta({ v }: { v: Video }) {
         <span className="truncate">{meta}</span>
         {v.likeCount > 0 ? (
           <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 tabular-nums">
-            <NavIcon className="size-2.5" name="heart" />
+            <Icon className="size-2.5" name="heart" />
             {v.likeCount}
           </span>
         ) : null}
@@ -106,10 +100,9 @@ function OverlayMeta({ v }: { v: Video }) {
 
 /**
  * The home poster wall. A portrait phone gets two full-width columns; wider
- * viewports add tracks rather than stretching a single card. The artwork is the
- * card — the title and metadata sit on a scrim over the bottom of the poster,
- * so every card is exactly the same shape and the screen reads as a shelf of
- * covers rather than a list of boxes.
+ * viewports add tracks rather than stretching a single card. Astryx's
+ * ClickableCard supplies the interactive surface and nested-button handling,
+ * while AspectRatio guarantees one poster shape for every row.
  */
 export function VideoGrid({
   videos,
@@ -126,9 +119,6 @@ export function VideoGrid({
     maxColumns: 4,
     measureKey: "cinematic",
   });
-  // Portrait phones settle on two columns; the track floor keeps that default
-  // while a tablet or landscape phone earns more columns. Before the first
-  // measurement the fallback is the two-column phone layout.
   const columns = virtual.columns > 0 ? virtual.columns : 2;
   const { startIndex, endIndex, windowed, offsetTop, totalHeight } = virtual;
 
@@ -138,31 +128,32 @@ export function VideoGrid({
       className="relative"
       style={windowed ? { height: totalHeight } : undefined}
     >
-      <div
-        ref={virtual.windowRef}
-        className="grid gap-2.5"
-        style={{
-          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-          ...(windowed ? { position: "absolute", top: offsetTop, left: 0, right: 0 } : null),
-        }}
+      <Grid
+        ref={(el) => { virtual.windowRef.current = el; }}
+        className="gap-2"
+        columns={columns}
+        style={windowed ? { position: "absolute", left: 0, right: 0, top: offsetTop } : undefined}
       >
         {videos.slice(startIndex, endIndex).map((v) => (
-          <article className="relative" key={v.id}>
-            <button
-              className="block w-full overflow-hidden rounded-[var(--radius)] border border-white/[0.07] bg-[#101013] text-left transition-transform duration-150 active:scale-[0.985]"
-              onClick={() => onOpen(v)}
-              type="button"
-            >
-              <div className="relative" style={{ aspectRatio: POSTER_ASPECT }}>
+          <ClickableCard
+            className="relative overflow-hidden border border-white/[0.07] bg-[#101013]"
+            key={v.id}
+            label={videoName(v)}
+            onClick={() => onOpen(v)}
+            padding={0}
+            variant="transparent"
+          >
+            <AspectRatio ratio={POSTER_RATIO}>
+              <div className="relative size-full">
                 <Thumb v={v} />
                 <StatusBadges v={v} />
                 <OverlayMeta v={v} />
               </div>
-            </button>
+            </AspectRatio>
             <CardMenu onOpen={() => onMenu(v)} />
-          </article>
+          </ClickableCard>
         ))}
-      </div>
+      </Grid>
     </div>
   );
 }
@@ -191,45 +182,60 @@ export function VideoList({
       className="relative"
       style={windowed ? { height: totalHeight } : undefined}
     >
-      <div
-        ref={virtual.windowRef}
+      <List
+        ref={(el) => { virtual.windowRef.current = el; }}
         className="flex flex-col gap-2"
-        style={windowed ? { position: "absolute", top: offsetTop, left: 0, right: 0 } : undefined}
+        style={windowed ? { position: "absolute", left: 0, right: 0, top: offsetTop } : undefined}
       >
-        {videos.slice(startIndex, endIndex).map((v) => (
-          <article className="relative" key={v.id}>
-            <button
-              className="flex w-full items-center gap-3 rounded-[var(--radius)] border border-white/[0.07] bg-[var(--card)]/55 p-2 pr-11 text-left active:scale-[0.99]"
-              onClick={() => onOpen(v)}
-              type="button"
-            >
-              <div className="relative aspect-video w-[42%] shrink-0 overflow-hidden rounded-[7px] bg-[#101013]">
-                <Thumb v={v} />
-                <StatusBadges v={v} />
-              </div>
-              <div className="min-w-0 flex-1 py-0.5">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <div className="truncate text-[14px] font-medium">{videoName(v)}</div>
-                  {v.mosaicRestored && <RestoredBadge />}
-                  {v.backedUp && <BackupBadge />}
-                </div>
-                <div className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-[var(--muted)]">
-                  <span className="truncate">
-                    {v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v)}
-                  </span>
+        {videos.slice(startIndex, endIndex).map((v) => {
+          const meta = v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v);
+          return (
+            <ListItem
+              className={cn(
+                "rounded-[var(--radius)] border border-white/[0.07] bg-[var(--card)]/55 p-2",
+              )}
+              description={
+                <span className="flex h-4 min-w-0 items-center gap-1 text-[11px] text-[var(--muted)]">
+                  <span className="truncate">{meta}</span>
+                  {v.mosaicRestored ? <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" /> : null}
+                  {v.backedUp ? <Badge className={compactBadgeClass} label="已备份" variant="success" /> : null}
+                </span>
+              }
+              endContent={
+                <span className="flex shrink-0 items-center gap-1">
                   {v.likeCount > 0 ? (
-                    <span className="inline-flex shrink-0 items-center gap-0.5 tabular-nums">
-                      <NavIcon className="size-2.5" name="heart" />
+                    <span className="inline-flex items-center gap-0.5 text-[11px] text-[var(--muted)] tabular-nums">
+                      <Icon className="size-2.5" name="heart" />
                       {v.likeCount}
                     </span>
                   ) : null}
-                </div>
-              </div>
-            </button>
-            <CardMenu centered onOpen={() => onMenu(v)} />
-          </article>
-        ))}
-      </div>
+                  <Button
+                    aria-label="更多操作"
+                    className="size-8 rounded-full p-0 text-[var(--muted)]"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMenu(v);
+                    }}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    <Icon className="size-4" name="more-horizontal" />
+                  </Button>
+                </span>
+              }
+              key={v.id}
+              label={videoName(v)}
+              onClick={() => onOpen(v)}
+              startContent={
+                <span className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-[7px] bg-[#101013]">
+                  <Thumb v={v} />
+                  <StatusBadges v={v} />
+                </span>
+              }
+            />
+          );
+        })}
+      </List>
     </div>
   );
 }

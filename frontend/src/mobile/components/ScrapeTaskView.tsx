@@ -1,10 +1,9 @@
 import { useState } from "react";
+import { Badge, EmptyState, Spinner } from "../../ui/astryx";
 
 import type { Video } from "../../types";
 import { formatDateTime } from "../../utils/task";
 import { cn } from "../../lib/utils";
-import { EmptyState, ErrorState, Loading } from "./States";
-import RestoredBadge from "../../ui/restored-badge";
 import { videoName } from "../videoDisplay";
 import {
   SCRAPE_CATEGORY_LABELS,
@@ -12,6 +11,7 @@ import {
   useScrapeTasks,
   type ScrapeTaskCategory,
 } from "../../views/scrape/useScrapeTasks";
+import { Button } from "../../ui/button";
 
 /**
  * The scrape board. Read-only: the mobile client can inspect task status but
@@ -26,8 +26,8 @@ export function ScrapeTaskView({ onOpenVideo }: { onOpenVideo: (v: Video) => voi
     keyword: "",
   });
 
-  if (loading) return <Loading />;
-  if (error) return <ErrorState message={error} onRetry={reload} />;
+  if (loading) return <div className="flex items-center justify-center py-20"><Spinner size="lg" /></div>;
+  if (error) return <EmptyState actions={<Button onClick={reload} variant="primary">重试</Button>} description={error} title="加载失败" />;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4">
@@ -52,7 +52,7 @@ export function ScrapeTaskView({ onOpenVideo }: { onOpenVideo: (v: Video) => voi
       <div className="scroll-area min-h-0 flex-1 pb-4" data-scroll-key="main">
         {tasks.length === 0 ? (
           <EmptyState
-            hint="在桌面端发起刮削后会出现在这里"
+            description="在桌面端发起刮削后会出现在这里"
             title="暂无刮削任务"
           />
         ) : shown.length === 0 ? (
@@ -70,7 +70,7 @@ export function ScrapeTaskView({ onOpenVideo }: { onOpenVideo: (v: Video) => voi
                   <div className="truncate text-sm font-medium">
                     {videoName(t.video)}
                   </div>
-                  {t.video.mosaicRestored && <RestoredBadge />}
+                  {t.video.mosaicRestored && <Badge label="马赛克破解" variant="purple" />}
                 </div>
                 <div className="mt-1 text-xs text-[var(--muted)]">
                   {scrapeStatusLabel(t.status)}

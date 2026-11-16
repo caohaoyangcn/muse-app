@@ -6,8 +6,13 @@ import { compareLastOpened } from "../../utils/sortVideos";
 import { client, videosInGroup } from "../../services/web";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { cn } from "../../lib/utils";
+import {
+  SegmentedControl,
+  SegmentedControlItem,
+  Toolbar,
+} from "../../ui/astryx";
 import { Button } from "../../ui/button";
-import { NavIcon } from "../../ui/NavIcon";
+import { Icon } from "../../ui/icon";
 import {
   buildFilterChips,
   chipKindLabel,
@@ -29,9 +34,9 @@ import {
   writeSortKey,
   writeViewMode,
 } from "../prefs";
-import { EmptyState, ErrorState, Loading } from "./States";
 import { FilterSheet } from "./FilterSheet";
 import { VideoGrid, VideoList } from "./VideoGrid";
+import { EmptyState, Spinner } from "../../ui/astryx";
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 
@@ -180,12 +185,9 @@ export function LibraryView({
     setSortDir(dir);
     writeSortDir(dir);
   }, []);
-  const toggleView = useCallback(() => {
-    setViewMode((current) => {
-      const next: ViewMode = current === "grid" ? "list" : "grid";
-      writeViewMode(next);
-      return next;
-    });
+  const setView = useCallback((next: ViewMode) => {
+    setViewMode(next);
+    writeViewMode(next);
   }, []);
 
   const resetFilters = useCallback(() => onFiltersChange(NO_FILTERS), [onFiltersChange]);
@@ -195,57 +197,77 @@ export function LibraryView({
       {/* One line at rest. The sheet holds the conditions; this bar only names
           the current ones and offers the two actions used mid-scroll. */}
       <div className="shrink-0 px-3 pb-2 pt-1.5">
-        <div className="flex items-center gap-1.5">
-          <Button
-            aria-label={count === 0 ? "筛选" : `筛选，已选 ${count} 个条件`}
-            className={cn(
-              "h-9 shrink-0 gap-1.5 rounded-full px-3 text-xs",
-              count > 0
-                ? "border-[var(--accent)] bg-[rgba(124,92,255,0.16)] text-[var(--text)]"
-                : "border-[var(--border)] bg-[var(--panel-2)] text-[var(--muted)]",
-            )}
-            onClick={() => onFilterOpenChange(true)}
-            size="sm"
-            variant="ghost"
-          >
-            <NavIcon className="size-3.5" name="filter" />
-            筛选
-            {count > 0 ? (
-              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-semibold leading-none text-white tabular-nums">
-                {count}
+        <Toolbar
+          className="px-0 py-0"
+          endContent={
+            <div className="flex items-center gap-2">
+              <SegmentedControl
+                label="视图切换"
+                layout="hug"
+                onChange={(value) => setView(value as ViewMode)}
+                size="sm"
+                value={viewMode}
+              >
+                <SegmentedControlItem
+                  icon={<Icon className="size-3.5" name="grid" />}
+                  isLabelHidden
+                  label="网格视图"
+                  value="grid"
+                />
+                <SegmentedControlItem
+                  icon={<Icon className="size-3.5" name="list" />}
+                  isLabelHidden
+                  label="列表视图"
+                  value="list"
+                />
+              </SegmentedControl>
+              <span className="shrink-0 text-[11px] leading-none text-[var(--muted)] tabular-nums">
+                {shown.length}
+                {shown.length !== sorted.length ? ` / ${sorted.length}` : ""} 部
               </span>
-            ) : null}
-          </Button>
+            </div>
+          }
+          label="片库工具栏"
+          startContent={
+            <div className="flex items-center gap-1.5">
+              <Button
+                aria-label={count === 0 ? "筛选" : `筛选，已选 ${count} 个条件`}
+                className={cn(
+                  "h-9 shrink-0 gap-1.5 rounded-full px-3 text-xs",
+                  count > 0
+                    ? "border-[var(--accent)] bg-[rgba(124,92,255,0.16)] text-[var(--text)]"
+                    : "border-[var(--border)] bg-[var(--panel-2)] text-[var(--muted)]",
+                )}
+                onClick={() => onFilterOpenChange(true)}
+                size="sm"
+                variant="ghost"
+              >
+                <Icon className="size-3.5" name="filter" />
+                筛选
+                {count > 0 ? (
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-semibold leading-none text-white tabular-nums">
+                    {count}
+                  </span>
+                ) : null}
+              </Button>
 
-          <Button
-            aria-label={`排序：${SORT_LABELS[sortKey]} ${sortDir === "asc" ? "升序" : "降序"}，点击调整`}
-            className="h-9 min-w-0 shrink gap-1 rounded-full border-[var(--border)] bg-[var(--panel-2)] px-3 text-xs text-[var(--text)]"
-            onClick={() => onFilterOpenChange(true)}
-            size="sm"
-            variant="ghost"
-          >
-            <span className="truncate">{SORT_LABELS[sortKey]}</span>
-            <NavIcon
-              className={cn("size-3 shrink-0", sortDir === "asc" && "rotate-180")}
-              name="chevron-down"
-            />
-          </Button>
-
-          <Button
-            aria-label={viewMode === "grid" ? "切换到列表视图" : "切换到网格视图"}
-            className="size-9 shrink-0 rounded-full border-[var(--border)] bg-[var(--panel-2)] p-0 text-[var(--muted)]"
-            onClick={toggleView}
-            size="sm"
-            variant="ghost"
-          >
-            <NavIcon className="size-4" name={viewMode === "grid" ? "grid" : "list"} />
-          </Button>
-
-          <span className="ml-auto shrink-0 pl-1 text-[11px] leading-none text-[var(--muted)] tabular-nums">
-            {shown.length}
-            {shown.length !== sorted.length ? ` / ${sorted.length}` : ""} 部
-          </span>
-        </div>
+              <Button
+                aria-label={`排序：${SORT_LABELS[sortKey]} ${sortDir === "asc" ? "升序" : "降序"}，点击调整`}
+                className="h-9 min-w-0 shrink gap-1 rounded-full border-[var(--border)] bg-[var(--panel-2)] px-3 text-xs text-[var(--text)]"
+                onClick={() => onFilterOpenChange(true)}
+                size="sm"
+                variant="ghost"
+              >
+                <span className="truncate">{SORT_LABELS[sortKey]}</span>
+                <Icon
+                  className={cn("size-3 shrink-0", sortDir === "asc" && "rotate-180")}
+                  name="chevron-down"
+                />
+              </Button>
+            </div>
+          }
+          variant="transparent"
+        />
 
         {chips.length > 0 ? (
           <div className="mt-2 flex items-center gap-2">
@@ -272,12 +294,12 @@ export function LibraryView({
 
       <div className="scroll-area min-h-0 flex-1 px-3 pb-4 pt-2" data-scroll-key="main">
         {loading ? (
-          <Loading />
+          <div className="flex items-center justify-center py-20"><Spinner size="lg" /></div>
         ) : error ? (
-          <ErrorState message={error} onRetry={reload} />
+          <EmptyState actions={<Button onClick={reload} variant="primary">重试</Button>} description={error} title="加载失败" />
         ) : sorted.length === 0 ? (
           <EmptyState
-            hint={
+            description={
               keyword
                 ? count > 0
                   ? "当前筛选内没有匹配的收藏，换个关键词或减少筛选"
@@ -295,7 +317,7 @@ export function LibraryView({
             }
           />
         ) : shown.length === 0 ? (
-          <EmptyState hint="试试减少演员或硬盘筛选" title="没有符合条件的视频" />
+          <EmptyState description="试试减少演员或硬盘筛选" title="没有符合条件的视频" />
         ) : viewMode === "grid" ? (
           <VideoGrid onMenu={onOpenMenu} onOpen={onOpenVideo} videos={shown} />
         ) : (
@@ -335,7 +357,7 @@ function AppliedChip({ chip, onRemove }: { chip: FilterChip; onRemove: () => voi
         size="sm"
         variant="ghost"
       >
-        <NavIcon className="size-3" name="x" />
+        <Icon className="size-3" name="x" />
       </Button>
     </span>
   );

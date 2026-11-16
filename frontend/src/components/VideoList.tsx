@@ -1,12 +1,11 @@
 import type { CardSize, Video } from "../types";
 import { useVirtualRows } from "../hooks/useVirtualRows";
-import BackupBadge from "../ui/backup-badge";
-import RestoredBadge from "../ui/restored-badge";
 import { scaleBetween } from "../utils/cardSize";
 import { DESKTOP_CARD_SIZE } from "../utils/viewPrefs";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import { cn } from "../lib/utils";
+import { Badge, compactBadgeClass } from "../ui/astryx";
 
 /**
  * Compact list view: one row per video. The card-size slider drives the row
@@ -64,7 +63,7 @@ export default function VideoList({
       style={windowed ? { height: totalHeight } : undefined}
     >
       <div
-        ref={virtual.windowRef}
+        ref={(el) => { virtual.windowRef.current = el; }}
         className="flex flex-col gap-1.5"
         style={windowed ? { position: "absolute", top: offsetTop, left: 0, right: 0 } : undefined}
       >
@@ -154,8 +153,8 @@ export default function VideoList({
                   >
                     {videoDisplayName(v)}
                   </div>
-                  {v.mosaicRestored && <RestoredBadge />}
-                  {v.backedUp && <BackupBadge />}
+                  {v.mosaicRestored && <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" />}
+                  {v.backedUp && <Badge className={compactBadgeClass} label="已备份" variant="success" />}
                   {remote && (
                     <span
                       className={cn(

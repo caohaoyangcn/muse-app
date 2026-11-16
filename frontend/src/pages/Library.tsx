@@ -10,7 +10,7 @@ import DiskFilterBar from "../components/DiskFilterBar";
 import DropOverlay from "../components/DropOverlay";
 import DuplicateView from "../components/DuplicateView";
 import EditVideoDialog from "../components/EditVideoDialog";
-import EmptyState from "../components/EmptyState";
+import { EmptyState, Spinner } from "../ui/astryx";
 import ErrorBoundary from "../ui/error-boundary";
 import FileScanButton from "../components/FileScanButton";
 import GroupContextMenu, { type GroupMenuAction } from "../components/GroupContextMenu";
@@ -1818,25 +1818,45 @@ export default function Library({
                 )}
               </div>
               {loading ? (
-                <div className="flex min-h-[320px] h-full flex-col items-center justify-center text-center text-[var(--muted)]">加载中…</div>
+                <div className="flex h-full min-h-[320px] items-center justify-center">
+                  <Spinner label="加载中…" size="lg" />
+                </div>
               ) : filter.kind === "recent" && !keyword.trim() && videos.length === 0 ? (
-                <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
-                  <div className="mb-1.5 text-xl text-[var(--text)]">还没有播放记录</div>
-                  <div>播放过的视频会按 1 天、3 天、7 天、14 天分组出现在这里</div>
-                </div>
+                <EmptyState
+                  className="min-h-[320px]"
+                  description="播放过的视频会按 1 天、3 天、7 天、14 天分组出现在这里"
+                  title="还没有播放记录"
+                />
               ) : videos.length === 0 ? (
-                <EmptyState keyword={keyword} onAdd={() => setAddSourceOpen(true)} />
+                <EmptyState
+                  actions={
+                    keyword.trim() ? undefined : (
+                      <Button variant="primary" size="lg" onClick={() => setAddSourceOpen(true)}>
+                        添加视频
+                      </Button>
+                    )
+                  }
+                  className="min-h-[320px]"
+                  description={
+                    keyword.trim()
+                      ? `没有匹配“${keyword.trim()}”的内容`
+                      : "添加你喜欢的视频；也可以将视频文件拖入窗口任意位置"
+                  }
+                  title={keyword.trim() ? "无结果" : "暂无收藏视频"}
+                />
               ) : shownVideos.length === 0 ? (
-                <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
-                  <div className="mb-1.5 text-xl text-[var(--text)]">无结果</div>
-                  <div>没有符合当前筛选条件的视频</div>
-                  {filterSummary && <div className="mt-1 text-xs">{filterSummary}</div>}
-                  {filtering && (
-                    <Button size="sm" className="mt-3" onClick={clearViewFilters}>
-                      清除筛选
-                    </Button>
-                  )}
-                </div>
+                <EmptyState
+                  actions={
+                    filtering ? (
+                      <Button size="sm" onClick={clearViewFilters}>
+                        清除筛选
+                      </Button>
+                    ) : undefined
+                  }
+                  className="min-h-[320px]"
+                  description={filterSummary || "没有符合当前筛选条件的视频"}
+                  title="无结果"
+                />
               ) : filter.kind === "recent" ? (
                 <RecentlyPlayedView groups={recentGroups} view={view} {...videoItemProps} />
               ) : view === "grid" ? (

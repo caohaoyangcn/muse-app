@@ -1,6 +1,6 @@
 # Astryx 全量替换方案
 
-> 状态：方案评审，尚未实施。  
+> 状态：Phase 1 + Phase 2 已实施（2026-11-16）；Phase 3 起待继续。
 > 范围：`frontend/src/` 的桌面端与移动端；产品深色 token、`ui/` 唯一接缝、文件零改动原则不变。
 
 ## 0. 结论先行
@@ -163,7 +163,7 @@
 
 **退出条件**：lint 通过，基线有数字。
 
-### Phase 1：原子层（低风险）
+### Phase 1：原子层（低风险）— ✅ 已完成
 
 - `NavIcon` → `Icon` + `registerIcons`
 - `backup-badge` / `restored-badge` → `Badge`
@@ -174,14 +174,15 @@
 
 **退出条件**：320/390/768 与桌面截图一致；裸按钮数量下降。
 
-### Phase 2：移动端片库（可视化试点）
+### Phase 2：移动端片库（可视化试点）— ✅ 已完成
 
-- 海报卡 → `Grid` + `ClickableCard` + `AspectRatio` + `Badge` + `MoreMenu`
-- 列表 → `List` + `ListItem`
-- 筛选面板 → `BottomSheet` + `Section` + `ToggleButtonGroup`/`CheckboxList` + `Divider`
-- 工具栏 → `Toolbar` + `SegmentedControl`
+- 海报卡 → `Grid` + `ClickableCard` + `AspectRatio` + `Badge`（完成）
+- 列表 → `List` + `ListItem`（完成）
+- 筛选面板 → `BottomSheet` + `Section` + `ToggleButtonGroup` + `Divider`（完成）
+- 工具栏 → `Toolbar` + `SegmentedControl`（完成）
+- 卡片菜单暂用 Astryx `Button` 触发既有 `VideoActionSheet`；`MoreMenu` 与动作面板合并放到 Phase 4。
 
-**退出条件**：320/390/768 视觉通过；筛选多选、关闭保留、返回键、海报比例、虚拟滚动不回退。此阶段结束时决定 `ClickableCard padding=0` 是否可接受；不可接受则只保留 `ui/media-card.tsx` 这一层薄组合。
+**结果**：320/390/768 视觉通过；`ClickableCard padding=0` + 透明 Card 保留了全出血海报；筛选多选、关闭保留、返回键、海报比例、列表/网格切换与虚拟滚动已回归。卡片菜单/动作面板仍未替换，留在 Phase 4。
 
 ### Phase 3：桌面卡片与工具栏
 

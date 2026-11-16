@@ -2,9 +2,9 @@ import type { JavTaskOverview, Video } from "../types";
 import { formatDateTime } from "../utils/task";
 import { videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
-import RestoredBadge from "../ui/restored-badge";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
+import { Badge } from "../ui/astryx";
 import {
   SCRAPE_CATEGORY_LABELS,
   scrapeStatusLabel,
@@ -34,7 +34,7 @@ function TaskRow({ task, onOpen }: { task: JavTaskOverview; onOpen: (video: Vide
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <div className="truncate font-medium">{videoDisplayName(video)}</div>
-          {video.mosaicRestored && <RestoredBadge />}
+          {video.mosaicRestored && <Badge label="马赛克破解" variant="purple" />}
         </div>
         {error && <div className="mt-1 truncate text-xs text-[var(--danger)]">{error}</div>}
       </div>

@@ -1,5 +1,8 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
+import { EmptyState } from "./astryx";
+import { Button } from "./button";
+
 type Props = {
   children: ReactNode;
   /** What this boundary protects, e.g. "当前页面". Shown in the fallback. */
@@ -62,27 +65,17 @@ function PageFallback({ error, onRetry }: { error: Error; onRetry: () => void })
       className="flex min-h-full flex-col items-center justify-center bg-[var(--bg)] px-6 py-10 text-[var(--text)]"
       role="alert"
     >
-      <div className="w-full max-w-[560px] text-center">
-        <h1 className="text-lg font-semibold">界面遇到问题</h1>
-        <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
-          本次操作没能完成渲染。收藏记录、缩略图和视频文件都没有受到影响。
-        </p>
-        <div className="mt-5 flex justify-center gap-2">
-          <button
-            className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel-2)] px-3.5 py-1.5 text-sm hover:border-[var(--accent)]"
-            onClick={onRetry}
-            type="button"
-          >
-            重试
-          </button>
-          <button
-            className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel-2)] px-3.5 py-1.5 text-sm hover:border-[var(--accent)]"
-            onClick={() => window.location.reload()}
-            type="button"
-          >
-            重新加载
-          </button>
-        </div>
+      <div className="w-full max-w-[560px]">
+        <EmptyState
+          actions={
+            <>
+              <Button onClick={onRetry}>重试</Button>
+              <Button onClick={() => window.location.reload()}>重新加载</Button>
+            </>
+          }
+          description="本次操作没能完成渲染。收藏记录、缩略图和视频文件都没有受到影响。"
+          title="界面遇到问题"
+        />
         <ErrorDetails error={error} />
       </div>
     </div>
@@ -92,18 +85,14 @@ function PageFallback({ error, onRetry }: { error: Error; onRetry: () => void })
 function RegionFallback({ scope, error, onRetry }: { scope: string; error: Error; onRetry: () => void }) {
   return (
     <div
-      className="flex min-h-[220px] flex-1 flex-col items-center justify-center gap-3 px-6 py-10 text-center"
+      className="flex min-h-[220px] flex-1 flex-col items-center justify-center px-6 py-10"
       role="alert"
     >
-      <div className="text-sm text-[var(--text)]">「{scope}」没能显示出来</div>
-      <div className="text-xs text-[var(--muted)]">其余界面仍可正常使用。</div>
-      <button
-        className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel-2)] px-3.5 py-1.5 text-sm hover:border-[var(--accent)]"
-        onClick={onRetry}
-        type="button"
-      >
-        重试
-      </button>
+      <EmptyState
+        actions={<Button onClick={onRetry}>重试</Button>}
+        description="其余界面仍可正常使用。"
+        title={`「${scope}」没能显示出来`}
+      />
       <ErrorDetails error={error} />
     </div>
   );

@@ -8,8 +8,9 @@ import {
 } from "../../views/duplicates/useContentDuplicates";
 import { videoMeta, videoName } from "../videoDisplay";
 import { ConfirmSheet } from "../../ui/sheet";
-import { EmptyState, ErrorState, Loading } from "./States";
 import { cn } from "../../lib/utils";
+import { EmptyState, Spinner } from "../../ui/astryx";
+import { Button } from "../../ui/button";
 
 /**
  * 内容重复 on the phone: the favorites that hold byte-identical files, grouped by
@@ -59,8 +60,8 @@ export function ContentDuplicateView({
     await keepCopy(group, keep);
   };
 
-  if (loading) return <Loading />;
-  if (error) return <ErrorState message={error} onRetry={reload} />;
+  if (loading) return <div className="flex items-center justify-center py-20"><Spinner size="lg" /></div>;
+  if (error) return <EmptyState actions={<Button onClick={reload} variant="primary">重试</Button>} description={error} title="加载失败" />;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4">
@@ -94,7 +95,7 @@ export function ContentDuplicateView({
       <div className="scroll-area min-h-0 flex-1 pb-4" data-scroll-key="main">
         {groups.length === 0 ? (
           <EmptyState
-            hint="只有内容完全相同的两个文件才会出现在这里"
+            description="只有内容完全相同的两个文件才会出现在这里"
             title="没有内容重复"
           />
         ) : (

@@ -6,8 +6,9 @@ import { videoName } from "../videoDisplay";
 import { formatFileSize } from "../../utils/format";
 import { cn } from "../../lib/utils";
 import { ConfirmSheet } from "../../ui/sheet";
-import { EmptyState, ErrorState, Loading } from "./States";
 import { remainingDays, useTrash } from "../../views/trash/useTrash";
+import { EmptyState, Spinner } from "../../ui/astryx";
+import { Button } from "../../ui/button";
 
 /**
  * The phone's recycle bin. Removing a favorite anywhere (desktop or phone) only
@@ -53,9 +54,9 @@ export function TrashView({
   // The phone disables every row while one write runs.
   const busy = busyId !== null || emptying || clearingArchive;
 
-  if (loading) return <Loading label={mode === "archive" ? "加载归档…" : "加载回收站…"} />;
+  if (loading) return <div className="flex items-center justify-center py-20"><Spinner label={mode === "archive" ? "加载归档…" : "加载回收站…"} size="lg" /></div>;
   if (error && videos.length === 0) {
-    return <ErrorState message={error} onRetry={reload} />;
+    return <EmptyState actions={<Button onClick={reload} variant="primary">重试</Button>} description={error} title="加载失败" />;
   }
 
   return (
@@ -105,7 +106,7 @@ export function TrashView({
 
       {videos.length === 0 ? (
         <EmptyState
-          hint={
+          description={
             mode === "archive"
               ? "停用网盘来源后，它的收藏会长期保留在这里，不参与普通回收站的自动清理。"
               : `从收藏中移除的影片会先来到这里，保留 ${retentionDays} 天后自动彻底清理；期间可以随时恢复。`

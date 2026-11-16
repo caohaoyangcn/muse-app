@@ -5,7 +5,7 @@ import { MIME_VIDEO_DRAG, MIME_VIDEO_DRAG_MULTI } from "../types";
 import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 import { Sidebar as SidebarRoot, SidebarNav, SidebarSection } from "../ui/sidebar";
-import { NavIcon, type NavIconName } from "../ui/NavIcon";
+import { Icon, type MuseIconName } from "../ui/icon";
 
 interface SidebarProps {
   groups: Group[];
@@ -52,7 +52,7 @@ function NavRow({
   onDragOver,
   onDrop,
 }: {
-  icon: NavIconName;
+  icon: MuseIconName;
   label: string;
   active: boolean;
   onClick: () => void;
@@ -73,7 +73,7 @@ function NavRow({
       title={title}
     >
       {active && <ActiveBar />}
-      <NavIcon name={icon} className={active ? "text-[var(--accent)]" : undefined} />
+      <Icon name={icon} className={active ? "text-[var(--accent)]" : undefined} />
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
     </button>
   );
@@ -302,12 +302,12 @@ export default function Sidebar({
                 toggleExpanded(g.id);
               }}
             >
-              <NavIcon name={expanded ? "chevron-down" : "chevron-right"} />
+              <Icon name={expanded ? "chevron-down" : "chevron-right"} />
             </button>
           ) : (
             <span className="w-4 shrink-0" aria-hidden="true" />
           )}
-          <NavIcon
+          <Icon
             name={expanded || active ? "folder-open" : "folder"}
             className={active ? "text-[var(--accent)]" : undefined}
           />
@@ -326,7 +326,7 @@ export default function Sidebar({
                 onGroupContextMenu(e, g);
               }}
             >
-              <NavIcon name="more-horizontal" className="h-3.5 w-3.5" />
+              <Icon name="more-horizontal" className="h-3.5 w-3.5" />
             </button>
           </span>
         </div>
@@ -374,7 +374,7 @@ export default function Sidebar({
         <SidebarSection className="mt-4 shrink-0">
           <span>分组</span>
           <Button variant="ghost" size="sm" className="h-5 w-5 rounded p-0" title="新建分组" onClick={onCreate}>
-            <NavIcon name="plus" className="h-3.5 w-3.5" />
+            <Icon name="plus" className="h-3.5 w-3.5" />
           </Button>
         </SidebarSection>
 

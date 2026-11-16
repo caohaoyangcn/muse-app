@@ -1,7 +1,8 @@
 import type { ActorSummary } from "../../types";
 import { actorAvatarURL } from "../../utils/format";
-import { EmptyState, ErrorState, Loading } from "./States";
 import { useActorIndex } from "../../views/actors/useActorIndex";
+import { EmptyState, Spinner } from "../../ui/astryx";
+import { Button } from "../../ui/button";
 
 /**
  * The aggregated actor index. Merged stage names are folded into their
@@ -12,8 +13,8 @@ export function ActorIndexView({ onSelect }: { onSelect: (name: string) => void 
   const { actors, filtered: shown, keyword: filter, setKeyword: setFilter, loading, error, reload } =
     useActorIndex();
 
-  if (loading) return <Loading />;
-  if (error) return <ErrorState message={error} onRetry={reload} />;
+  if (loading) return <div className="flex items-center justify-center py-20"><Spinner size="lg" /></div>;
+  if (error) return <EmptyState actions={<Button onClick={reload} variant="primary">重试</Button>} description={error} title="加载失败" />;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4">

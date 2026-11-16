@@ -1,11 +1,10 @@
 import { useRef, useState } from "react";
 import type { Video } from "../types";
 import MetadataPopup from "./MetadataPopup";
-import BackupBadge from "../ui/backup-badge";
-import RestoredBadge from "../ui/restored-badge";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import { cn } from "../lib/utils";
+import { Badge, compactBadgeClass } from "../ui/astryx";
 
 const POPUP_DELAY_MS = 300;
 
@@ -136,8 +135,8 @@ ${video.remotePath}`}
       <div className="px-3 pb-3 pt-2.5">
         <div className="flex min-w-0 items-center gap-1.5">
           <div className="truncate font-medium">{videoDisplayName(video)}</div>
-          {video.mosaicRestored && <RestoredBadge />}
-          {video.backedUp && <BackupBadge />}
+          {video.mosaicRestored && <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" />}
+          {video.backedUp && <Badge className={compactBadgeClass} label="已备份" variant="success" />}
         </div>
         <div className="mt-0.5 text-xs text-[var(--muted)]">
           {missing ? (

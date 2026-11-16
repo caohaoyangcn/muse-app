@@ -1,4 +1,5 @@
 import { useCallback, useState, type ReactNode } from "react";
+import { Badge, EmptyState, Spinner } from "../../ui/astryx";
 
 import type { JavDetail, Video } from "../../types";
 import {
@@ -10,11 +11,10 @@ import {
 } from "../../utils/format";
 import { formatDateTime } from "../../utils/task";
 import { client, coverURL, getVideo } from "../../services/web";
-import RestoredBadge from "../../ui/restored-badge";
 import { invalidate } from "../../services/live";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { videoName } from "../videoDisplay";
-import { ErrorState, Loading } from "./States";
+import { Button } from "../../ui/button";
 
 const errorLabels: Record<string, string> = {
   no_code: "未识别到番号",
@@ -114,9 +114,9 @@ export function VideoDetailView({
       <div className="flex h-full flex-col">
         <DetailHeader onBack={onBack} title="视频详情" />
         {error ? (
-          <ErrorState message={error} onRetry={reload} />
+          <EmptyState actions={<Button onClick={reload} variant="primary">重试</Button>} description={error} title="加载失败" />
         ) : (
-          <Loading label="正在加载…" />
+          <div className="flex items-center justify-center py-20"><Spinner label="正在加载…" size="lg" /></div>
         )}
       </div>
     );
@@ -148,7 +148,7 @@ export function VideoDetailView({
   return (
     <div className="flex h-full flex-col">
       <DetailHeader
-        badge={v.mosaicRestored ? <RestoredBadge className="text-xs" /> : null}
+        badge={v.mosaicRestored ? <Badge label="马赛克破解" variant="purple" /> : null}
         onBack={onBack}
         onEdit={() => onEdit(v)}
         title={videoName(v)}

@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { WorkspaceTab } from "../types";
 import { cn } from "../lib/utils";
-import { NavIcon } from "../ui/NavIcon";
+import { Icon } from "../ui/icon";
 
 /** One rendered tab in the strip: its identity plus the label shown. */
 export interface WorkspaceTabItem {
@@ -237,7 +237,7 @@ export default function WorkspaceTabs({
               >
                 {group.tabs.length}
               </span>
-              <NavIcon
+              <Icon
                 name={collapsed ? "chevron-right" : "chevron-down"}
                 className="h-3.5 w-3.5 shrink-0 opacity-80"
               />

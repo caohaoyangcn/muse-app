@@ -55,7 +55,7 @@ export default function VideoGrid({
       style={windowed ? { height: totalHeight } : undefined}
     >
       <div
-        ref={virtual.windowRef}
+        ref={(el) => { virtual.windowRef.current = el; }}
         className="grid"
         // An explicit track list keeps the rendered rows aligned with the
         // window's row maths; the count still follows the container width.

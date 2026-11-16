@@ -57,7 +57,7 @@ export interface VirtualRowsState {
    *  computed scroll height while windowing. */
   containerRef: React.RefObject<HTMLDivElement | null>;
   /** Attach to the grid/list element itself (the one that lays out items). */
-  windowRef: React.RefObject<HTMLDivElement | null>;
+  windowRef: React.RefObject<HTMLElement | null>;
   /** Measured columns per row, or 0 while still unknown. */
   columns: number;
   /** Inclusive start / exclusive end of the items to render. */
@@ -124,7 +124,7 @@ export function useVirtualRows({
   revealIndex,
 }: VirtualRowsOptions): VirtualRowsState {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const windowRef = useRef<HTMLDivElement | null>(null);
+  const windowRef = useRef<HTMLElement | null>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
   // Offset of the container inside the scroller's content box — the height of
   // whatever sits above the grid (sticky bar, sort bar). Without it the window

@@ -4,7 +4,7 @@ import type { Video } from "../types";
 import { NO_FILTERS, type LibraryFilters } from "./libraryFilters";
 import ErrorBoundary from "../ui/error-boundary";
 import { Drawer, DrawerRow, DrawerSection } from "../ui/drawer";
-import { NavIcon, type NavIconName } from "../ui/NavIcon";
+import { Icon, type MuseIconName } from "../ui/icon";
 import { invalidate } from "../services/live";
 import { client, ApiError, markVideoOpened } from "../services/web";
 import { ActorFilmsView } from "./components/ActorFilmsView";
@@ -60,7 +60,7 @@ function currentHref(): string {
 const NAV_ITEMS: {
   tab: Tab;
   label: string;
-  icon: NavIconName;
+  icon: MuseIconName;
   section: "browse" | "tools";
 }[] = [
   { tab: "library", label: "收藏", icon: "star", section: "browse" },
@@ -487,7 +487,7 @@ export default function App() {
           onClick={() => setDrawerOpen(true)}
           type="button"
         >
-          <NavIcon name="menu" className="size-5" />
+          <Icon name="menu" className="size-5" />
         </button>
         <span className="shrink-0 font-semibold">Muse Video</span>
         {showSearch ? (
@@ -573,7 +573,7 @@ export default function App() {
             onClick={() => setDrawerOpen(false)}
             type="button"
           >
-            <NavIcon name="x" className="size-4" />
+            <Icon name="x" className="size-4" />
           </button>
         </div>
 
@@ -582,7 +582,7 @@ export default function App() {
           {BROWSE_ITEMS.map((item) => (
             <DrawerRow
               active={activeTab === item.tab}
-              icon={<NavIcon name={item.icon} />}
+              icon={<Icon name={item.icon} />}
               key={item.tab}
               label={item.label}
               onClick={() => selectTab(item.tab)}
@@ -592,7 +592,7 @@ export default function App() {
           {TOOL_ITEMS.map((item) => (
             <DrawerRow
               active={activeTab === item.tab}
-              icon={<NavIcon name={item.icon} />}
+              icon={<Icon name={item.icon} />}
               key={item.tab}
               label={item.label}
               onClick={() => selectTab(item.tab)}

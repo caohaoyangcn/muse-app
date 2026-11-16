@@ -1,9 +1,10 @@
 import type { Video } from "../../types";
 import { actorAvatarURL, actorProfileMeta } from "../../utils/format";
-import { EmptyState, ErrorState, Loading } from "./States";
-import { NavIcon } from "../../ui/NavIcon";
+import { Icon } from "../../ui/icon";
 import { VideoGrid } from "./VideoGrid";
 import { useActorFilms } from "../../views/actors/useActorFilms";
+import { EmptyState, Spinner } from "../../ui/astryx";
+import { Button } from "../../ui/button";
 
 /** One actor's film list, opened from the actor index or a detail chip. */
 export function ActorFilmsView({
@@ -40,7 +41,7 @@ export function ActorFilmsView({
           onClick={onBack}
           type="button"
         >
-          <NavIcon className="size-4" name="arrow-left" />
+          <Icon className="size-4" name="arrow-left" />
         </button>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {profile ? (
@@ -81,13 +82,13 @@ export function ActorFilmsView({
       </div>
       <div className="scroll-area min-h-0 flex-1 px-3 pb-4 pt-2" data-scroll-key="main">
         {loading ? (
-          <Loading />
+          <div className="flex items-center justify-center py-20"><Spinner size="lg" /></div>
         ) : error ? (
-          <ErrorState message={error} onRetry={reload} />
+          <EmptyState actions={<Button onClick={reload} variant="primary">重试</Button>} description={error} title="加载失败" />
         ) : videos.length === 0 ? (
           <EmptyState title="该演员暂无作品" />
         ) : shown.length === 0 ? (
-          <EmptyState hint="换个关键词试试" title="没有匹配的影片" />
+          <EmptyState description="换个关键词试试" title="没有匹配的影片" />
         ) : (
           <VideoGrid onMenu={onMenu} onOpen={onOpenVideo} videos={shown} />
         )}
