@@ -4,7 +4,9 @@ import type { Video } from "../types";
 import { NO_FILTERS, type LibraryFilters } from "./libraryFilters";
 import ErrorBoundary from "../ui/error-boundary";
 import { Drawer, DrawerRow, DrawerSection } from "../ui/drawer";
+import { IconButton } from "../ui/astryx";
 import { Icon, type MuseIconName } from "../ui/icon";
+import { Input } from "../ui/input";
 import { invalidate } from "../services/live";
 import { client, ApiError, markVideoOpened } from "../services/web";
 import { ActorFilmsView } from "./components/ActorFilmsView";
@@ -481,19 +483,19 @@ export default function App() {
           the drawer header, so the search keeps the width it had while the
           navigation becomes a summonable panel instead of a permanent strip. */}
       <header className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--panel)] px-4 py-3">
-        <button
-          aria-label="打开导航"
-          className="flex size-9 shrink-0 items-center justify-center rounded-full text-[var(--muted)] active:bg-[var(--panel-2)]"
+        <IconButton
+          className="size-9 shrink-0 rounded-full text-[var(--muted)]"
+          icon={<Icon name="menu" className="size-5" />}
+          label="打开导航"
           onClick={() => setDrawerOpen(true)}
-          type="button"
-        >
-          <Icon name="menu" className="size-5" />
-        </button>
+          size="sm"
+          variant="ghost"
+        />
         <span className="shrink-0 font-semibold">Muse Video</span>
         {showSearch ? (
           <div className="relative ml-auto min-w-0 flex-1">
-            <input
-              className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 outline-none focus:border-[var(--accent)]"
+            <Input
+              aria-label="搜索"
               onChange={(e) => setSearch(e.target.value)}
               placeholder="搜索"
               type="search"
@@ -567,14 +569,14 @@ export default function App() {
             <div className="truncate font-semibold">Muse Video</div>
             <div className="truncate text-[11px] text-[var(--muted)]">局域网收藏</div>
           </div>
-          <button
-            aria-label="关闭导航"
-            className="flex size-8 shrink-0 items-center justify-center rounded-full text-[var(--muted)] active:bg-[var(--panel-2)]"
+          <IconButton
+            className="size-8 shrink-0 rounded-full text-[var(--muted)]"
+            icon={<Icon name="x" className="size-4" />}
+            label="关闭导航"
             onClick={() => setDrawerOpen(false)}
-            type="button"
-          >
-            <Icon name="x" className="size-4" />
-          </button>
+            size="sm"
+            variant="ghost"
+          />
         </div>
 
         <nav aria-label="主导航" className="scroll-area min-h-0 flex-1 px-2 py-1.5">

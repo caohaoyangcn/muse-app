@@ -1,8 +1,8 @@
-import type { ActorSummary } from "../../types";
 import { actorAvatarURL } from "../../utils/format";
-import { useActorIndex } from "../../views/actors/useActorIndex";
-import { EmptyState, Spinner } from "../../ui/astryx";
+import { Avatar, EmptyState, List, ListItem, Spinner } from "../../ui/astryx";
 import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
+import { useActorIndex } from "../../views/actors/useActorIndex";
 
 /**
  * The aggregated actor index. Merged stage names are folded into their
@@ -13,15 +13,33 @@ export function ActorIndexView({ onSelect }: { onSelect: (name: string) => void 
   const { actors, filtered: shown, keyword: filter, setKeyword: setFilter, loading, error, reload } =
     useActorIndex();
 
-  if (loading) return <div className="flex items-center justify-center py-20"><Spinner size="lg" /></div>;
-  if (error) return <EmptyState actions={<Button onClick={reload} variant="primary">重试</Button>} description={error} title="加载失败" />;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <EmptyState
+        actions={
+          <Button onClick={reload} variant="default">
+            重试
+          </Button>
+        }
+        description={error}
+        title="加载失败"
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4">
       <div className="py-2">
-        <input
-          className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 outline-none focus:border-[var(--accent)]"
-          onChange={(e) => setFilter(e.target.value)}
+        <Input
+          aria-label="筛选演员"
+          onChange={(event) => setFilter(event.target.value)}
           placeholder="筛选演员"
           type="search"
           value={filter}
@@ -32,45 +50,24 @@ export function ActorIndexView({ onSelect }: { onSelect: (name: string) => void 
         {shown.length === 0 ? (
           <EmptyState title={actors.length === 0 ? "暂无演员数据" : "没有匹配的演员"} />
         ) : (
-          <div className="flex flex-col gap-2">
-            {shown.map((a) => (
-              <button
-                className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] px-3 py-3 text-left active:scale-[0.99]"
-                key={a.name}
-                onClick={() => onSelect(a.name)}
-                type="button"
-              >
-                <div className="flex items-center gap-2.5">
-                  <ActorAvatar actor={a} />
-                  <span className="min-w-0 flex-1 truncate font-medium">{a.name}</span>
-                  <span className="shrink-0 text-xs text-[var(--muted)]">{a.count} 部</span>
-                </div>
-                {a.aliases && a.aliases.length > 0 ? (
-                  <div className="mt-1 truncate text-xs text-[var(--muted)]">
-                    已合并：{a.aliases.join("、")}
-                  </div>
-                ) : null}
-              </button>
-            ))}
-          </div>
+          <List className="flex flex-col gap-2">
+            {shown.map((actor) => {
+              const src = actorAvatarURL(actor.profile);
+              return (
+                <ListItem
+                  className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)]"
+                  description={actor.aliases && actor.aliases.length > 0 ? `已合并：${actor.aliases.join("、")}` : undefined}
+                  endContent={<span className="text-xs text-[var(--muted)]">{actor.count} 部</span>}
+                  key={actor.name}
+                  label={actor.name}
+                  onClick={() => onSelect(actor.name)}
+                  startContent={<Avatar name={actor.name} size="md" src={src || undefined} />}
+                />
+              );
+            })}
+          </List>
         )}
       </div>
     </div>
-  );
-}
-
-/** 演员头像；没有档案时用名字首字兜底，避免列表出现空洞。 */
-function ActorAvatar({ actor }: { actor: ActorSummary }) {
-  const src = actorAvatarURL(actor.profile);
-  return (
-    <span className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-[var(--border)] bg-[var(--panel-2)]">
-      {src ? (
-        <img alt="" className="h-full w-full object-cover" loading="lazy" src={src} />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center text-sm text-[var(--muted)]">
-          {actor.name.slice(0, 1)}
-        </span>
-      )}
-    </span>
   );
 }

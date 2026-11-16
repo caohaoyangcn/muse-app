@@ -4,11 +4,18 @@ import type { Video } from "../../types";
 import { coverURL } from "../../services/web";
 import { videoName } from "../videoDisplay";
 import { formatFileSize } from "../../utils/format";
-import { cn } from "../../lib/utils";
 import { ConfirmSheet } from "../../ui/sheet";
 import { remainingDays, useTrash } from "../../views/trash/useTrash";
-import { EmptyState, Spinner } from "../../ui/astryx";
+import {
+  EmptyState,
+  List,
+  ListItem,
+  SegmentedControl,
+  SegmentedControlItem,
+  Spinner,
+} from "../../ui/astryx";
 import { Button } from "../../ui/button";
+import { Icon } from "../../ui/icon";
 
 /**
  * The phone's recycle bin. Removing a favorite anywhere (desktop or phone) only
@@ -62,45 +69,24 @@ export function TrashView({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="border-b border-[var(--border)] px-4 py-2.5">
-        <div className="flex items-center gap-1 text-xs" role="tablist" aria-label="归档与回收站">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "archive"}
-            className={cn(
-              "rounded-full px-3 py-1.5",
-              mode === "archive" ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--muted)]",
-            )}
-            onClick={() => setMode("archive")}
-          >
-            归档 {archivedVideos.length}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "trash"}
-            className={cn(
-              "rounded-full px-3 py-1.5",
-              mode === "trash" ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--muted)]",
-            )}
-            onClick={() => setMode("trash")}
-          >
-            回收站 {trashVideos.length}
-          </button>
-        </div>
+        <SegmentedControl className="w-full" label="归档与回收站" onChange={(value) => setMode(value as "trash" | "archive")} value={mode}>
+          <SegmentedControlItem label={`归档 ${archivedVideos.length}`} value="archive" />
+          <SegmentedControlItem label={`回收站 ${trashVideos.length}`} value="trash" />
+        </SegmentedControl>
         <div className="mt-2 flex items-center gap-2 text-[11px] text-[var(--muted)]">
           <span>
             {videos.length} 项{totalSize > 0 ? ` · ${formatFileSize(totalSize)}` : ""}
             {mode === "trash" ? ` · 保留 ${retentionDays} 天` : " · 长期保留"}
           </span>
-          <button
-            className="ml-auto rounded-full border border-[var(--border)] bg-[var(--panel-2)] px-3 py-1.5 text-xs text-[var(--danger)] disabled:opacity-40"
+          <Button
+            className="ml-auto text-[var(--danger)]"
             disabled={videos.length === 0 || busy}
             onClick={() => (mode === "trash" ? setEmptyOpen(true) : setArchiveOpen(true))}
-            type="button"
+            size="sm"
+            variant="ghost"
           >
             {mode === "trash" ? "清空回收站" : "清空归档"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -114,7 +100,7 @@ export function TrashView({
           title={mode === "archive" ? "归档是空的" : "回收站是空的"}
         />
       ) : (
-        <div className="flex flex-col">
+        <List className="flex flex-col">
           {videos.map((video) => (
             <TrashRow
               archived={mode === "archive"}
@@ -126,7 +112,7 @@ export function TrashView({
               onRestore={() => void restore(video)}
             />
           ))}
-        </div>
+        </List>
       )}
 
       <p className="px-4 py-4 text-[11px] leading-relaxed text-[var(--muted)]">
@@ -204,45 +190,55 @@ function TrashRow({
   const remaining = remainingDays(video.deletedAt, retentionDays);
   const restoreBlocked = video.sourceId > 0 && !video.sourceEnabled;
   return (
-    <div className="flex gap-3 border-b border-[var(--border)] px-4 py-3">
-      <div className="h-[60px] w-[104px] shrink-0 overflow-hidden rounded-[6px] bg-[#111114]">
-        {video.thumbnailPath ? (
-          <img alt="" className="h-full w-full object-contain" loading="lazy" src={coverURL(video)} />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-lg opacity-40">🎞</div>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{videoName(video)}</div>
-        <div className="mt-0.5 text-[11px] text-[var(--muted)]">
-          {archived
-            ? `${reason} · 长期保留${video.sourceName ? ` · ${video.sourceName}` : ""}`
-            : `${reason} · ${remaining > 0 ? `${remaining} 天后清理` : "即将清理"}`}
-        </div>
-        {(video.trashGroupNames?.length ?? 0) > 0 && (
-          <div className="mt-0.5 truncate text-[11px] text-[var(--muted)]">
-            原分组：{video.trashGroupNames.join(" / ")}
-          </div>
-        )}
-        <div className="mt-1.5 flex gap-2">
-          <button
-            className="rounded-full border border-[var(--border)] px-3 py-1 text-xs active:bg-[var(--panel-2)] disabled:opacity-40"
+    <ListItem
+      className="border-b border-[var(--border)]"
+      description={
+        <>
+          <span>
+            {archived
+              ? `${reason} · 长期保留${video.sourceName ? ` · ${video.sourceName}` : ""}`
+              : `${reason} · ${remaining > 0 ? `${remaining} 天后清理` : "即将清理"}`}
+          </span>
+          {(video.trashGroupNames?.length ?? 0) > 0 ? (
+            <span className="mt-0.5 block truncate">
+              原分组：{video.trashGroupNames?.join(" / ")}
+            </span>
+          ) : null}
+        </>
+      }
+      endContent={
+        <span className="flex flex-col gap-1">
+          <Button
             disabled={busy || restoreBlocked}
             onClick={onRestore}
-            type="button"
+            size="sm"
+            variant="ghost"
           >
             恢复
-          </button>
-          <button
-            className="rounded-full border border-[rgba(229,83,75,0.45)] px-3 py-1 text-xs text-[var(--danger)] active:bg-[rgba(229,83,75,0.12)] disabled:opacity-40"
+          </Button>
+          <Button
+            className="text-[var(--danger)]"
             disabled={busy}
             onClick={onPurge}
-            type="button"
+            size="sm"
+            variant="ghost"
           >
             彻底删除
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </span>
+      }
+      label={videoName(video)}
+      startContent={
+        <span className="block h-[60px] w-[104px] shrink-0 overflow-hidden rounded-[6px] bg-[#111114]">
+          {video.thumbnailPath ? (
+            <img alt="" className="h-full w-full object-contain" loading="lazy" src={coverURL(video)} />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-[var(--muted)]">
+              <Icon name="archive" className="size-5" />
+            </span>
+          )}
+        </span>
+      }
+    />
   );
 }

@@ -1,6 +1,7 @@
 import type { Video } from "../../types";
+import { List, ListItem } from "../../ui/astryx";
+import { BottomSheet } from "../../ui/sheet";
 import { videoName } from "../videoDisplay";
-import { BottomSheet, SheetAction } from "../../ui/sheet";
 
 /**
  * The card overflow menu. The desktop equivalent is the right-click
@@ -37,16 +38,30 @@ export function VideoActionSheet({
   const unavailable = missing || offline || sourceOffline;
   return (
     <BottomSheet onClose={onClose} open={open && !!video} title={video ? videoName(video) : undefined}>
-      <SheetAction disabled={unavailable} label="播放" onClick={onPlay} />
-      <SheetAction disabled={unavailable || remote} label="播放器选项" onClick={onChoosePlayer} />
-      <SheetAction label="查看详情" onClick={onDetails} />
-      <SheetAction
-        label="点赞"
-        hint={video && video.likeCount > 0 ? String(video.likeCount) : undefined}
-        onClick={onLike}
-      />
-      <SheetAction label="编辑信息" onClick={onEdit} />
-      <SheetAction danger label="移入回收站" onClick={onRemove} />
+      <List className="flex flex-col">
+        <ListItem
+          isDisabled={unavailable}
+          label="播放"
+          onClick={onPlay}
+        />
+        <ListItem
+          isDisabled={unavailable || remote}
+          label="播放器选项"
+          onClick={onChoosePlayer}
+        />
+        <ListItem label="查看详情" onClick={onDetails} />
+        <ListItem
+          description={video && video.likeCount > 0 ? `${video.likeCount} 次` : undefined}
+          label="点赞"
+          onClick={onLike}
+        />
+        <ListItem label="编辑信息" onClick={onEdit} />
+        <ListItem
+          className="text-[var(--danger)]"
+          label="移入回收站"
+          onClick={onRemove}
+        />
+      </List>
       {offline ? (
         <p className="px-3 py-2 text-xs text-[var(--muted)]">
           磁盘 {video?.volumeRoot || ""} 未接入，插回移动硬盘后即可播放；移入回收站后可恢复；源视频不会被删除。

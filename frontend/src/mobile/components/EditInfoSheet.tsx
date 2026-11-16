@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 
 import type { Video } from "../../types";
+import { TextArea } from "../../ui/astryx";
+import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
 import { BottomSheet } from "../../ui/sheet";
 
 /** Sheet for editing a favorite's custom title and notes. */
@@ -36,8 +39,8 @@ export function EditInfoSheet({
           <span className="text-xs text-[var(--muted)]">
             标题（留空则显示刮削番号，未刮削时显示文件名）
           </span>
-          <input
-            className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 outline-none focus:border-[var(--accent)]"
+          <Input
+            aria-label="标题"
             onChange={(e) => setTitle(e.target.value)}
             placeholder={video.javCode?.trim() || video.fileName}
             value={title}
@@ -45,21 +48,18 @@ export function EditInfoSheet({
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-xs text-[var(--muted)]">备注</span>
-          <textarea
-            className="min-h-28 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2.5 outline-none focus:border-[var(--accent)]"
-            onChange={(e) => setNotes(e.target.value)}
+          <TextArea
+            label="备注"
+            isLabelHidden
+            onChange={(value) => setNotes(value)}
             placeholder="添加备注…"
+            rows={4}
             value={notes}
           />
         </label>
-        <button
-          className="rounded-[var(--radius)] bg-[var(--accent)] py-3 font-medium text-white disabled:opacity-50"
-          disabled={busy}
-          onClick={() => onSave(title, notes)}
-          type="button"
-        >
+        <Button className="py-3" disabled={busy} onClick={() => onSave(title, notes)} variant="primary">
           {busy ? "保存中…" : "保存"}
-        </button>
+        </Button>
       </div>
     </BottomSheet>
   );
