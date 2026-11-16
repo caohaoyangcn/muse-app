@@ -43,6 +43,7 @@ export { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/Segme
 export { Skeleton } from "@astryxdesign/core/Skeleton";
 export { Slider } from "@astryxdesign/core/Slider";
 export { Spinner } from "@astryxdesign/core/Spinner";
+export { Tab, TabList } from "@astryxdesign/core/TabList";
 export { TextArea } from "@astryxdesign/core/TextArea";
 export { ToggleButton, ToggleButtonGroup } from "@astryxdesign/core/ToggleButton";
 export { Toolbar } from "@astryxdesign/core/Toolbar";

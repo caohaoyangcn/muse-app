@@ -1,98 +1,31 @@
-
 import type { MouseEvent as ReactMouseEvent } from "react";
-import type { WorkspaceTab } from "../types";
-import { cn } from "../lib/utils";
-import { Button } from "../ui/button";
-import { IconButton } from "../ui/astryx";
-import { Icon } from "../ui/icon";
+import type { ActorTab, WorkspaceTab } from "../types";
+import { Tab, TabList } from "../ui/astryx";
 
-/** One rendered tab in the strip: its identity plus the label shown. */
+/** One rendered tab in the strip: its identity, label and optional actor group. */
 export interface WorkspaceTabItem {
   tab: WorkspaceTab;
   label: string;
-}
-
-/** A collapsible automatic group of video tabs that share an actor. */
-export interface WorkspaceTabGroup {
-  /** Canonical actor name, also the collapse-state key. */
-  id: string;
-  label: string;
-  tabs: WorkspaceTabItem[];
+  /** Actor group this tab belongs to; only used to keep the group's colour. */
+  groupLabel?: string;
 }
 
 /** Chrome's tab-group palette, tuned for the app's dark surface. */
 interface GroupColor {
   solid: string;
-  tint: string;
   border: string;
-  text: string;
-  badge: string;
 }
 
 const GROUP_COLORS: GroupColor[] = [
-  {
-    solid: "#1a73e8",
-    tint: "rgba(26,115,232,0.16)",
-    border: "rgba(90,155,255,0.55)",
-    text: "#ffffff",
-    badge: "rgba(255,255,255,0.22)",
-  },
-  {
-    solid: "#d93025",
-    tint: "rgba(217,48,37,0.16)",
-    border: "rgba(255,110,100,0.55)",
-    text: "#ffffff",
-    badge: "rgba(255,255,255,0.22)",
-  },
-  {
-    solid: "#f9ab00",
-    tint: "rgba(249,171,0,0.15)",
-    border: "rgba(249,171,0,0.55)",
-    text: "#1b1b1f",
-    badge: "rgba(0,0,0,0.16)",
-  },
-  {
-    solid: "#1e8e3e",
-    tint: "rgba(30,142,62,0.16)",
-    border: "rgba(80,200,120,0.55)",
-    text: "#ffffff",
-    badge: "rgba(255,255,255,0.22)",
-  },
-  {
-    solid: "#d01884",
-    tint: "rgba(208,24,132,0.16)",
-    border: "rgba(255,100,190,0.55)",
-    text: "#ffffff",
-    badge: "rgba(255,255,255,0.22)",
-  },
-  {
-    solid: "#9334e6",
-    tint: "rgba(147,52,230,0.16)",
-    border: "rgba(190,130,255,0.55)",
-    text: "#ffffff",
-    badge: "rgba(255,255,255,0.22)",
-  },
-  {
-    solid: "#0e9fb5",
-    tint: "rgba(14,159,181,0.16)",
-    border: "rgba(60,220,240,0.55)",
-    text: "#1b1b1f",
-    badge: "rgba(0,0,0,0.16)",
-  },
-  {
-    solid: "#d9650a",
-    tint: "rgba(217,101,10,0.16)",
-    border: "rgba(255,170,90,0.55)",
-    text: "#1b1b1f",
-    badge: "rgba(0,0,0,0.16)",
-  },
-  {
-    solid: "#5f6368",
-    tint: "rgba(95,99,104,0.18)",
-    border: "rgba(160,165,175,0.5)",
-    text: "#ffffff",
-    badge: "rgba(255,255,255,0.22)",
-  },
+  { solid: "#1a73e8", border: "rgba(90,155,255,0.55)" },
+  { solid: "#d93025", border: "rgba(255,110,100,0.55)" },
+  { solid: "#f9ab00", border: "rgba(249,171,0,0.55)" },
+  { solid: "#1e8e3e", border: "rgba(80,200,120,0.55)" },
+  { solid: "#d01884", border: "rgba(255,100,190,0.55)" },
+  { solid: "#9334e6", border: "rgba(190,130,255,0.55)" },
+  { solid: "#0e9fb5", border: "rgba(60,220,240,0.55)" },
+  { solid: "#d9650a", border: "rgba(255,170,90,0.55)" },
+  { solid: "#5f6368", border: "rgba(160,165,175,0.5)" },
 ];
 
 /**
@@ -109,146 +42,89 @@ function groupColor(name: string): GroupColor {
   return GROUP_COLORS[hash % GROUP_COLORS.length];
 }
 
+/** `TabList` values are strings; actor tabs already carry a unique prefix. */
+function tabFromValue(value: string): WorkspaceTab {
+  if (value === "library") return "library";
+  if (value.startsWith("actor:")) return value as ActorTab;
+  return Number(value);
+}
+
+/**
+ * Astryx's Tab renders its label unclipped (the label doubles as the width
+ * sizer), so a long video name would widen the whole strip. Truncate the
+ * visible text here and keep the full name on `aria-label`.
+ */
+function visibleLabel(label: string): string {
+  const MAX = 18;
+  return label.length > MAX ? `${label.slice(0, MAX - 1)}…` : label;
+}
+
+/**
+ * The workspace tab strip, on Astryx `TabList`.
+ *
+ * One flat strip: actor groups keep their colour as a small leading dot, but
+ * no longer have a collapsible container. Tabs close through the right-click
+ * menu (close / close others / close right) and a middle click; there is no
+ * per-tab close button because `Tab` is one button and its `endContent` may
+ * not contain interactive elements.
+ */
 export default function WorkspaceTabs({
-  groups,
   tabs,
   active,
-  collapsedGroups,
-  onToggleGroup,
   onSelect,
   onClose,
   onContextMenu,
 }: {
-  groups: WorkspaceTabGroup[];
-  /** Loose tabs: video tabs without a group, then actor film-list tabs. */
   tabs: WorkspaceTabItem[];
   active: WorkspaceTab;
-  collapsedGroups: ReadonlySet<string>;
-  onToggleGroup: (id: string) => void;
   onSelect: (tab: WorkspaceTab) => void;
   onClose: (tab: WorkspaceTab) => void;
   onContextMenu: (e: ReactMouseEvent, tab: WorkspaceTab) => void;
 }) {
-  const renderTab = ({ tab, label }: WorkspaceTabItem, color?: GroupColor) => {
-    const selected = active === tab;
-    return (
-      <div
-        key={String(tab)}
-        className={cn(
-          "group flex h-10 shrink-0 items-center border-b-2 transition-colors",
-          selected && color == null
-            ? "border-[var(--accent)]"
-            : color == null
-              ? "border-transparent"
-              : undefined,
-        )}
-        // Chrome draws the group's colour along the bottom of every member
-        // tab, including the active one; ungrouped tabs keep the app accent.
-        style={
-          color
-            ? { borderBottomColor: selected ? color.solid : color.border }
-            : undefined
-        }
-        onContextMenu={(e) => onContextMenu(e, tab)}
-      >
-        <Button
-          aria-current={selected ? "page" : undefined}
-          className={cn(
-            "h-full max-w-[260px] truncate px-3 text-sm",
-            selected ? "text-[var(--text)]" : "text-[var(--muted)]",
-          )}
-          onClick={() => onSelect(tab)}
-          title={label}
-          variant="ghost"
-        >
-          {label}
-        </Button>
-        <IconButton
-          className="mr-1 size-6 opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
-          icon={<Icon className="size-3.5" name="x" />}
-          label={`关闭 ${label}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose(tab);
-          }}
-          size="sm"
-          tooltip="关闭标签"
-          variant="ghost"
-        />
-      </div>
-    );
-  };
-
   return (
-    <nav
-      className="flex min-h-10 shrink-0 items-end gap-1 overflow-x-auto border-b border-[var(--border)] bg-[var(--panel)] px-3"
+    <TabList
       aria-label="工作区标签"
+      className="min-h-10 shrink-0 bg-[var(--panel)] px-3"
+      hasDivider
+      onChange={(value) => onSelect(tabFromValue(value))}
+      size="md"
+      value={String(active)}
     >
-      <Button
-        aria-current={active === "library" ? "page" : undefined}
-        className={cn(
-          "h-10 shrink-0 rounded-none border-b-2 px-4 text-sm",
-          active === "library"
-            ? "border-[var(--accent)] text-[var(--text)]"
-            : "border-transparent text-[var(--muted)]",
-        )}
-        onClick={() => onSelect("library")}
-        onContextMenu={(e) => onContextMenu(e, "library")}
-        variant="ghost"
-      >
-        影片库
-      </Button>
-      {groups.map((group) => {
-        const collapsed = collapsedGroups.has(group.id);
-        const containsActive = group.tabs.some((item) => item.tab === active);
-        const color = groupColor(group.label);
+      {tabs.map(({ tab, label, groupLabel }) => {
+        const color = groupLabel == null ? null : groupColor(groupLabel);
         return (
-          <div
-            key={`group:${group.id}`}
-            className={cn(
-              "flex h-10 shrink-0 items-end gap-0 rounded-t-lg border border-b-0 transition-colors",
-              !collapsed && "pl-1 pr-0.5",
-            )}
-            style={{
-              backgroundColor: collapsed ? "transparent" : color.tint,
-              borderColor: collapsed
-                ? "transparent"
-                : containsActive
-                  ? color.solid
-                  : color.border,
+          <Tab
+            aria-label={label}
+            icon={
+              color ? (
+                <span
+                  aria-hidden="true"
+                  className="size-2 shrink-0 rounded-full border"
+                  style={{ borderColor: color.border }}
+                />
+              ) : undefined
+            }
+            key={String(tab)}
+            label={visibleLabel(label)}
+            onAuxClick={(event) => {
+              if (event.button !== 1) return;
+              event.preventDefault();
+              onClose(tab);
             }}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            <Button
-              aria-expanded={!collapsed}
-              aria-label={`${group.label} 标签组，${group.tabs.length} 个标签页，${
-                collapsed ? "已折叠" : "已展开"
-              }`}
-              className="mb-1 h-8 max-w-[220px] gap-1.5 rounded-md px-2 text-xs font-medium"
-              onClick={() => onToggleGroup(group.id)}
-              style={{ backgroundColor: color.solid, color: color.text }}
-              title={`${group.label} · 演员标签组（${group.tabs.length}）· 点击${
-                collapsed ? "展开" : "折叠"
-              }`}
-              variant="ghost"
-            >
-              <span className="max-w-[140px] truncate">{group.label}</span>
-              <span
-                className="shrink-0 rounded-full px-1.5 text-[10px] leading-[16px] tabular-nums"
-                style={{ backgroundColor: color.badge }}
-              >
-                {group.tabs.length}
-              </span>
-              <Icon
-                name={collapsed ? "chevron-right" : "chevron-down"}
-                className="h-3.5 w-3.5 shrink-0 opacity-80"
-              />
-            </Button>
-            {!collapsed && group.tabs.map((item) => renderTab(item, color))}
-          </div>
+            onContextMenu={(event) => onContextMenu(event, tab)}
+            selectedIcon={
+              color ? (
+                <span
+                  aria-hidden="true"
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: color.solid }}
+                />
+              ) : undefined
+            }
+            value={String(tab)}
+          />
         );
       })}
-      {tabs.map((item) => renderTab(item))}
-    </nav>
+    </TabList>
   );
 }

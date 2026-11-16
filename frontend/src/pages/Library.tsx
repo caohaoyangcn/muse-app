@@ -29,10 +29,7 @@ import VideoGrid from "../components/VideoGrid";
 import VideoList from "../components/VideoList";
 import VideoDetailPanel from "../components/VideoDetailPanel";
 import RecentlyPlayedView from "../components/RecentlyPlayedView";
-import WorkspaceTabs, {
-  type WorkspaceTabGroup,
-  type WorkspaceTabItem,
-} from "../components/WorkspaceTabs";
+import WorkspaceTabs, { type WorkspaceTabItem } from "../components/WorkspaceTabs";
 import { client, addVideoToGroup, addVideos, addWatchDir, copyPath, createGroup, deleteGroup, listCloudConnections, openContainingFolder, openCloudPage, openVideo, pickVideoFiles, pickWatchDir, refreshStatus, refreshVolumes, renameGroup, reorderGroups, setGroupParent, setVideoGroups, suggestGroupsForVideos, videosInGroup } from "../services/desktop";
 import { invalidate } from "../services/live";
 import { useLiveQuery } from "../hooks/useLiveQuery";
@@ -121,9 +118,6 @@ export default function Library({
   // display label; films and counts are resolved by the tab's own view.
   const [actorTabs, setActorTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("library");
-  // Actor groups the user collapsed. Membership is recomputed from the open
-  // tabs, so this only carries the session's collapse decisions.
-  const [collapsedTabGroups, setCollapsedTabGroups] = useState<Set<string>>(() => new Set());
   // Browser-style visit history over the tab strip: `backStack` holds the tabs
   // we came from, `forwardStack` the ones we stepped back out of. Kept as two
   // stacks rather than an index because pruning closed tabs then needs no index
@@ -140,15 +134,6 @@ export default function Library({
   // switching tabs goes through; the auto-close effect reads it newest-last.
   const tabRecencyRef = useRef(new Map<WorkspaceTab, number>());
   const tabClockRef = useRef(0);
-  // The expand-on-activation effect must read the latest collapse set without
-  // making the set itself a dependency: collapsing the active tab's group must
-  // not immediately re-open it.
-  const collapsedTabGroupsRef = useRef(collapsedTabGroups);
-  collapsedTabGroupsRef.current = collapsedTabGroups;
-  // Which group the active tab belonged to on the previous render. Used to
-  // expand only when it *enters* a collapsed group, not on every data refresh
-  // that recomputes the same plan.
-  const activeGroupRef = useRef<string | null>(null);
 
   // Video tabs partitioned into automatic actor groups. Groups are contiguous
   // in the strip; the library and actor tabs stay outside.
@@ -336,53 +321,6 @@ export default function Library({
     setBackStack((prev) => prev.filter((tab) => !dead.has(tab)));
     setForwardStack((prev) => prev.filter((tab) => !dead.has(tab)));
   }, []);
-
-  const toggleTabGroup = useCallback((id: string) => {
-    setCollapsedTabGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  // Drop collapse decisions for groups that dissolved, so a later group with
-  // the same actor name starts expanded again.
-  useEffect(() => {
-    const live = new Set(videoTabPlan.groups.map((group) => group.id));
-    setCollapsedTabGroups((prev) => {
-      let changed = false;
-      const next = new Set<string>();
-      for (const id of prev) {
-        if (live.has(id)) next.add(id);
-        else changed = true;
-      }
-      return changed ? next : prev;
-    });
-  }, [videoTabPlan]);
-
-  // A tab can enter a collapsed group through back/forward, Ctrl+Tab or a
-  // scrape that reveals a shared actor. Expand that group so the active tab is
-  // visible. A manual collapse does not change the active group, so it stays
-  // closed.
-  useEffect(() => {
-    const group =
-      typeof activeTab === "number"
-        ? videoTabPlan.groups.find((candidate) =>
-            candidate.tabs.some((video) => video.id === activeTab),
-          )
-        : undefined;
-    const groupID = group?.id ?? null;
-    const entered = activeGroupRef.current !== groupID;
-    activeGroupRef.current = groupID;
-    if (!entered || group == null || !collapsedTabGroupsRef.current.has(group.id)) return;
-    setCollapsedTabGroups((prev) => {
-      if (!prev.has(group.id)) return prev;
-      const next = new Set(prev);
-      next.delete(group.id);
-      return next;
-    });
-  }, [activeTab, videoTabPlan]);
 
   // Keep the usage clock bounded: forget tabs that were closed by any path.
   useEffect(() => {
@@ -593,6 +531,33 @@ export default function Library({
     setActorTabs((prev) => (keepActor == null ? [] : prev.filter((n) => n === keepActor)));
   }, [detailTabs, actorTabs, selectTab, forgetTabs]);
 
+  // Close every tab to the right of `keep`, keeping `keep` itself. The library
+  // tab is always first, so right-clicking it closes the whole strip.
+  const closeTabsRight = useCallback((keep: WorkspaceTab) => {
+    const index = tabOrder.indexOf(keep);
+    if (index < 0) return;
+    const closing = tabOrder.slice(index + 1);
+    if (closing.length === 0) return;
+    // Select first so the outgoing tab's scroll position is saved before its
+    // state is dropped.
+    if (closing.includes(activeTab)) selectTab(keep);
+    const closingVideos = new Set<number>();
+    const closingActors = new Set<string>();
+    for (const tab of closing) {
+      const name = actorTabName(tab);
+      if (name != null) {
+        closingActors.add(name);
+        scrollPositionsRef.current.delete(tab);
+      } else if (typeof tab === "number") {
+        closingVideos.add(tab);
+        scrollPositionsRef.current.delete(tab);
+      }
+    }
+    forgetTabs(closing);
+    setDetailTabs((prev) => prev.filter((tab) => !closingVideos.has(tab.id)));
+    setActorTabs((prev) => prev.filter((name) => !closingActors.has(name)));
+  }, [tabOrder, activeTab, selectTab, forgetTabs]);
+
   const handleTabMenuAction = useCallback((action: TabMenuAction, tab: WorkspaceTab) => {
     const name = actorTabName(tab);
     if (action === "close" && tab !== "library") {
@@ -600,8 +565,9 @@ export default function Library({
       else closeDetail(tab as number);
     }
     else if (action === "closeOthers") closeOtherTabs(tab);
+    else if (action === "closeRight") closeTabsRight(tab);
     else if (action === "closeAll") closeAllTabs();
-  }, [closeDetail, closeActor, closeOtherTabs, closeAllTabs]);
+  }, [closeDetail, closeActor, closeOtherTabs, closeTabsRight, closeAllTabs]);
 
   const selectFilter = useCallback((next: ViewFilter) => {
     selectTab("library");
@@ -1553,25 +1519,23 @@ export default function Library({
         ? `video:${activeTab}`
         : `filter:${filter.kind}`;
 
-  // Tab strip items: actor groups for video tabs that share a performer, then
-  // loose video tabs and actor tabs. The library tab is rendered separately by
-  // WorkspaceTabs.
-  const tabStrip = useMemo(() => {
-    const item = (video: Video): WorkspaceTabItem => ({
+  // One flat strip, in visual order: the library home, actor-grouped video tabs
+  // (the group label now only drives their colour dot), loose video tabs, then
+  // actor tabs.
+  const tabStrip = useMemo<WorkspaceTabItem[]>(() => {
+    const item = (video: Video, groupLabel?: string): WorkspaceTabItem => ({
       tab: video.id as WorkspaceTab,
       label: videoDisplayName(video),
+      groupLabel,
     });
-    return {
-      groups: videoTabPlan.groups.map<WorkspaceTabGroup>((group) => ({
-        id: group.id,
-        label: group.label,
-        tabs: group.tabs.map(item),
-      })),
-      loose: [
-        ...videoTabPlan.ungrouped.map(item),
-        ...actorTabs.map((name) => ({ tab: actorTabID(name), label: name })),
-      ],
-    };
+    return [
+      { tab: "library", label: "影片库" },
+      ...videoTabPlan.groups.flatMap((group) =>
+        group.tabs.map((video) => item(video, group.label)),
+      ),
+      ...videoTabPlan.ungrouped.map((video) => item(video)),
+      ...actorTabs.map((name) => ({ tab: actorTabID(name), label: name })),
+    ];
   }, [videoTabPlan, actorTabs]);
 
   // Title shown in the tab context menu; the library tab is the home page.
@@ -1582,6 +1546,8 @@ export default function Library({
   const tabMenuLabel = tabMenuActor ?? (tabMenuVideo
     ? videoDisplayName(tabMenuVideo)
     : "影片库");
+  const tabMenuIndex = tabMenu ? tabOrder.indexOf(tabMenu.tab) : -1;
+  const tabMenuRightCount = tabMenuIndex < 0 ? 0 : tabOrder.length - tabMenuIndex - 1;
   // The video shown in the active detail tab, if the active tab is a video tab.
   const activeVideoTab = typeof activeTab === "number"
     ? detailTabs.find((tab) => tab.id === activeTab)
@@ -1652,11 +1618,8 @@ export default function Library({
       </header>
 
       <WorkspaceTabs
-        groups={tabStrip.groups}
-        tabs={tabStrip.loose}
+        tabs={tabStrip}
         active={activeTab}
-        collapsedGroups={collapsedTabGroups}
-        onToggleGroup={toggleTabGroup}
         onSelect={selectTab}
         onClose={(tab) => {
           const name = actorTabName(tab);
@@ -1926,6 +1889,7 @@ export default function Library({
           tab={tabMenu.tab}
           label={tabMenuLabel}
           tabCount={detailTabs.length + actorTabs.length}
+          rightCount={tabMenuRightCount}
           onAction={handleTabMenuAction}
           onClose={() => setTabMenu(null)}
         />
