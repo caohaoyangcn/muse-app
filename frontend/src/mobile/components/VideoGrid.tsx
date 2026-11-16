@@ -4,9 +4,9 @@ import {
   Badge,
   ClickableCard,
   Grid,
-  IconButton,
   List,
   ListItem,
+  MoreMenu,
   compactBadgeClass,
 } from "../../ui/astryx";
 import { Icon } from "../../ui/icon";
@@ -14,6 +14,7 @@ import { useVirtualRows } from "../../hooks/useVirtualRows";
 import { cn } from "../../lib/utils";
 import { coverURL } from "../../services/web";
 import { videoMeta, videoName } from "../videoDisplay";
+import { videoMenuItems, type VideoMenuActions } from "../videoMenu";
 
 /** The poster ratio. Every card shares it, so a row always has one height
  *  regardless of how long the title is — the text sits over the artwork. */
@@ -55,23 +56,6 @@ function StatusBadges({ v }: { v: Video }) {
   );
 }
 
-function CardMenu({ onOpen }: { onOpen: () => void }) {
-  return (
-    <IconButton
-      className="absolute right-2 top-2 z-20 size-8 rounded-full bg-black/55 p-0 text-white active:bg-black/80"
-      icon={<Icon className="size-4" name="more-horizontal" />}
-      label="更多操作"
-      onClick={(event) => {
-        event.stopPropagation();
-        onOpen();
-      }}
-      size="sm"
-      tooltip="更多操作"
-      variant="ghost"
-    />
-  );
-}
-
 function OverlayMeta({ v }: { v: Video }) {
   const meta = v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v);
   return (
@@ -107,11 +91,15 @@ function OverlayMeta({ v }: { v: Video }) {
 export function VideoGrid({
   videos,
   onOpen,
-  onMenu,
+  actions,
+  openMenuId,
+  onMenuOpenChange,
 }: {
   videos: Video[];
   onOpen: (v: Video) => void;
-  onMenu: (v: Video) => void;
+  actions: VideoMenuActions;
+  openMenuId: number | null;
+  onMenuOpenChange: (video: Video, open: boolean) => void;
 }) {
   const virtual = useVirtualRows({
     count: videos.length,
@@ -150,7 +138,20 @@ export function VideoGrid({
                 <OverlayMeta v={v} />
               </div>
             </AspectRatio>
-            <CardMenu onOpen={() => onMenu(v)} />
+            <div
+              className="absolute right-2 top-2 z-20 rounded-full bg-black/55"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <MoreMenu
+                icon={<Icon className="size-4 text-white" name="more-horizontal" />}
+                isMenuOpen={openMenuId === v.id}
+                items={videoMenuItems(v, actions)}
+                label="更多操作"
+                onOpenChange={(open) => onMenuOpenChange(v, open)}
+                presentation="bottom-sheet"
+                size="sm"
+              />
+            </div>
           </ClickableCard>
         ))}
       </Grid>
@@ -163,11 +164,15 @@ export function VideoGrid({
 export function VideoList({
   videos,
   onOpen,
-  onMenu,
+  actions,
+  openMenuId,
+  onMenuOpenChange,
 }: {
   videos: Video[];
   onOpen: (v: Video) => void;
-  onMenu: (v: Video) => void;
+  actions: VideoMenuActions;
+  openMenuId: number | null;
+  onMenuOpenChange: (video: Video, open: boolean) => void;
 }) {
   const virtual = useVirtualRows({
     count: videos.length,
@@ -209,18 +214,20 @@ export function VideoList({
                       {v.likeCount}
                     </span>
                   ) : null}
-                  <IconButton
-                    className="size-8 rounded-full p-0 text-[var(--muted)]"
-                    icon={<Icon className="size-4" name="more-horizontal" />}
-                    label="更多操作"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onMenu(v);
-                    }}
-                    size="sm"
-                    tooltip="更多操作"
-                    variant="ghost"
-                  />
+                  <span
+                    className="inline-flex shrink-0"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <MoreMenu
+                      icon={<Icon className="size-4 text-[var(--muted)]" name="more-horizontal" />}
+                      isMenuOpen={openMenuId === v.id}
+                      items={videoMenuItems(v, actions)}
+                      label="更多操作"
+                      onOpenChange={(open) => onMenuOpenChange(v, open)}
+                      presentation="bottom-sheet"
+                      size="sm"
+                    />
+                  </span>
                 </span>
               }
               key={v.id}

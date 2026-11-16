@@ -2,6 +2,7 @@ import type { Video } from "../../types";
 import { actorAvatarURL, actorProfileMeta } from "../../utils/format";
 import { Icon } from "../../ui/icon";
 import { VideoGrid } from "./VideoGrid";
+import type { VideoMenuActions } from "../videoMenu";
 import { useActorFilms } from "../../views/actors/useActorFilms";
 import { Avatar, EmptyState, IconButton, Spinner } from "../../ui/astryx";
 import { Button } from "../../ui/button";
@@ -12,12 +13,16 @@ export function ActorFilmsView({
   name,
   onBack,
   onOpenVideo,
-  onMenu,
+  actions,
+  openMenuId,
+  onMenuOpenChange,
 }: {
   name: string;
   onBack: () => void;
   onOpenVideo: (v: Video) => void;
-  onMenu: (v: Video) => void;
+  actions: VideoMenuActions;
+  openMenuId: number | null;
+  onMenuOpenChange: (video: Video, open: boolean) => void;
 }) {
   // A removal made on this screen goes through the shell's confirm sheet; the
   // live query is what takes the card off the list.
@@ -80,7 +85,13 @@ export function ActorFilmsView({
         ) : shown.length === 0 ? (
           <EmptyState description="换个关键词试试" title="没有匹配的影片" />
         ) : (
-          <VideoGrid onMenu={onMenu} onOpen={onOpenVideo} videos={shown} />
+          <VideoGrid
+            actions={actions}
+            onMenuOpenChange={onMenuOpenChange}
+            onOpen={onOpenVideo}
+            openMenuId={openMenuId}
+            videos={shown}
+          />
         )}
       </div>
     </div>

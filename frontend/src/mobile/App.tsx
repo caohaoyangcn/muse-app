@@ -19,7 +19,7 @@ import { ScrapeTaskView } from "./components/ScrapeTaskView";
 import { TrashView } from "./components/TrashView";
 import { ConfirmSheet } from "../ui/sheet";
 import { ToastStack, type ToastItem } from "../ui/toast";
-import { VideoActionSheet } from "./components/VideoActionSheet";
+import { type VideoMenuActions } from "./videoMenu";
 import { VideoDetailView } from "./components/VideoDetailView";
 import {
   copyText,
@@ -453,6 +453,44 @@ export default function App() {
     [toast],
   );
 
+  // The card overflow menu. MoreMenu lives on each card, so the shell only
+  // tracks which one is open: that keeps the Android back gesture closing the
+  // sheet through the same history entry as the other overlays.
+  const menuActions: VideoMenuActions = {
+    onPlay: (video) => {
+      setMenuVideo(null);
+      requestPlay(video);
+    },
+    onChoosePlayer: (video) => {
+      setMenuVideo(null);
+      setPlayerNotice(undefined);
+      setPlayerVideo(video);
+    },
+    onDetails: (video) => {
+      setMenuVideo(null);
+      openVideo(video);
+    },
+    onLike: (video) => {
+      setMenuVideo(null);
+      void like(video);
+    },
+    onEdit: (video) => {
+      setMenuVideo(null);
+      setEditVideo(video);
+    },
+    onRemove: (video) => {
+      setMenuVideo(null);
+      setRemoveTarget(video);
+    },
+  };
+
+  const handleMenuOpenChange = useCallback((video: Video, open: boolean) => {
+    setMenuVideo((current) => {
+      if (open) return video;
+      return current?.id === video.id ? null : current;
+    });
+  }, []);
+
   // The drawer switches the base content. Closing it first keeps the history
   // honest: the drawer's entry is the one navigate() replaces with the
   // destination, so back from the new section returns to the section the drawer
@@ -526,19 +564,23 @@ export default function App() {
         <ActorFilmsView
           key={route.name}
           name={route.name}
+          actions={menuActions}
           onBack={() => goBack({ kind: "tab", tab: "actors" })}
-          onMenu={setMenuVideo}
+          onMenuOpenChange={handleMenuOpenChange}
           onOpenVideo={openVideo}
+          openMenuId={menuVideo?.id ?? null}
         />
       ) : activeTab === "library" ? (
         <LibraryView
           filterOpen={filterOpen}
           filters={filters}
           keyword={keyword}
+          actions={menuActions}
           onFilterOpenChange={setFilterOpen}
           onFiltersChange={setFilters}
-          onOpenMenu={setMenuVideo}
+          onMenuOpenChange={handleMenuOpenChange}
           onOpenVideo={openVideo}
+          openMenuId={menuVideo?.id ?? null}
         />
       ) : activeTab === "actors" ? (
         <ActorIndexView onSelect={openActor} />
@@ -603,37 +645,6 @@ export default function App() {
       </Drawer>
 
       {/* Overlays */}
-      <VideoActionSheet
-        onClose={() => setMenuVideo(null)}
-        onDetails={() => {
-          if (menuVideo) openVideo(menuVideo);
-          setMenuVideo(null);
-        }}
-        onEdit={() => {
-          setEditVideo(menuVideo);
-          setMenuVideo(null);
-        }}
-        onLike={() => {
-          const target = menuVideo;
-          setMenuVideo(null);
-          if (target) void like(target);
-        }}
-        onPlay={() => {
-          if (menuVideo) requestPlay(menuVideo);
-          setMenuVideo(null);
-        }}
-        onChoosePlayer={() => {
-          setPlayerNotice(undefined);
-          setPlayerVideo(menuVideo);
-          setMenuVideo(null);
-        }}
-        onRemove={() => {
-          setRemoveTarget(menuVideo);
-          setMenuVideo(null);
-        }}
-        open={menuVideo !== null}
-        video={menuVideo}
-      />
 
       {editVideo ? (
         <EditInfoSheet

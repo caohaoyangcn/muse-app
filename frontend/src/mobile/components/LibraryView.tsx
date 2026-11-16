@@ -37,6 +37,7 @@ import {
 } from "../prefs";
 import { FilterSheet } from "./FilterSheet";
 import { VideoGrid, VideoList } from "./VideoGrid";
+import type { VideoMenuActions } from "../videoMenu";
 import { EmptyState, Spinner } from "../../ui/astryx";
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
@@ -70,7 +71,9 @@ export function LibraryView({
   filterOpen,
   onFilterOpenChange,
   onOpenVideo,
-  onOpenMenu,
+  actions,
+  openMenuId,
+  onMenuOpenChange,
 }: {
   keyword: string;
   filters: LibraryFilters;
@@ -78,7 +81,9 @@ export function LibraryView({
   filterOpen: boolean;
   onFilterOpenChange: (open: boolean) => void;
   onOpenVideo: (v: Video) => void;
-  onOpenMenu: (v: Video) => void;
+  actions: VideoMenuActions;
+  openMenuId: number | null;
+  onMenuOpenChange: (video: Video, open: boolean) => void;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>(readSortKey);
   const [sortDir, setSortDir] = useState<SortDir>(readSortDir);
@@ -319,9 +324,21 @@ export function LibraryView({
         ) : shown.length === 0 ? (
           <EmptyState description="试试减少演员或硬盘筛选" title="没有符合条件的视频" />
         ) : viewMode === "grid" ? (
-          <VideoGrid onMenu={onOpenMenu} onOpen={onOpenVideo} videos={shown} />
+          <VideoGrid
+            actions={actions}
+            onMenuOpenChange={onMenuOpenChange}
+            onOpen={onOpenVideo}
+            openMenuId={openMenuId}
+            videos={shown}
+          />
         ) : (
-          <VideoList onMenu={onOpenMenu} onOpen={onOpenVideo} videos={shown} />
+          <VideoList
+            actions={actions}
+            onMenuOpenChange={onMenuOpenChange}
+            onOpen={onOpenVideo}
+            openMenuId={openMenuId}
+            videos={shown}
+          />
         )}
       </div>
 

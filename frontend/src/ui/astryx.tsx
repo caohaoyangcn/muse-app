@@ -26,6 +26,7 @@ export {
   DropdownMenuRadioItem,
   DropdownMenuSubMenu,
 } from "@astryxdesign/core/DropdownMenu";
+export type { DropdownMenuOption } from "@astryxdesign/core/DropdownMenu";
 export { EmptyState } from "@astryxdesign/core/EmptyState";
 export { Field } from "@astryxdesign/core/Field";
 export { FormLayout } from "@astryxdesign/core/FormLayout";
