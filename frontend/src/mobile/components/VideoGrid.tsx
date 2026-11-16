@@ -1,18 +1,21 @@
-import type { CardSize, Video } from "../../types";
-import { formatDuration } from "../../utils/format";
-import { scaleBetween } from "../../utils/cardSize";
+import type { Video } from "../../types";
 import { useVirtualRows } from "../../hooks/useVirtualRows";
+import { cn } from "../../lib/utils";
 import BackupBadge from "../../ui/backup-badge";
+import { NavIcon } from "../../ui/NavIcon";
 import RestoredBadge from "../../ui/restored-badge";
 import { coverURL } from "../../services/web";
-import { MOBILE_CARD_SIZE } from "../prefs";
 import { videoMeta, videoName } from "../videoDisplay";
+
+/** The poster ratio. Every card shares it, so a row always has one height
+ *  regardless of how long the title is — the text sits over the artwork. */
+const POSTER_ASPECT = "3 / 4";
 
 function Thumb({ v }: { v: Video }) {
   if (v.status === "missing" && !v.volumeOffline) {
     return (
-      <div className="flex size-full items-center justify-center bg-[#111114] text-2xl opacity-60">
-        ⚠
+      <div className="flex size-full items-center justify-center bg-[#101013] text-[var(--danger)]">
+        <NavIcon className="size-7 opacity-80" name="alert" />
       </div>
     );
   }
@@ -27,79 +30,107 @@ function Thumb({ v }: { v: Video }) {
   );
 }
 
-function Badges({ v }: { v: Video }) {
-  const duration = formatDuration(v.durationMs);
-  // A detached drive is not a missing file: the card stays normal and carries
-  // only the warning (see the desktop VideoCard).
+/** Status pills that must be readable over artwork without a backing card. */
+function StatusBadges({ v }: { v: Video }) {
+  // A detached drive is not a missing file: the card keeps its artwork and adds
+  // the warning (matching the desktop card).
   const offline = v.volumeOffline === true;
   const sourceOffline = v.sourceId > 0 && v.sourceOffline === true;
   const missing = !offline && v.status === "missing";
+  if (!offline && !sourceOffline && !missing) return null;
   return (
-    <>
-      {offline || sourceOffline ? (
-        // One chip only: the narrow mobile card has no room for the duration
-        // beside the warning, and the warning is the more important of the two.
-        <span className="absolute bottom-1.5 right-1.5 rounded bg-[var(--danger)]/90 px-2 py-0.5 text-[11px] text-white">
-          {offline ? "⚠ 磁盘未接入" : "⚠ 网盘离线"}
-        </span>
-      ) : duration ? (
-        <span className="absolute bottom-1.5 right-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[11px] text-white">
-          {duration}
-        </span>
-      ) : null}
+    <div className="absolute left-2 top-2 flex max-w-[calc(100%-2.75rem)] flex-wrap gap-1">
       {missing ? (
-        <span className="absolute left-1.5 top-1.5 rounded bg-[var(--danger)]/90 px-2 py-0.5 text-[11px] text-white">
-          ⚠ 缺失
+        <span className="rounded-[5px] bg-[var(--danger)]/95 px-1.5 py-1 text-[10px] font-medium leading-none text-white">
+          文件缺失
         </span>
       ) : null}
-      {v.likeCount > 0 ? (
-        <span className="absolute bottom-1.5 left-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[11px] text-white">
-          ♥ {v.likeCount}
+      {offline ? (
+        <span className="rounded-[5px] bg-[var(--danger)]/95 px-1.5 py-1 text-[10px] font-medium leading-none text-white">
+          磁盘未接入
         </span>
       ) : null}
-    </>
+      {sourceOffline ? (
+        <span className="rounded-[5px] bg-[#e0b64f] px-1.5 py-1 text-[10px] font-medium leading-none text-black">
+          网盘离线
+        </span>
+      ) : null}
+    </div>
   );
 }
 
-/** The per-card overflow button; the mobile replacement for right-click. */
-function MenuButton({ onOpen }: { onOpen: () => void }) {
+function CardMenu({ onOpen, centered }: { onOpen: () => void; centered?: boolean }) {
   return (
     <button
       aria-label="更多操作"
-      className="absolute right-1 top-1 flex size-8 items-center justify-center rounded-full bg-black/60 text-base leading-none text-white backdrop-blur-sm active:bg-black/80"
+      className={cn(
+        "absolute right-2 z-20 flex size-8 items-center justify-center rounded-full bg-black/55 text-white active:bg-black/80",
+        centered ? "top-1/2 -translate-y-1/2" : "top-2",
+      )}
       onClick={(e) => {
         e.stopPropagation();
         onOpen();
       }}
       type="button"
     >
-      ⋯
+      <NavIcon className="size-4" name="more-horizontal" />
     </button>
   );
 }
 
+function OverlayMeta({ v }: { v: Video }) {
+  const meta = v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v);
+  return (
+    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent px-2.5 pb-2.5 pt-10">
+      {v.mosaicRestored || v.backedUp ? (
+        <div className="mb-1 flex flex-wrap gap-1">
+          {v.mosaicRestored ? <RestoredBadge /> : null}
+          {v.backedUp ? <BackupBadge /> : null}
+        </div>
+      ) : null}
+      <div className="line-clamp-2 text-[13px] font-semibold leading-[1.25] text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.55)]">
+        {videoName(v)}
+      </div>
+      <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10.5px] leading-none text-white/65">
+        <span className="truncate">{meta}</span>
+        {v.likeCount > 0 ? (
+          <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 tabular-nums">
+            <NavIcon className="size-2.5" name="heart" />
+            {v.likeCount}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /**
- * Fixed-width card grid. The slider sets the exact track width so every step
- * changes the cards, not only the column count; leftover width is centred.
+ * The home poster wall. A portrait phone gets two full-width columns; wider
+ * viewports add tracks rather than stretching a single card. The artwork is the
+ * card — the title and metadata sit on a scrim over the bottom of the poster,
+ * so every card is exactly the same shape and the screen reads as a shelf of
+ * covers rather than a list of boxes.
  */
 export function VideoGrid({
   videos,
   onOpen,
   onMenu,
-  cardSize,
 }: {
   videos: Video[];
   onOpen: (v: Video) => void;
   onMenu: (v: Video) => void;
-  cardSize: CardSize;
 }) {
   const virtual = useVirtualRows({
     count: videos.length,
-    minColumnWidth: cardSize,
-    measureKey: cardSize,
+    minColumnWidth: 136,
+    maxColumns: 4,
+    measureKey: "cinematic",
   });
-  const { startIndex, endIndex, columns, windowed, offsetTop, totalHeight } = virtual;
-  const gap = Math.round(scaleBetween(cardSize, MOBILE_CARD_SIZE, 10, 14));
+  // Portrait phones settle on two columns; the track floor keeps that default
+  // while a tablet or landscape phone earns more columns. Before the first
+  // measurement the fallback is the two-column phone layout.
+  const columns = virtual.columns > 0 ? virtual.columns : 2;
+  const { startIndex, endIndex, windowed, offsetTop, totalHeight } = virtual;
 
   return (
     <div
@@ -109,63 +140,48 @@ export function VideoGrid({
     >
       <div
         ref={virtual.windowRef}
-        className="grid"
+        className="grid gap-2.5"
         style={{
-          gridTemplateColumns: `repeat(${columns > 0 ? columns : "auto-fill"}, min(${cardSize}px, 100%))`,
-          justifyContent: "center",
-          columnGap: gap,
-          rowGap: gap,
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
           ...(windowed ? { position: "absolute", top: offsetTop, left: 0, right: 0 } : null),
         }}
       >
         {videos.slice(startIndex, endIndex).map((v) => (
-          <button
-            className="relative overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] text-left active:scale-[0.98]"
-            key={v.id}
-            onClick={() => onOpen(v)}
-            type="button"
-          >
-            <div className="relative aspect-video bg-[#111114]">
-              <Thumb v={v} />
-              <Badges v={v} />
-              <MenuButton onOpen={() => onMenu(v)} />
-            </div>
-            <div className="px-2.5 pb-2.5 pt-2">
-              <div className="flex min-w-0 items-center gap-1.5">
-                <div className="truncate text-[13px] font-medium">{videoName(v)}</div>
-                {v.mosaicRestored && <RestoredBadge />}
-              {v.backedUp && <BackupBadge />}
-                {v.backedUp && <BackupBadge />}
+          <article className="relative" key={v.id}>
+            <button
+              className="block w-full overflow-hidden rounded-[var(--radius)] border border-white/[0.07] bg-[#101013] text-left transition-transform duration-150 active:scale-[0.985]"
+              onClick={() => onOpen(v)}
+              type="button"
+            >
+              <div className="relative" style={{ aspectRatio: POSTER_ASPECT }}>
+                <Thumb v={v} />
+                <StatusBadges v={v} />
+                <OverlayMeta v={v} />
               </div>
-              <div className="truncate text-xs text-[var(--muted)]">
-                {v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v)}
-              </div>
-            </div>
-          </button>
+            </button>
+            <CardMenu onOpen={() => onMenu(v)} />
+          </article>
         ))}
       </div>
     </div>
   );
 }
 
+/** The compact list. Rows keep one line of title so the shared row windowing
+ *  still measures a single uniform height. */
 export function VideoList({
   videos,
   onOpen,
   onMenu,
-  cardSize,
 }: {
   videos: Video[];
   onOpen: (v: Video) => void;
   onMenu: (v: Video) => void;
-  cardSize: CardSize;
 }) {
-  // The list has no column width to derive from, so the card width is scaled
-  // into a row thumbnail and clamped to keep text readable.
-  const thumbWidth = Math.min(150, Math.max(72, Math.round(cardSize * 0.6)));
   const virtual = useVirtualRows({
     count: videos.length,
     fixedColumns: 1,
-    measureKey: cardSize,
+    measureKey: "cinematic-list",
   });
   const { startIndex, endIndex, windowed, offsetTop, totalHeight } = virtual;
 
@@ -181,32 +197,37 @@ export function VideoList({
         style={windowed ? { position: "absolute", top: offsetTop, left: 0, right: 0 } : undefined}
       >
         {videos.slice(startIndex, endIndex).map((v) => (
-          <button
-            className="relative flex items-center gap-3 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-2 pr-11 text-left active:scale-[0.99]"
-            key={v.id}
-            onClick={() => onOpen(v)}
-            type="button"
-          >
-            <div
-              className="relative aspect-video shrink-0 overflow-hidden rounded-md bg-[#111114]"
-              style={{ width: thumbWidth }}
+          <article className="relative" key={v.id}>
+            <button
+              className="flex w-full items-center gap-3 rounded-[var(--radius)] border border-white/[0.07] bg-[var(--card)]/55 p-2 pr-11 text-left active:scale-[0.99]"
+              onClick={() => onOpen(v)}
+              type="button"
             >
-              <Thumb v={v} />
-              <Badges v={v} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-1.5">
-                <div className="truncate text-[14px] font-medium">{videoName(v)}</div>
-                {v.mosaicRestored && <RestoredBadge />}
-              {v.backedUp && <BackupBadge />}
-                {v.backedUp && <BackupBadge />}
+              <div className="relative aspect-video w-[42%] shrink-0 overflow-hidden rounded-[7px] bg-[#101013]">
+                <Thumb v={v} />
+                <StatusBadges v={v} />
               </div>
-              <div className="truncate text-xs text-[var(--muted)]">
-                {v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v)}
+              <div className="min-w-0 flex-1 py-0.5">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <div className="truncate text-[14px] font-medium">{videoName(v)}</div>
+                  {v.mosaicRestored && <RestoredBadge />}
+                  {v.backedUp && <BackupBadge />}
+                </div>
+                <div className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-[var(--muted)]">
+                  <span className="truncate">
+                    {v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v)}
+                  </span>
+                  {v.likeCount > 0 ? (
+                    <span className="inline-flex shrink-0 items-center gap-0.5 tabular-nums">
+                      <NavIcon className="size-2.5" name="heart" />
+                      {v.likeCount}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            </div>
-            <MenuButton onOpen={() => onMenu(v)} />
-          </button>
+            </button>
+            <CardMenu centered onOpen={() => onMenu(v)} />
+          </article>
         ))}
       </div>
     </div>

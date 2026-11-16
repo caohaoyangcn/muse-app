@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Video } from "../types";
+import { NO_FILTERS, type LibraryFilters } from "./libraryFilters";
 import ErrorBoundary from "../ui/error-boundary";
 import { Drawer, DrawerRow, DrawerSection } from "../ui/drawer";
 import { NavIcon, type NavIconName } from "../ui/NavIcon";
@@ -95,7 +96,11 @@ export default function App() {
   );
   const [keyword, setKeyword] = useState("");
   const [search, setSearch] = useState("");
-  const [filterGroupId, setFilterGroupId] = useState<number | "all">("all");
+  // The library's conditions live in the shell so opening a video and coming
+  // back does not silently clear them. The sheet itself is an overlay too, so
+  // the back gesture closes it instead of leaving the screen.
+  const [filters, setFilters] = useState<LibraryFilters>(NO_FILTERS);
+  const [filterOpen, setFilterOpen] = useState(false);
   // The slide-out drawer is an overlay like the sheets: open while the user is
   // choosing a section, closed by a tap outside, Escape, or the back gesture.
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -236,6 +241,7 @@ export default function App() {
       setPlayerVideo(null);
       setPlayerNotice(undefined);
       setDrawerOpen(false);
+      setFilterOpen(false);
 
       if (state?.museModal) {
         // Forward can land on a sheet entry, but the sheet's data is gone.
@@ -260,7 +266,8 @@ export default function App() {
     editVideo !== null ||
     menuVideo !== null ||
     removeTarget !== null ||
-    drawerOpen;
+    drawerOpen ||
+    filterOpen;
   useEffect(() => {
     const state = navState();
     if (overlayOpen && !state.museModal) {
@@ -451,6 +458,7 @@ export default function App() {
   const selectTab = useCallback(
     (next: Tab) => {
       setDrawerOpen(false);
+      setFilterOpen(false);
       setKeyword("");
       setSearch("");
       navigate({ kind: "tab", tab: next });
@@ -521,9 +529,11 @@ export default function App() {
         />
       ) : activeTab === "library" ? (
         <LibraryView
-          filterGroupId={filterGroupId}
+          filterOpen={filterOpen}
+          filters={filters}
           keyword={keyword}
-          onFilterGroupChange={setFilterGroupId}
+          onFilterOpenChange={setFilterOpen}
+          onFiltersChange={setFilters}
           onOpenMenu={setMenuVideo}
           onOpenVideo={openVideo}
         />

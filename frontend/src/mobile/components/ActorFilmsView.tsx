@@ -1,9 +1,7 @@
-import { useState } from "react";
-
-import type { CardSize, Video } from "../../types";
+import type { Video } from "../../types";
 import { actorAvatarURL, actorProfileMeta } from "../../utils/format";
-import { readCardSize } from "../prefs";
 import { EmptyState, ErrorState, Loading } from "./States";
+import { NavIcon } from "../../ui/NavIcon";
 import { VideoGrid } from "./VideoGrid";
 import { useActorFilms } from "../../views/actors/useActorFilms";
 
@@ -32,20 +30,17 @@ export function ActorFilmsView({
     error,
     reload,
   } = useActorFilms(name);
-  // No size switcher on this screen, but it honours the library's choice so the
-  // two grids match. Read once on mount: the view remounts on each navigation.
-  const [cardSize] = useState<CardSize>(readCardSize);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b border-[var(--border)] px-2 py-2">
         <button
           aria-label="返回"
-          className="px-2 text-xl leading-none text-[var(--muted)]"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full text-[var(--muted)] active:bg-[var(--panel-2)]"
           onClick={onBack}
           type="button"
         >
-          ←
+          <NavIcon className="size-4" name="arrow-left" />
         </button>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {profile ? (
@@ -84,7 +79,7 @@ export function ActorFilmsView({
           value={filter}
         />
       </div>
-      <div className="scroll-area min-h-0 flex-1 px-4 py-3" data-scroll-key="main">
+      <div className="scroll-area min-h-0 flex-1 px-3 pb-4 pt-2" data-scroll-key="main">
         {loading ? (
           <Loading />
         ) : error ? (
@@ -94,7 +89,7 @@ export function ActorFilmsView({
         ) : shown.length === 0 ? (
           <EmptyState hint="换个关键词试试" title="没有匹配的影片" />
         ) : (
-          <VideoGrid cardSize={cardSize} onMenu={onMenu} onOpen={onOpenVideo} videos={shown} />
+          <VideoGrid onMenu={onMenu} onOpen={onOpenVideo} videos={shown} />
         )}
       </div>
     </div>

@@ -48,3 +48,15 @@ textarea {
   -webkit-overflow-scrolling: touch;
 }
 
+
+/* The applied-filter strip scrolls sideways. Hiding the bar keeps the row the
+   same height as the chips; the chips themselves are the affordance. */
+.filter-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior-x: contain;
+}
+
+.filter-scroll::-webkit-scrollbar {
+  display: none;
+}

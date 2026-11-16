@@ -16,11 +16,19 @@ export function BottomSheet({
   title,
   onClose,
   children,
+  height = "85dvh",
+  headerEnd,
 }: {
   open: boolean;
   title?: string;
   onClose: () => void;
   children: ReactNode;
+  /** A sheet that hugs its content passes "auto"; task sheets keep the default
+   *  tall surface so their rows stay in one reachable scroll area. */
+  height?: string;
+  /** Replaces the default 完成 control. A sheet with its own footer action can
+   *  use a compact close icon instead of saying "done" twice. */
+  headerEnd?: ReactNode;
 }) {
   return (
     <AstryxBottomSheet
@@ -29,13 +37,20 @@ export function BottomSheet({
       label={title ?? "操作"}
       // Sheets are edge-to-edge on purpose; each row brings its own padding.
       padding={0}
-      height="85dvh"
+      height={height}
     >
       <div className="flex items-center justify-between px-4 pb-2 pt-3">
         <div className="text-base font-semibold">{title}</div>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          完成
-        </Button>
+        {headerEnd ?? (
+          <Button
+            className="text-[13px] text-[var(--muted)]"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+          >
+            完成
+          </Button>
+        )}
       </div>
       <div className="scroll-area max-h-[70dvh] px-2 pb-[var(--safe-bottom)]">{children}</div>
     </AstryxBottomSheet>

@@ -1,23 +1,36 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { CardSize, Group, SortDir, SortKey, Video, ViewMode } from "../../types";
+import type { Group, SortDir, SortKey, Video, ViewMode } from "../../types";
+import { collectDiskOptions } from "../../utils/diskFilter";
 import { compareLastOpened } from "../../utils/sortVideos";
-import { filterVideosByKeyword } from "../../utils/videoFilter";
 import { client, videosInGroup } from "../../services/web";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
+import { cn } from "../../lib/utils";
+import { Button } from "../../ui/button";
+import { NavIcon } from "../../ui/NavIcon";
 import {
-  readCardSize,
+  buildFilterChips,
+  chipKindLabel,
+  collectActorOptions,
+  filterCount,
+  filterVideos,
+  NO_FILTERS,
+  removeFilterChip,
+  withSelectedActors,
+  withSelectedDisks,
+  type FilterChip,
+  type LibraryFilters,
+} from "../libraryFilters";
+import {
   readSortDir,
   readSortKey,
   readViewMode,
-  writeCardSize,
   writeSortDir,
   writeSortKey,
   writeViewMode,
 } from "../prefs";
 import { EmptyState, ErrorState, Loading } from "./States";
-import { GroupSheet } from "./GroupSheet";
-import { SortViewBar } from "./SortViewBar";
+import { FilterSheet } from "./FilterSheet";
 import { VideoGrid, VideoList } from "./VideoGrid";
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
@@ -26,53 +39,97 @@ const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base"
 const NO_VIDEOS: Video[] = [];
 const NO_GROUPS: Group[] = [];
 
-/** The library tab: search, group filter, sort, grid/list and the card list. */
+const SORT_LABELS: Record<SortKey, string> = {
+  createdAt: "添加时间",
+  lastOpenedAt: "最近播放",
+  fileSize: "文件大小",
+  fileName: "文件名",
+  likeCount: "点赞数",
+};
+
+/**
+ * The library tab: a cinematic poster grid, one compact control line, the
+ * applied filter chips and the filter sheet.
+ *
+ * Filter state lives in the shell (so it survives opening a video and coming
+ * back); this view is responsible for turning it into rows: selected groups are
+ * fetched as a union, selected actors and disks narrow that list locally, and
+ * the keyword remains a whole-library search intersected with the group
+ * selection.
+ */
 export function LibraryView({
   keyword,
-  filterGroupId,
+  filters,
+  onFiltersChange,
+  filterOpen,
+  onFilterOpenChange,
   onOpenVideo,
   onOpenMenu,
-  onFilterGroupChange,
 }: {
   keyword: string;
-  filterGroupId: number | "all";
+  filters: LibraryFilters;
+  onFiltersChange: (next: LibraryFilters) => void;
+  filterOpen: boolean;
+  onFilterOpenChange: (open: boolean) => void;
   onOpenVideo: (v: Video) => void;
   onOpenMenu: (v: Video) => void;
-  onFilterGroupChange: (id: number | "all") => void;
 }) {
-  const [groupSheet, setGroupSheet] = useState(false);
-  // Keyword for the group view's own box. The header search stays a
-  // whole-library query; this one only narrows the group already on screen.
-  const [groupFilter, setGroupFilter] = useState("");
-
   const [sortKey, setSortKey] = useState<SortKey>(readSortKey);
   const [sortDir, setSortDir] = useState<SortDir>(readSortDir);
   const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
-  const [cardSize, setCardSize] = useState<CardSize>(readCardSize);
 
-  // Search always spans the whole library (matching the desktop app);
-  // otherwise the selected group narrows the list.
+  const groupIds = filters.groupIds;
+  const groupKey = groupIds.join(",");
+
+  // Search always spans the whole library (matching the desktop app); the group
+  // selection then intersects it by id. With no keyword the selected groups are
+  // the source list themselves, so no redundant full-library read is needed.
   const fetchLibrary = useCallback(async () => {
-    const [list, groupList] = await Promise.all([
-      keyword
-        ? client.searchVideos(keyword)
-        : filterGroupId === "all"
-          ? client.listVideos()
-          : videosInGroup(filterGroupId),
+    const basePromise: Promise<Video[] | null> = keyword
+      ? client.searchVideos(keyword)
+      : groupIds.length === 0
+        ? client.listVideos()
+        : Promise.resolve(null);
+    const [groupList, base, groupLists] = await Promise.all([
       client.listGroups(),
+      basePromise,
+      Promise.all(groupIds.map((id) => videosInGroup(id))),
     ]);
-    return { videos: list ?? NO_VIDEOS, groups: groupList ?? NO_GROUPS };
-  }, [keyword, filterGroupId]);
+
+    let videos: Video[];
+    if (groupIds.length > 0) {
+      const union = new Map<number, Video>();
+      for (const list of groupLists) {
+        for (const video of list ?? []) union.set(video.id, video);
+      }
+      videos = keyword ? (base ?? []).filter((video) => union.has(video.id)) : [...union.values()];
+    } else {
+      videos = base ?? NO_VIDEOS;
+    }
+    return { videos, groups: groupList ?? NO_GROUPS };
+  }, [keyword, groupIds]);
 
   const { data, loading, error, reload } = useLiveQuery(
     fetchLibrary,
-    `library:${filterGroupId}:${keyword}`,
+    `library:${groupKey}:${keyword}`,
+    { keepPreviousData: true },
   );
-  const videos = data?.videos ?? NO_VIDEOS;
+  const baseVideos = data?.videos ?? NO_VIDEOS;
   const groups = data?.groups ?? NO_GROUPS;
 
+  // A group deleted on the desktop must not strand the phone behind a 404: drop
+  // ids that no longer exist once the group list has loaded.
+  useEffect(() => {
+    if (!data) return;
+    const known = new Set(groups.map((group) => group.id));
+    const kept = filters.groupIds.filter((id) => known.has(id));
+    if (kept.length !== filters.groupIds.length) {
+      onFiltersChange({ ...filters, groupIds: kept });
+    }
+  }, [data, groups, filters, onFiltersChange]);
+
   const sorted = useMemo(() => {
-    const copy = [...videos];
+    const copy = [...baseVideos];
     const dir = sortDir === "asc" ? 1 : -1;
     copy.sort((a, b) => {
       if (sortKey === "lastOpenedAt") return compareLastOpened(a, b, sortDir);
@@ -95,102 +152,191 @@ export function LibraryView({
       return cmp * dir;
     });
     return copy;
-  }, [videos, sortKey, sortDir]);
+  }, [baseVideos, sortKey, sortDir]);
 
-  const activeGroup = groups.find((g) => g.id === filterGroupId);
-  const groupView = filterGroupId !== "all";
-  // Switching groups drops the previous group's filter (re-picking the same
-  // group keeps it).
-  useEffect(() => {
-    setGroupFilter("");
-  }, [filterGroupId]);
-  const shown = useMemo(
-    () => (groupView ? filterVideosByKeyword(sorted, groupFilter) : sorted),
-    [sorted, groupFilter, groupView],
+  const actorOptions = useMemo(
+    () => withSelectedActors(collectActorOptions(baseVideos), filters.actors),
+    [baseVideos, filters.actors],
   );
-  const groupFiltering = groupView && groupFilter.trim() !== "";
-  const heading = keyword
-    ? `“${keyword}” — ${sorted.length} 个结果`
-    : groupFiltering
-      ? `匹配 ${shown.length} / 共 ${sorted.length} 个视频`
-      : filterGroupId === "all"
-        ? `${sorted.length} 个视频`
-        : `${activeGroup?.name ?? ""} — ${sorted.length} 个视频`;
+  const diskOptions = useMemo(
+    () => withSelectedDisks(collectDiskOptions(baseVideos), filters.disks),
+    [baseVideos, filters.disks],
+  );
+  const chips = useMemo(
+    () => buildFilterChips(filters, groups, diskOptions),
+    [filters, groups, diskOptions],
+  );
+  const shown = useMemo(() => filterVideos(sorted, filters), [sorted, filters]);
+  const count = filterCount(filters);
+
+  const setSort = useCallback((key: SortKey) => {
+    setSortKey(key);
+    writeSortKey(key);
+    // Changing the field resets to the field's natural "most relevant" first.
+    setSortDir("desc");
+    writeSortDir("desc");
+  }, []);
+  const setDir = useCallback((dir: SortDir) => {
+    setSortDir(dir);
+    writeSortDir(dir);
+  }, []);
+  const toggleView = useCallback(() => {
+    setViewMode((current) => {
+      const next: ViewMode = current === "grid" ? "list" : "grid";
+      writeViewMode(next);
+      return next;
+    });
+  }, []);
+
+  const resetFilters = useCallback(() => onFiltersChange(NO_FILTERS), [onFiltersChange]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4">
-      <div className="flex items-center gap-2 py-2">
-        <button
-          className="flex shrink-0 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--panel-2)] px-3 py-1.5 text-xs text-[var(--text)]"
-          onClick={() => setGroupSheet(true)}
-          type="button"
-        >
-          {filterGroupId === "all" ? "分组" : activeGroup?.name ?? "分组"} ▾
-        </button>
-        <div className="min-w-0 flex-1 truncate text-xs text-[var(--muted)]">{heading}</div>
-        {groupView ? (
-          <input
-            className="w-[8.5rem] shrink-0 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--accent)]"
-            onChange={(e) => setGroupFilter(e.target.value)}
-            placeholder="筛选本组"
-            type="search"
-            value={groupFilter}
-          />
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* One line at rest. The sheet holds the conditions; this bar only names
+          the current ones and offers the two actions used mid-scroll. */}
+      <div className="shrink-0 px-3 pb-2 pt-1.5">
+        <div className="flex items-center gap-1.5">
+          <Button
+            aria-label={count === 0 ? "筛选" : `筛选，已选 ${count} 个条件`}
+            className={cn(
+              "h-9 shrink-0 gap-1.5 rounded-full px-3 text-xs",
+              count > 0
+                ? "border-[var(--accent)] bg-[rgba(124,92,255,0.16)] text-[var(--text)]"
+                : "border-[var(--border)] bg-[var(--panel-2)] text-[var(--muted)]",
+            )}
+            onClick={() => onFilterOpenChange(true)}
+            size="sm"
+            variant="ghost"
+          >
+            <NavIcon className="size-3.5" name="filter" />
+            筛选
+            {count > 0 ? (
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-semibold leading-none text-white tabular-nums">
+                {count}
+              </span>
+            ) : null}
+          </Button>
+
+          <Button
+            aria-label={`排序：${SORT_LABELS[sortKey]} ${sortDir === "asc" ? "升序" : "降序"}，点击调整`}
+            className="h-9 min-w-0 shrink gap-1 rounded-full border-[var(--border)] bg-[var(--panel-2)] px-3 text-xs text-[var(--text)]"
+            onClick={() => onFilterOpenChange(true)}
+            size="sm"
+            variant="ghost"
+          >
+            <span className="truncate">{SORT_LABELS[sortKey]}</span>
+            <NavIcon
+              className={cn("size-3 shrink-0", sortDir === "asc" && "rotate-180")}
+              name="chevron-down"
+            />
+          </Button>
+
+          <Button
+            aria-label={viewMode === "grid" ? "切换到列表视图" : "切换到网格视图"}
+            className="size-9 shrink-0 rounded-full border-[var(--border)] bg-[var(--panel-2)] p-0 text-[var(--muted)]"
+            onClick={toggleView}
+            size="sm"
+            variant="ghost"
+          >
+            <NavIcon className="size-4" name={viewMode === "grid" ? "grid" : "list"} />
+          </Button>
+
+          <span className="ml-auto shrink-0 pl-1 text-[11px] leading-none text-[var(--muted)] tabular-nums">
+            {shown.length}
+            {shown.length !== sorted.length ? ` / ${sorted.length}` : ""} 部
+          </span>
+        </div>
+
+        {chips.length > 0 ? (
+          <div className="mt-2 flex items-center gap-2">
+            <div className="filter-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
+              {chips.map((chip) => (
+                <AppliedChip
+                  chip={chip}
+                  key={chip.id}
+                  onRemove={() => onFiltersChange(removeFilterChip(filters, chip))}
+                />
+              ))}
+            </div>
+            <Button
+              className="h-7 shrink-0 rounded-full px-2 text-[11px] text-[var(--muted)]"
+              onClick={resetFilters}
+              size="sm"
+              variant="ghost"
+            >
+              清除
+            </Button>
+          </div>
         ) : null}
       </div>
 
-      <SortViewBar
-        onSortKey={(k) => {
-          setSortKey(k);
-          writeSortKey(k);
-          setSortDir("desc");
-          writeSortDir("desc");
-        }}
-        onToggleDir={() => {
-          const next = sortDir === "asc" ? "desc" : "asc";
-          setSortDir(next);
-          writeSortDir(next);
-        }}
-        onViewMode={(m) => {
-          setViewMode(m);
-          writeViewMode(m);
-        }}
-        onCardSize={(s) => {
-          setCardSize(s);
-          writeCardSize(s);
-        }}
-        sortDir={sortDir}
-        sortKey={sortKey}
-        viewMode={viewMode}
-        cardSize={cardSize}
-      />
-
-      <div className="scroll-area min-h-0 flex-1 py-3" data-scroll-key="main">
+      <div className="scroll-area min-h-0 flex-1 px-3 pb-4 pt-2" data-scroll-key="main">
         {loading ? (
           <Loading />
         ) : error ? (
           <ErrorState message={error} onRetry={reload} />
         ) : sorted.length === 0 ? (
           <EmptyState
-            hint={keyword ? "换个关键词试试" : "在桌面端添加收藏后会出现在这里"}
-            title={keyword ? "没有匹配的视频" : "收藏库为空"}
+            hint={
+              keyword
+                ? count > 0
+                  ? "当前筛选内没有匹配的收藏，换个关键词或减少筛选"
+                  : "换个关键词试试"
+                : count > 0
+                  ? "所选条件暂无收藏，试试减少筛选"
+                  : "在桌面端添加收藏后会出现在这里"
+            }
+            title={
+              keyword
+                ? "没有匹配的视频"
+                : count > 0
+                  ? "当前筛选没有视频"
+                  : "收藏库为空"
+            }
           />
         ) : shown.length === 0 ? (
-          <EmptyState hint="换个关键词试试" title="本组没有匹配的视频" />
+          <EmptyState hint="试试减少演员或硬盘筛选" title="没有符合条件的视频" />
         ) : viewMode === "grid" ? (
-          <VideoGrid cardSize={cardSize} onMenu={onOpenMenu} onOpen={onOpenVideo} videos={shown} />
+          <VideoGrid onMenu={onOpenMenu} onOpen={onOpenVideo} videos={shown} />
         ) : (
-          <VideoList cardSize={cardSize} onMenu={onOpenMenu} onOpen={onOpenVideo} videos={shown} />
+          <VideoList onMenu={onOpenMenu} onOpen={onOpenVideo} videos={shown} />
         )}
       </div>
 
-      <GroupSheet
-        activeId={filterGroupId}
+      <FilterSheet
+        actors={actorOptions}
+        disks={diskOptions}
+        filters={filters}
         groups={groups}
-        onClose={() => setGroupSheet(false)}
-        onSelect={onFilterGroupChange}
-        open={groupSheet}
+        onChange={onFiltersChange}
+        onClose={() => onFilterOpenChange(false)}
+        onReset={resetFilters}
+        onSortDir={setDir}
+        onSortKey={setSort}
+        open={filterOpen}
+        sortDir={sortDir}
+        sortKey={sortKey}
       />
     </div>
+  );
+}
+
+function AppliedChip({ chip, onRemove }: { chip: FilterChip; onRemove: () => void }) {
+  return (
+    <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-[rgba(124,92,255,0.45)] bg-[rgba(124,92,255,0.14)] pl-2.5 pr-1">
+      <span className="text-[10px] leading-none text-[var(--muted)]">{chipKindLabel(chip.kind)}</span>
+      <span className="max-w-[9rem] truncate text-[11px] leading-none text-[var(--text)]">
+        {chip.label}
+      </span>
+      <Button
+        aria-label={`移除筛选：${chipKindLabel(chip.kind)} ${chip.label}`}
+        className="size-5 min-w-0 shrink-0 rounded-full p-0 text-[var(--muted)]"
+        onClick={onRemove}
+        size="sm"
+        variant="ghost"
+      >
+        <NavIcon className="size-3" name="x" />
+      </Button>
+    </span>
   );
 }

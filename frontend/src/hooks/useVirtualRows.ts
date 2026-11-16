@@ -41,6 +41,9 @@ export interface VirtualRowsOptions {
   /** Fixed card width in px. When set, the column count follows the
    *  container width using the same rule as `auto-fill` tracks. */
   minColumnWidth?: number;
+  /** Upper bound for an auto-fill column count (a poster wall stops growing
+   *  once its cards are wide enough). Ignored for `fixedColumns`. */
+  maxColumns?: number;
   /** Re-measure when this changes (the caller passes its current card size). */
   measureKey?: string | number;
   /** Item index to keep mounted. When it changes to something outside the
@@ -116,6 +119,7 @@ export function useVirtualRows({
   count,
   fixedColumns,
   minColumnWidth,
+  maxColumns,
   measureKey,
   revealIndex,
 }: VirtualRowsOptions): VirtualRowsState {
@@ -186,6 +190,7 @@ export function useVirtualRows({
       // available width allows; the rule is the same either way.
       const width = el.clientWidth;
       columns = Math.max(1, Math.floor((width + columnGap) / (minColumnWidth + columnGap)));
+      if (maxColumns && maxColumns > 0) columns = Math.min(columns, maxColumns);
     }
 
     const next: Metrics = { columns, itemHeight, rowGap, columnGap };
@@ -197,7 +202,7 @@ export function useVirtualRows({
     setRows((prev) =>
       prev && range && prev.first === range.first && prev.last === range.last ? prev : range,
     );
-  }, [computeRows, fixedColumns, minColumnWidth]);
+  }, [computeRows, fixedColumns, maxColumns, minColumnWidth]);
 
   // Measure before paint, so the starter render is never shown: the layout
   // effect commits the real window in the same frame. Also re-run when the
