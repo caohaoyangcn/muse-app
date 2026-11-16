@@ -13,7 +13,17 @@ import {
 import { videoDisplayName } from "../utils/videoName";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import { Badge } from "../ui/astryx";
+import {
+  Badge,
+  Banner,
+  ClickableCard,
+  MetadataList,
+  MetadataListItem,
+  RadioList,
+  RadioListItem,
+  Spinner,
+  Toolbar,
+} from "../ui/astryx";
 import {
   Dialog,
   DialogContent,
@@ -193,13 +203,10 @@ export default function VideoDetailPanel({
 
   return (
     <section className="mx-auto flex min-h-full w-full max-w-[980px] flex-col gap-5 pb-8">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="min-w-0 break-words text-xl font-semibold">{videoDisplayName(video)}</h2>
-          {video.mosaicRestored && <Badge label="马赛克破解" variant="purple" />}
-          {video.backedUp && <Badge label="已备份" variant="success" />}
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <Toolbar
+        className="border-b border-[var(--border)] px-0 pb-4"
+        endContent={
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
           {onPlay && (
             <Button
               variant="primary"
@@ -223,31 +230,46 @@ export default function VideoDetailPanel({
           <Button onClick={() => void scrape()} disabled={scraping || saving || mode === "skip"}>
             {scraping ? "重新刮削中…" : "重新刮削"}
           </Button>
-        </div>
-      </header>
+          </div>
+        }
+        label="视频详情"
+        startContent={
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 className="min-w-0 break-words text-xl font-semibold">{videoDisplayName(video)}</h2>
+            {video.mosaicRestored && <Badge label="马赛克破解" variant="purple" />}
+            {video.backedUp && <Badge label="已备份" variant="success" />}
+          </div>
+        }
+      />
 
-      {error && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border border-[var(--danger)]/50 bg-[var(--danger)]/10 p-3 text-sm text-[var(--danger)]">
-          <span className="break-words">{error}</span>
-          <Button size="sm" onClick={() => { setActionError(null); jav.reload(); }}>重试</Button>
-        </div>
-      )}
+      {error ? (
+        <Banner
+          endContent={
+            <Button onClick={() => { setActionError(null); jav.reload(); }} size="sm">
+              重试
+            </Button>
+          }
+          status="error"
+          title={error}
+        />
+      ) : null}
 
       {jav.loading ? (
-        <div className="flex min-h-[320px] items-center justify-center text-[var(--muted)]">加载详情中…</div>
+        <div className="flex min-h-[320px] items-center justify-center">
+          <Spinner label="加载详情中…" size="lg" />
+        </div>
       ) : (
         <>
           <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
             <div>
-              <button
-                type="button"
-                className="flex min-h-[260px] w-full items-center justify-center overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[#111114] p-2 transition hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+              <ClickableCard
+                className="flex min-h-[260px] w-full items-center justify-center bg-[#111114] p-2"
+                label="查看大图"
                 onClick={() => setCoverPreviewOpen(true)}
-                aria-label="查看大图"
-                title="查看大图"
+                padding={0}
               >
-                <img className="max-h-[420px] max-w-full object-contain" src={videoCoverURL(video)} alt="当前封面，点击查看大图" />
-              </button>
+                <img className="max-h-[420px] max-w-full object-contain" src={videoCoverURL(video)} alt="当前封面" />
+              </ClickableCard>
               <p className="mt-2 text-xs text-[var(--muted)]">
                 当前封面：{video.coverSource === "scraped" ? "JavBus 刮削" : video.coverSource === "custom_frame" ? "用户自定义" : "自动帧"}
               </p>
@@ -256,7 +278,7 @@ export default function VideoDetailPanel({
             <div className="min-w-0">
               <h3 className="mb-3 text-sm font-semibold">JavBus 元数据</h3>
               {detail ? (
-                <dl className="grid gap-x-5 gap-y-2 sm:grid-cols-2">
+                <MetadataList columns={2} label={{ position: "top" }}>
                   {([
                     ["番号", valueOrUnknown(detail.code)],
                     ["标题", valueOrUnknown(detail.title)],
@@ -268,12 +290,9 @@ export default function VideoDetailPanel({
                     ["抓取时间", formatDateTime(detail.fetchedAt)],
                     ["是否无码", detail.isUncensored === undefined ? "未提供" : detail.isUncensored ? "是" : "否"],
                   ] as [string, string][]).map(([label, value]) => (
-                    <div className="min-w-0 border-b border-[var(--border)]/60 pb-2" key={label}>
-                      <dt className="text-xs text-[var(--muted)]">{label}</dt>
-                      <dd className="mt-0.5 break-words text-sm">{value}</dd>
-                    </div>
+                    <MetadataListItem key={label} label={label}>{value}</MetadataListItem>
                   ))}
-                </dl>
+                </MetadataList>
               ) : (
                 <p className="text-sm text-[var(--muted)]">尚未建立刮削记录。</p>
               )}
@@ -286,19 +305,16 @@ export default function VideoDetailPanel({
                 <h3 className="mb-3 text-sm font-semibold">演员</h3>
                 <div className="flex flex-wrap gap-2">
                   {actors.length > 0 ? actors.map((actor) =>
-                    onSelectActor ? (
-                      <button
-                        type="button"
-                        className="border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1 text-sm underline-offset-2 hover:border-[var(--accent)] hover:text-[var(--accent)] hover:underline"
-                        key={actor}
-                        onClick={() => onSelectActor(actor)}
-                        title={`查看 ${actor} 出演的全部影片`}
-                      >
-                        {actor}
-                      </button>
-                    ) : (
-                      <span className="border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1 text-sm" key={actor}>{actor}</span>
-                    ),
+                    <Button
+                      className="border-[var(--border)]"
+                      key={actor}
+                      onClick={onSelectActor ? () => onSelectActor(actor) : undefined}
+                      size="sm"
+                      title={`查看 ${actor} 出演的全部影片`}
+                      variant="default"
+                    >
+                      {actor}
+                    </Button>,
                   ) : <span className="text-sm text-[var(--muted)]">未提供</span>}
                 </div>
                 {onSelectActor && actors.length > 0 && (
@@ -309,7 +325,7 @@ export default function VideoDetailPanel({
                 <h3 className="mb-3 text-sm font-semibold">标签</h3>
                 <div className="flex flex-wrap gap-2">
                   {tags.length > 0 ? tags.map((tag) => (
-                    <span className="border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1 text-sm" key={tag}>{tag}</span>
+                    <Badge key={tag} label={tag} variant="neutral" />
                   )) : <span className="text-sm text-[var(--muted)]">未提供</span>}
                 </div>
               </section>
@@ -333,14 +349,19 @@ export default function VideoDetailPanel({
 
           <section className="border-t border-[var(--border)] pt-5">
             <h3 className="mb-3 text-sm font-semibold">番号与刮削模式</h3>
-            <div className="flex flex-wrap gap-4 text-sm">
-              {(["auto", "manual", "skip"] as OverrideMode[]).map((value) => (
-                <label className="inline-flex cursor-pointer items-center gap-2" key={value}>
-                  <input type="radio" name={`jav-mode-${video.id}`} checked={mode === value} onChange={() => { setMode(value); setFormTouched(true); }} />
-                  {value === "auto" ? "自动识别" : value === "manual" ? "手动番号" : "跳过刮削"}
-                </label>
-              ))}
-            </div>
+            <RadioList
+              label="刮削模式"
+              onChange={(value) => {
+                setMode(value as OverrideMode);
+                setFormTouched(true);
+              }}
+              orientation="horizontal"
+              value={mode}
+            >
+              <RadioListItem label="自动识别" value="auto" />
+              <RadioListItem label="手动番号" value="manual" />
+              <RadioListItem label="跳过刮削" value="skip" />
+            </RadioList>
             {mode === "manual" && (
               <Input
                 className="mt-3 max-w-[300px]"
@@ -361,31 +382,26 @@ export default function VideoDetailPanel({
 
           <section className="border-t border-[var(--border)] pt-5">
             <h3 className="mb-3 text-sm font-semibold">文件信息</h3>
-            <dl className="grid gap-x-5 gap-y-2 sm:grid-cols-2">
-              <div className="min-w-0 sm:col-span-2">
-                <dt className="text-xs text-[var(--muted)]">{remote ? "网盘路径" : "路径"}</dt>
-                <dd className="mt-0.5 break-all text-sm">
-                  {onRevealPath ? (
-                    <button
-                      type="button"
-                      className="text-left underline-offset-2 hover:text-[var(--accent)] hover:underline"
-                      onClick={onRevealPath}
-                      title={remote ? "在 OpenList 网页中打开" : "在文件管理器中定位该文件"}
-                    >
-                      {remote ? video.remotePath : video.path}
-                    </button>
-                  ) : (
-                    remote ? video.remotePath : video.path
-                  )}
-                </dd>
-              </div>
+            <MetadataList columns={2} label={{ position: "top" }}>
+              <MetadataListItem label={remote ? "网盘路径" : "路径"}>
+                {onRevealPath ? (
+                  <Button
+                    className="h-auto justify-start px-0 text-left"
+                    onClick={onRevealPath}
+                    size="sm"
+                    title={remote ? "在 OpenList 网页中打开" : "在文件管理器中定位该文件"}
+                    variant="ghost"
+                  >
+                    {remote ? video.remotePath : video.path}
+                  </Button>
+                ) : (
+                  remote ? video.remotePath : video.path
+                )}
+              </MetadataListItem>
               {metadataRows.map(([label, value]) => (
-                <div className="min-w-0" key={label}>
-                  <dt className="text-xs text-[var(--muted)]">{label}</dt>
-                  <dd className="mt-0.5 break-words text-sm">{value}</dd>
-                </div>
+                <MetadataListItem key={label} label={label}>{value}</MetadataListItem>
               ))}
-            </dl>
+            </MetadataList>
             {onRevealPath && (
               <p className="mt-2 text-xs text-[var(--muted)]">
                 {remote ? "点击路径可在 OpenList 网页中打开" : "点击路径可在文件管理器中定位该文件"}

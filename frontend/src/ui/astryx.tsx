@@ -33,6 +33,7 @@ export { List, ListItem } from "@astryxdesign/core/List";
 export { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 export { MoreMenu } from "@astryxdesign/core/MoreMenu";
 export { ProgressBar } from "@astryxdesign/core/ProgressBar";
+export { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 export { Section } from "@astryxdesign/core/Section";
 export { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 export { Skeleton } from "@astryxdesign/core/Skeleton";
