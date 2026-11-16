@@ -26,9 +26,12 @@ function Thumb({ v }: { v: Video }) {
     );
   }
   return (
+    // Wide packshots can carry the front and back cover side by side. A centre
+    // crop in the 3:4 poster lands on the seam and shows half of each; align
+    // right so the card shows the front cover instead.
     <img
       alt=""
-      className="size-full object-cover"
+      className="size-full object-cover object-right"
       draggable={false}
       loading="lazy"
       src={coverURL(v)}

@@ -180,7 +180,7 @@ function JavDuplicatePanel({
                       startContent={
                         <img
                           alt=""
-                          className="h-14 w-24 shrink-0 rounded-md bg-[#111114] object-cover"
+                          className="h-14 w-24 shrink-0 rounded-md bg-[#111114] object-cover object-right"
                           draggable={false}
                           loading="lazy"
                           src={coverURL(v)}
