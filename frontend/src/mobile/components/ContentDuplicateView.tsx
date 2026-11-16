@@ -9,7 +9,7 @@ import {
 import { videoMeta, videoName } from "../videoDisplay";
 import { ConfirmSheet } from "../../ui/sheet";
 import { cn } from "../../lib/utils";
-import { EmptyState, Spinner } from "../../ui/astryx";
+import { Badge, Banner, CheckboxInput, EmptyState, List, ListItem, Spinner } from "../../ui/astryx";
 import { Button } from "../../ui/button";
 
 /**
@@ -69,27 +69,26 @@ export function ContentDuplicateView({
         <span className="text-xs text-[var(--muted)]">
           {activeCount === 0 ? "没有内容重复" : `${activeCount} 组文件内容完全相同`}
         </span>
-        <label className="ml-auto flex items-center gap-1.5 text-xs text-[var(--muted)]">
-          <input
-            checked={includeIgnored}
-            className="accent-[var(--accent)]"
-            onChange={(e) => setIncludeIgnored(e.target.checked)}
-            type="checkbox"
+        <span className="ml-auto">
+          <CheckboxInput
+            label="显示已忽略"
+            onChange={setIncludeIgnored}
+            size="sm"
+            value={includeIgnored}
           />
-          显示已忽略
-        </label>
+        </span>
       </div>
 
       <div className="mb-2 flex items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-xs text-[var(--muted)]">
         <span className="min-w-0 flex-1">{scanStatusText(scan)}</span>
-        <button
-          className="shrink-0 rounded-full border border-[var(--border)] px-3 py-1 active:bg-[var(--panel-2)] disabled:opacity-50"
+        <Button
           disabled={scan?.running ?? false}
           onClick={() => void startScan()}
-          type="button"
+          size="sm"
+          variant="ghost"
         >
           重新扫描
-        </button>
+        </Button>
       </div>
 
       <div className="scroll-area min-h-0 flex-1 pb-4" data-scroll-key="main">
@@ -110,98 +109,83 @@ export function ContentDuplicateView({
                   <span className="truncate text-xs text-[var(--muted)]">
                     可省 {formatBytes(group.reclaimableBytes)}
                   </span>
-                  {group.ignored ? (
-                    <span className="border border-[var(--border)] px-1.5 py-px text-[11px] text-[var(--muted)]">
-                      已忽略
-                    </span>
-                  ) : null}
+                  {group.ignored ? <Badge label="已忽略" variant="neutral" /> : null}
                   {group.needsReverify ? (
-                    <button
-                      className="ml-auto shrink-0 rounded-full border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] active:bg-[var(--panel-2)]"
+                    <Button
+                      className="ml-auto shrink-0"
                       onClick={() => void reverify(group)}
-                      type="button"
+                      size="sm"
+                      variant="ghost"
                     >
                       重新校验
-                    </button>
+                    </Button>
                   ) : (
                     <span className="ml-auto flex shrink-0 items-center gap-1.5">
                       {!group.confirmed && !group.refuted ? (
-                        <button
-                          className="rounded-full border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] active:bg-[var(--panel-2)] disabled:opacity-50"
+                        <Button
                           disabled={group.confirming}
                           onClick={() => void confirmGroup(group)}
-                          type="button"
+                          size="sm"
+                          variant="ghost"
                         >
                           {group.confirming ? "校验中…" : "完整校验"}
-                        </button>
+                        </Button>
                       ) : null}
-                      <button
-                        className="rounded-full border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] active:bg-[var(--panel-2)] disabled:opacity-50"
+                      <Button
                         disabled={group.refuted || groupDetached(group)}
                         onClick={() => void keepAll(group)}
-                        type="button"
+                        size="sm"
+                        variant="ghost"
                       >
                         {group.members.length > 2 ? "保留全部" : "保留两份"}
-                      </button>
+                      </Button>
                     </span>
                   )}
                 </header>
                 {group.needsReverify ? (
-                  <div className="border-b border-[var(--border)] px-3 py-2 text-xs text-[var(--danger)]">
-                    ⚠ 有成员的文件在应用之外发生了变化，重新校验完成前不能据此移除记录。
-                  </div>
+                  <Banner status="error" title="有成员的文件在应用之外发生了变化，重新校验完成前不能据此移除记录。" />
                 ) : null}
                 {groupDetached(group) ? (
-                  <div className="border-b border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
-                    ⚠ 有拷贝所在的磁盘未接入；插回后再整理，避免移除还能找回的收藏。
-                  </div>
+                  <Banner status="warning" title="有拷贝所在的磁盘未接入；插回后再整理，避免移除还能找回的收藏。" />
                 ) : null}
                 {group.refuted ? (
-                  <div className="border-b border-[var(--border)] px-3 py-2 text-xs text-[var(--danger)]">
-                    ⚠ 完整校验表明这些文件内容并不相同（首尾与大小恰好一致），请勿据此删除任何文件。
-                  </div>
+                  <Banner status="error" title="完整校验表明这些文件内容并不相同（首尾与大小恰好一致），请勿据此删除任何文件。" />
                 ) : null}
-                <div className="flex flex-col divide-y divide-[var(--border)]">
+                <List className="flex flex-col">
                   {group.members.map((member) => (
-                    <div className="flex items-center gap-3 p-2" key={member.video.id}>
-                      <button
-                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                        onClick={() => onOpenVideo(member.video)}
-                        type="button"
-                      >
+                    <ListItem
+                      className={cn("border-b border-[var(--border)] last:border-b-0", member.missing && "opacity-60")}
+                      description={
+                        <>
+                          <span>{videoMeta(member.video)}</span>
+                          <span className="mt-0.5 block truncate">{memberBadge(member)}</span>
+                        </>
+                      }
+                      endContent={
+                        <Button
+                          disabled={busy || group.needsReverify || group.refuted || groupDetached(group)}
+                          onClick={() => setPendingKeep({ group, keep: member.video })}
+                          size="sm"
+                          variant="primary"
+                        >
+                          保留此份
+                        </Button>
+                      }
+                      key={member.video.id}
+                      label={videoName(member.video)}
+                      onClick={() => onOpenVideo(member.video)}
+                      startContent={
                         <img
                           alt=""
-                          className={cn(
-                            "h-14 w-24 shrink-0 rounded-md bg-[#111114] object-cover",
-                            member.missing && "opacity-60",
-                          )}
+                          className="h-14 w-24 shrink-0 rounded-md bg-[#111114] object-cover"
                           draggable={false}
                           loading="lazy"
                           src={coverURL(member.video)}
                         />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
-                            {videoName(member.video)}
-                          </span>
-                          <span className="mt-0.5 block truncate text-xs text-[var(--muted)]">
-                            {videoMeta(member.video)}
-                          </span>
-                          <span className="mt-0.5 block truncate text-[11px] text-[var(--muted)]">
-                            {memberBadge(member)}
-                          </span>
-                        </span>
-                      </button>
-                      <button
-                        className="shrink-0 rounded-[var(--radius)] bg-[var(--accent)] px-3 py-2 text-xs font-medium text-white active:opacity-90 disabled:opacity-50"
-                        disabled={busy || group.needsReverify || group.refuted || groupDetached(group)}
-                        onClick={() => setPendingKeep({ group, keep: member.video })}
-                        type="button"
-                      >
-                        保留此份
-                      </button>
-                    </div>
+                      }
+                    />
                   ))}
-                </div>
+                </List>
               </section>
             ))}
           </div>

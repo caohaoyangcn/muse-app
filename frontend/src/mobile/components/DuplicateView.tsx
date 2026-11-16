@@ -6,9 +6,18 @@ import { useJavDuplicates } from "../../views/duplicates/useJavDuplicates";
 import { videoMeta, videoName } from "../videoDisplay";
 import { ContentDuplicateView } from "./ContentDuplicateView";
 import { ConfirmSheet } from "../../ui/sheet";
-import { cn } from "../../lib/utils";
-import { EmptyState, Spinner } from "../../ui/astryx";
+import {
+  Badge,
+  CheckboxInput,
+  EmptyState,
+  List,
+  ListItem,
+  SegmentedControl,
+  SegmentedControlItem,
+  Spinner,
+} from "../../ui/astryx";
 import { Button } from "../../ui/button";
+import { cn } from "../../lib/utils";
 
 /**
  * 查重 (duplicates) on the phone holds two worklists that answer different
@@ -30,31 +39,16 @@ export function DuplicateView({
   const [tab, setTab] = useState<"jav" | "content">("jav");
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-1 border-b border-[var(--border)] px-4">
-        <button
-          className={cn(
-            "-mb-px border-b-2 px-3 py-2 text-sm",
-            tab === "jav"
-              ? "border-[var(--accent)] font-semibold"
-              : "border-transparent text-[var(--muted)]",
-          )}
-          onClick={() => setTab("jav")}
-          type="button"
+      <div className="border-b border-[var(--border)] px-4 py-2">
+        <SegmentedControl
+          className="w-full"
+          label="查重方式"
+          onChange={(value) => setTab(value as "jav" | "content")}
+          value={tab}
         >
-          同番号多版本
-        </button>
-        <button
-          className={cn(
-            "-mb-px border-b-2 px-3 py-2 text-sm",
-            tab === "content"
-              ? "border-[var(--accent)] font-semibold"
-              : "border-transparent text-[var(--muted)]",
-          )}
-          onClick={() => setTab("content")}
-          type="button"
-        >
-          内容重复
-        </button>
+          <SegmentedControlItem label="同番号多版本" value="jav" />
+          <SegmentedControlItem label="内容重复" value="content" />
+        </SegmentedControl>
       </div>
       {tab === "jav" ? (
         <JavDuplicatePanel onOpenVideo={onOpenVideo} onToast={onToast} />
@@ -114,15 +108,14 @@ function JavDuplicatePanel({
         <span className="text-xs text-[var(--muted)]">
           {activeCount === 0 ? "没有重复作品" : `${activeCount} 部作品有多个版本`}
         </span>
-        <label className="ml-auto flex items-center gap-1.5 text-xs text-[var(--muted)]">
-          <input
-            checked={includeIgnored}
-            className="accent-[var(--accent)]"
-            onChange={(e) => setIncludeIgnored(e.target.checked)}
-            type="checkbox"
+        <span className="ml-auto">
+          <CheckboxInput
+            label="显示已忽略"
+            onChange={setIncludeIgnored}
+            size="sm"
+            value={includeIgnored}
           />
-          显示已忽略
-        </label>
+        </span>
       </div>
 
       <div className="scroll-area min-h-0 flex-1 pb-4" data-scroll-key="main">
@@ -135,7 +128,7 @@ function JavDuplicatePanel({
           <div className="flex flex-col gap-3">
             {groups.map((group) => (
               <section
-                className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)]"
+                className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)]"
                 key={group.key}
               >
                 <header className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2">
@@ -146,62 +139,56 @@ function JavDuplicatePanel({
                   <span className="text-xs text-[var(--muted)]">
                     {group.videos.length} 个版本
                   </span>
-                  {group.ignored ? (
-                    <span className="border border-[var(--border)] px-1.5 py-px text-[11px] text-[var(--muted)]">
-                      已忽略
-                    </span>
-                  ) : null}
-                  <button
-                    className="ml-auto rounded-full border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] active:bg-[var(--panel-2)]"
+                  {group.ignored ? <Badge label="已忽略" variant="neutral" /> : null}
+                  <Button
+                    className="ml-auto"
                     onClick={() => void keepAll(group)}
-                    type="button"
+                    size="sm"
+                    variant="ghost"
                   >
                     {group.videos.length > 2 ? "保留全部" : "保留两者"}
-                  </button>
+                  </Button>
                 </header>
-                <div className="flex flex-col divide-y divide-[var(--border)]">
+                <List className="flex flex-col">
                   {group.videos.map((v) => (
-                    <div className="flex items-center gap-3 p-2" key={v.id}>
-                      <button
-                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                        onClick={() => onOpenVideo(v)}
-                        type="button"
-                      >
+                    <ListItem
+                      className={cn(
+                        "border-b border-[var(--border)] last:border-b-0",
+                        v.status === "missing" && !v.volumeOffline && "opacity-60",
+                      )}
+                      description={
+                        <>
+                          <span>{videoMeta(v)}</span>
+                          {v.volumeOffline ? (
+                            <span className="mt-0.5 block text-[var(--danger)]">磁盘未接入</span>
+                          ) : null}
+                        </>
+                      }
+                      endContent={
+                        <Button
+                          disabled={busy}
+                          onClick={() => setPendingKeep({ group, keep: v })}
+                          size="sm"
+                          variant="primary"
+                        >
+                          保留此版本
+                        </Button>
+                      }
+                      key={v.id}
+                      label={videoName(v)}
+                      onClick={() => onOpenVideo(v)}
+                      startContent={
                         <img
                           alt=""
-                          className={cn(
-                            "h-14 w-24 shrink-0 rounded-md bg-[#111114] object-cover",
-                            v.status === "missing" && !v.volumeOffline && "opacity-60",
-                          )}
+                          className="h-14 w-24 shrink-0 rounded-md bg-[#111114] object-cover"
                           draggable={false}
                           loading="lazy"
                           src={coverURL(v)}
                         />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
-                            {videoName(v)}
-                          </span>
-                          <span className="mt-0.5 block truncate text-xs text-[var(--muted)]">
-                            {videoMeta(v)}
-                          </span>
-                          {v.volumeOffline ? (
-                            <span className="mt-0.5 block truncate text-[11px] text-[var(--danger)]">
-                              ⚠ 磁盘未接入
-                            </span>
-                          ) : null}
-                        </span>
-                      </button>
-                      <button
-                        className="shrink-0 rounded-[var(--radius)] bg-[var(--accent)] px-3 py-2 text-xs font-medium text-white active:opacity-90"
-                        disabled={busy}
-                        onClick={() => setPendingKeep({ group, keep: v })}
-                        type="button"
-                      >
-                        保留此版本
-                      </button>
-                    </div>
+                      }
+                    />
                   ))}
-                </div>
+                </List>
               </section>
             ))}
           </div>
