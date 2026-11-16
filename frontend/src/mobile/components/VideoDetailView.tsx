@@ -167,18 +167,20 @@ export function VideoDetailView({
       />
 
       <div className="scroll-area flex-1 px-4 pb-8 pt-3" data-scroll-key="main">
-        <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)]">
-          <ClickableCard
-            className="w-full overflow-hidden bg-[#111114]"
-            label="查看封面"
-            onClick={() => setLightbox(true)}
-            padding={0}
-            variant="default"
-          >
-            <img alt="" className="block w-full object-contain" src={coverURL(v)} />
-          </ClickableCard>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+          <div className="min-w-0 md:flex-[2_1_0%]">
+            <ClickableCard
+              className="w-full overflow-hidden bg-[#111114]"
+              label="查看封面"
+              onClick={() => setLightbox(true)}
+              padding={0}
+              variant="default"
+            >
+              <img alt="" className="block w-full object-contain" src={coverURL(v)} />
+            </ClickableCard>
+          </div>
 
-          <div className="min-w-0 break-words">
+          <div className="min-w-0 break-words md:flex-[1_1_0%]">
             <div className="flex gap-2">
               <Button
                 className="flex-1 py-3"
