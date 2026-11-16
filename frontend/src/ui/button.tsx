@@ -27,7 +27,9 @@ const VARIANTS = {
 } as const;
 
 const SIZES = {
-  default: "md",
+  // `default` stays undefined so Astryx's SizeContext can supply the size from
+  // a surrounding Toolbar; an explicit `md` would override that cascade.
+  default: undefined,
   sm: "sm",
   lg: "lg",
 } as const;

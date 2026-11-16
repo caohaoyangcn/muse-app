@@ -101,6 +101,7 @@ export default function ScrapeTaskView({
           className="flex flex-wrap items-center gap-1.5"
           label="刮削状态"
           onChange={(value) => value && onStatusChange(value as ScrapeTaskStatus)}
+          size="sm"
           type="single"
           value={status}
         >

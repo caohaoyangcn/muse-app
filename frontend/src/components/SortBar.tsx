@@ -75,6 +75,7 @@ export default function SortBar({
             className="flex flex-wrap"
             label="排序字段"
             onChange={select}
+            size="sm"
             type="single"
             value={sortBy}
           >
