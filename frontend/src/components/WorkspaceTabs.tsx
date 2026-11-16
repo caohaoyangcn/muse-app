@@ -1,7 +1,9 @@
-import { X } from "lucide-react";
+
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { WorkspaceTab } from "../types";
 import { cn } from "../lib/utils";
+import { Button } from "../ui/button";
+import { IconButton } from "../ui/astryx";
 import { Icon } from "../ui/icon";
 
 /** One rendered tab in the strip: its identity plus the label shown. */
@@ -149,30 +151,30 @@ export default function WorkspaceTabs({
         }
         onContextMenu={(e) => onContextMenu(e, tab)}
       >
-        <button
-          type="button"
+        <Button
+          aria-current={selected ? "page" : undefined}
           className={cn(
             "h-full max-w-[260px] truncate px-3 text-sm",
-            selected ? "text-[var(--text)]" : "text-[var(--muted)] hover:text-[var(--text)]",
+            selected ? "text-[var(--text)]" : "text-[var(--muted)]",
           )}
-          aria-current={selected ? "page" : undefined}
           onClick={() => onSelect(tab)}
           title={label}
+          variant="ghost"
         >
           {label}
-        </button>
-        <button
-          type="button"
-          className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded text-[var(--muted)] opacity-60 transition hover:bg-[var(--border)] hover:text-[var(--text)] group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-          aria-label={`关闭 ${label}`}
-          title="关闭标签"
+        </Button>
+        <IconButton
+          className="mr-1 size-6 opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
+          icon={<Icon className="size-3.5" name="x" />}
+          label={`关闭 ${label}`}
           onClick={(e) => {
             e.stopPropagation();
             onClose(tab);
           }}
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          size="sm"
+          tooltip="关闭标签"
+          variant="ghost"
+        />
       </div>
     );
   };
@@ -182,20 +184,20 @@ export default function WorkspaceTabs({
       className="flex min-h-10 shrink-0 items-end gap-1 overflow-x-auto border-b border-[var(--border)] bg-[var(--panel)] px-3"
       aria-label="工作区标签"
     >
-      <button
-        type="button"
+      <Button
+        aria-current={active === "library" ? "page" : undefined}
         className={cn(
-          "h-10 shrink-0 border-b-2 px-4 text-sm transition-colors",
+          "h-10 shrink-0 rounded-none border-b-2 px-4 text-sm",
           active === "library"
             ? "border-[var(--accent)] text-[var(--text)]"
-            : "border-transparent text-[var(--muted)] hover:text-[var(--text)]",
+            : "border-transparent text-[var(--muted)]",
         )}
-        aria-current={active === "library" ? "page" : undefined}
         onClick={() => onSelect("library")}
         onContextMenu={(e) => onContextMenu(e, "library")}
+        variant="ghost"
       >
         影片库
-      </button>
+      </Button>
       {groups.map((group) => {
         const collapsed = collapsedGroups.has(group.id);
         const containsActive = group.tabs.some((item) => item.tab === active);
@@ -217,18 +219,18 @@ export default function WorkspaceTabs({
             }}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <button
-              type="button"
-              className="mb-1 flex h-8 max-w-[220px] items-center gap-1.5 rounded-md px-2 text-xs font-medium shadow-[0_1px_2px_rgba(0,0,0,0.28)] transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--text)]"
-              style={{ backgroundColor: color.solid, color: color.text }}
+            <Button
               aria-expanded={!collapsed}
               aria-label={`${group.label} 标签组，${group.tabs.length} 个标签页，${
                 collapsed ? "已折叠" : "已展开"
               }`}
+              className="mb-1 h-8 max-w-[220px] gap-1.5 rounded-md px-2 text-xs font-medium"
+              onClick={() => onToggleGroup(group.id)}
+              style={{ backgroundColor: color.solid, color: color.text }}
               title={`${group.label} · 演员标签组（${group.tabs.length}）· 点击${
                 collapsed ? "展开" : "折叠"
               }`}
-              onClick={() => onToggleGroup(group.id)}
+              variant="ghost"
             >
               <span className="max-w-[140px] truncate">{group.label}</span>
               <span
@@ -241,7 +243,7 @@ export default function WorkspaceTabs({
                 name={collapsed ? "chevron-right" : "chevron-down"}
                 className="h-3.5 w-3.5 shrink-0 opacity-80"
               />
-            </button>
+            </Button>
             {!collapsed && group.tabs.map((item) => renderTab(item, color))}
           </div>
         );

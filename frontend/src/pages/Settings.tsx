@@ -10,6 +10,7 @@ import type {
 import { BrowserOpenURL } from "../../wailsjs/runtime";
 import { invalidate } from "../services/live";
 import ConfirmDialog from "../components/ConfirmDialog";
+import { CheckboxInput } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { cn } from "../lib/utils";
@@ -1397,29 +1398,23 @@ function CloudSection() {
             </Field>
           </div>
 
-          <label className="mt-3 flex items-start gap-2 text-[13px] leading-relaxed">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
-              checked={draft.verifyTls}
-              onChange={(e) => updateDraft({ verifyTls: e.target.checked })}
+          <div className="mt-3">
+            <CheckboxInput
+              description="默认开启；仅自签名 OpenList 才需要关闭"
+              label="校验 HTTPS 证书"
+              onChange={(checked) => updateDraft({ verifyTls: checked })}
+              value={draft.verifyTls}
             />
-            <span>
-              校验 HTTPS 证书
-              <span className="ml-1 text-[var(--muted)]">（默认开启；仅自签名 OpenList 才需要关闭）</span>
-            </span>
-          </label>
+          </div>
 
           {draft.id > 0 && connections.find((c) => c.id === draft.id)?.hasPassword && (
-            <label className="mt-2 flex items-start gap-2 text-[13px] leading-relaxed">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
-                checked={draft.clearPassword}
-                onChange={(e) => updateDraft({ clearPassword: e.target.checked, password: "" })}
+            <div className="mt-2">
+              <CheckboxInput
+                label="清除已保存的密码（改为匿名访问）"
+                onChange={(checked) => updateDraft({ clearPassword: checked, password: "" })}
+                value={draft.clearPassword}
               />
-              <span>清除已保存的密码（改为匿名访问）</span>
-            </label>
+            </div>
           )}
 
           {!storageAvailable && (

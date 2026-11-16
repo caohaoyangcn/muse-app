@@ -216,7 +216,9 @@ if (manifest) {
 }
 
 // 裸 <button> 是"绕过 ui/Button"的信号。它只许减少，不许变多。
-const BUTTON_CEILING = 80;
+// 只剩下 GuidedTour 聚光灯的两个控制（Astryx 无 tour/spotlight 等价物，
+// 见 docs/spec/astryx-migration-plan.md 的显式例外）。
+const BUTTON_CEILING = 2;
 const bareButtons = files.filter(
   (f) => !f.rel.startsWith("src/ui/") && f.rel.endsWith(".tsx"),
 );
@@ -228,6 +230,18 @@ if (buttonCount > BUTTON_CEILING) {
   problems.push(`裸 <button> 数量 ${buttonCount} 超过上限 ${BUTTON_CEILING}（新代码请用 ui/button）`);
 } else {
   notes.push(`裸 <button>：${buttonCount} / 上限 ${BUTTON_CEILING}`);
+}
+
+// 原生 <input>/<select>/<textarea> 也应收口到 ui/input 与 Astryx 表单组件；
+// ui/ 自身是适配层，不计入。当前业务层应为 0。
+const NATIVE_FORM_CEILING = 0;
+const nativeFormCount = files
+  .filter((f) => !f.rel.startsWith("src/ui/") && f.rel.endsWith(".tsx"))
+  .reduce((sum, f) => sum + (f.source.match(/<(input|select|textarea)[\s>]/g)?.length ?? 0), 0);
+if (nativeFormCount > NATIVE_FORM_CEILING) {
+  problems.push(`裸表单控件 ${nativeFormCount} 超过上限 ${NATIVE_FORM_CEILING}（请用 ui/input 或 Astryx 表单组件）`);
+} else {
+  notes.push(`裸表单控件：${nativeFormCount} / 上限 ${NATIVE_FORM_CEILING}`);
 }
 
 notes.push(`共享视图模型：${models.length} 个（两端均已引用）`);

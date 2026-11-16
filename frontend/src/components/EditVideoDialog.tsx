@@ -3,6 +3,7 @@ import type { Video } from "../types";
 import { client, resetVideoCover, setVideoCover, setVideoScrapedCoverAllowed } from "../services/desktop";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Banner, CheckboxInput, RadioList, RadioListItem, TextArea } from "../ui/astryx";
 import { videoCoverURL } from "../utils/format";
 import {
   Dialog,
@@ -102,16 +103,17 @@ export default function EditVideoDialog({ video, onClose, onSaved }: Props) {
                 alt="当前封面"
               />
             </div>
-            <div className="flex gap-4">
-              <label className="inline-flex cursor-pointer items-center gap-1.5 text-[13px]">
-                <input type="radio" name="cover-mode" checked={mode === "auto"} onChange={() => setMode("auto")} />
-                自动封面
-              </label>
-              <label className="inline-flex cursor-pointer items-center gap-1.5 text-[13px]">
-                <input type="radio" name="cover-mode" checked={mode === "custom"} onChange={() => setMode("custom")} />
-                指定时间抽帧
-              </label>
-            </div>
+            <RadioList
+              isLabelHidden
+              label="封面模式"
+              onChange={(value) => setMode(value as CoverMode)}
+              orientation="horizontal"
+              size="sm"
+              value={mode}
+            >
+              <RadioListItem label="自动封面" value="auto" />
+              <RadioListItem label="指定时间抽帧" value="custom" />
+            </RadioList>
             {mode === "custom" ? (
               <div>
                 <label className="mb-2 block text-[13px]" htmlFor="cover-time">
@@ -157,14 +159,12 @@ export default function EditVideoDialog({ video, onClose, onSaved }: Props) {
             )}
           </div>
 
-          <label className="inline-flex cursor-pointer items-center gap-2 text-[13px]">
-            <input
-              type="checkbox"
-              checked={allowScrapedCover}
-              onChange={(e) => setAllowScrapedCover(e.target.checked)}
-            />
-            允许刮削封面替换当前封面
-          </label>
+          <CheckboxInput
+            label="允许刮削封面替换当前封面"
+            onChange={setAllowScrapedCover}
+            size="sm"
+            value={allowScrapedCover}
+          />
           <p className="mt-1 text-[13px] text-[var(--muted)]">
             默认开启。关闭后，刮削封面仍会保存，但只作为备用封面，不会覆盖这部影片当前封面。
           </p>
@@ -179,15 +179,11 @@ export default function EditVideoDialog({ video, onClose, onSaved }: Props) {
             onChange={(e) => setTitle(e.target.value)}
             placeholder={video.javCode?.trim() || video.fileName}
           />
-          <label className="mb-2 block font-medium" htmlFor="edit-notes">
-            备注
-          </label>
-          <textarea
-            id="edit-notes"
-            className="min-h-[60px] w-full resize-y rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-[inherit] text-sm text-[var(--text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+          <TextArea
+            label="备注"
+            onChange={(value) => setNotes(value)}
             rows={3}
+            value={notes}
           />
           <p className="mt-2.5 text-[13px] text-[var(--muted)]">标题留空时列表显示刮削番号；尚未刮削时显示文件名。</p>
 
@@ -204,7 +200,7 @@ export default function EditVideoDialog({ video, onClose, onSaved }: Props) {
             )}
           </div>
 
-          {error && <p className="text-[13px] text-[var(--danger)]">{error}</p>}
+          {error ? <Banner status="error" title={error} /> : null}
         </div>
 
         <DialogFooter>

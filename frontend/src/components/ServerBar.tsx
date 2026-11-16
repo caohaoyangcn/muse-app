@@ -71,14 +71,16 @@ export default function ServerBar() {
       {info?.running ? (
         <>
           {url ? (
-            <button
-              className="max-w-[260px] truncate rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] px-2.5 py-1.5 text-xs text-[var(--text)] hover:border-[var(--accent)] disabled:opacity-70"
-              title={`${url} — 点击复制`}
-              onClick={() => void copy(url)}
+            <Button
+              className="max-w-[260px] truncate border-[var(--border)] text-xs"
               disabled={copied}
+              onClick={() => void copy(url)}
+              size="sm"
+              title={`${url} — 点击复制`}
+              variant="ghost"
             >
               {copied ? "已复制 ✓" : `📱 ${url.replace(/^https?:\/\//, "")}`}
-            </button>
+            </Button>
           ) : (
             <span
               className="text-xs text-[#e0b64f]"

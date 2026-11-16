@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight, Cloud, FileVideo, FolderSearch } from "lucide-react";
 import { cn } from "../lib/utils";
+import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
@@ -190,15 +191,14 @@ const SourceCard = ({
   badge?: string;
   onClick: () => void;
 }) => (
-  <button
+  <Button
     ref={ref}
-    type="button"
     onClick={onClick}
     className={cn(
-      "group flex w-full items-center gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] px-3.5 py-3 text-left transition-colors",
+      "group h-auto w-full justify-start gap-3 whitespace-normal rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] px-3.5 py-3 text-left",
       "hover:border-[var(--accent)] hover:bg-[var(--panel-2)]",
-      "focus-visible:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]",
     )}
+    variant="ghost"
   >
     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--panel-2)] text-[var(--accent)]">
       <Icon className="h-[18px] w-[18px]" aria-hidden />
@@ -220,5 +220,5 @@ const SourceCard = ({
       </kbd>
       <ChevronRight className="h-4 w-4 transition-colors group-hover:text-[var(--accent)]" aria-hidden />
     </span>
-  </button>
+  </Button>
 );

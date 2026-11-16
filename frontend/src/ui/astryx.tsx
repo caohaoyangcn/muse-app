@@ -35,6 +35,7 @@ export { MoreMenu } from "@astryxdesign/core/MoreMenu";
 export { ProgressBar } from "@astryxdesign/core/ProgressBar";
 export { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 export { Section } from "@astryxdesign/core/Section";
+export { Selector } from "@astryxdesign/core/Selector";
 export { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 export { Skeleton } from "@astryxdesign/core/Skeleton";
 export { Slider } from "@astryxdesign/core/Slider";

@@ -6,6 +6,7 @@ import { cn } from "../lib/utils";
 import { Button } from "../ui/button";
 import { Sidebar as SidebarRoot, SidebarNav, SidebarSection } from "../ui/sidebar";
 import { Icon, type MuseIconName } from "../ui/icon";
+import { IconButton } from "../ui/astryx";
 
 interface SidebarProps {
   groups: Group[];
@@ -19,7 +20,7 @@ interface SidebarProps {
 }
 
 const ROW =
-  "relative flex h-8 w-full shrink-0 items-center gap-2 rounded-[var(--radius)] px-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]";
+  "relative flex h-8 w-full shrink-0 items-center justify-start gap-2 rounded-[var(--radius)] px-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]";
 
 function rowClass(active: boolean, extra?: string) {
   return cn(
@@ -62,20 +63,20 @@ function NavRow({
   onDrop?: (e: ReactDragEvent<HTMLButtonElement>) => void;
 }) {
   return (
-    <button
-      type="button"
-      className={rowClass(active)}
+    <Button
       aria-current={active ? "page" : undefined}
+      className={rowClass(active)}
       data-tour={dataTour}
       onClick={onClick}
       onDragOver={onDragOver}
       onDrop={onDrop}
       title={title}
+      variant="ghost"
     >
       {active && <ActiveBar />}
       <Icon name={icon} className={active ? "text-[var(--accent)]" : undefined} />
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -291,19 +292,19 @@ export default function Sidebar({
         >
           {active && <ActiveBar />}
           {hasChildren ? (
-            <button
-              type="button"
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:text-[var(--text)]"
+            <IconButton
               aria-expanded={expanded}
-              aria-label={expanded ? `折叠 ${g.name} 的子分组` : `展开 ${g.name} 的子分组`}
-              title={expanded ? "折叠子分组" : "展开子分组"}
+              className="size-4 shrink-0"
+              icon={<Icon name={expanded ? "chevron-down" : "chevron-right"} />}
+              label={expanded ? `折叠 ${g.name} 的子分组` : `展开 ${g.name} 的子分组`}
               onClick={(e) => {
                 e.stopPropagation();
                 toggleExpanded(g.id);
               }}
-            >
-              <Icon name={expanded ? "chevron-down" : "chevron-right"} />
-            </button>
+              size="sm"
+              tooltip={expanded ? "折叠子分组" : "展开子分组"}
+              variant="ghost"
+            />
           ) : (
             <span className="w-4 shrink-0" aria-hidden="true" />
           )}
@@ -316,18 +317,18 @@ export default function Sidebar({
             <span className="text-[11px] tabular-nums text-[var(--muted)] transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">
               {g.videoCount}
             </span>
-            <button
-              type="button"
-              className="pointer-events-none absolute inset-y-0 right-0 flex w-5 items-center justify-center rounded text-[var(--muted)] opacity-0 transition hover:bg-[var(--border)] hover:text-[var(--text)] group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
-              aria-label={`分组操作：${g.name}`}
-              title="分组操作"
+            <IconButton
+              className="pointer-events-none absolute inset-y-0 right-0 w-5 opacity-0 group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
+              icon={<Icon name="more-horizontal" className="size-3.5" />}
+              label={`分组操作：${g.name}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onGroupContextMenu(e, g);
               }}
-            >
-              <Icon name="more-horizontal" className="h-3.5 w-3.5" />
-            </button>
+              size="sm"
+              tooltip="分组操作"
+              variant="ghost"
+            />
           </span>
         </div>
         {expanded && children.length > 0 && (

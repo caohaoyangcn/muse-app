@@ -8,6 +8,7 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
+import { CheckboxInput, Selector } from "../ui/astryx";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -212,23 +213,19 @@ export default function CloudBrowserDialog({
         ) : (
           <>
             <div className="flex shrink-0 items-center gap-2.5 border-b border-[var(--border)] px-5 py-3">
-              <label className="sr-only" htmlFor="cloud-browser-connection">
-                网盘连接
-              </label>
-              <select
-                id="cloud-browser-connection"
-                className="h-9 min-w-[170px] max-w-[240px] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] px-2.5 text-sm text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                value={connectionID ?? ""}
-                onChange={(event) => setConnectionID(Number(event.target.value))}
-                disabled={loadingConnections || adding}
-              >
-                {(enabledConnections ?? []).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                    {item.online ? "" : "（离线）"}
-                  </option>
-                ))}
-              </select>
+              <Selector
+                isDisabled={loadingConnections || adding}
+                isLabelHidden
+                label="网盘连接"
+                onChange={(value) => setConnectionID(Number(value))}
+                options={(enabledConnections ?? []).map((item) => ({
+                  label: `${item.name}${item.online ? "" : "（离线）"}`,
+                  value: String(item.id),
+                }))}
+                size="sm"
+                value={connectionID == null ? "" : String(connectionID)}
+                width={240}
+              />
 
               <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
                 {crumbs.map((crumb, index) => (
@@ -236,17 +233,18 @@ export default function CloudBrowserDialog({
                     {index > 0 && (
                       <ChevronRight className="mx-0.5 h-3.5 w-3.5 shrink-0 text-[var(--muted)]" aria-hidden />
                     )}
-                    <button
-                      type="button"
+                    <Button
                       className={cn(
-                        "truncate rounded px-1.5 py-0.5 text-xs transition-colors hover:bg-[var(--panel)] hover:text-[var(--text)]",
+                        "h-auto truncate rounded px-1.5 py-0.5 text-xs",
                         index === crumbs.length - 1 ? "text-[var(--text)]" : "text-[var(--muted)]",
                       )}
-                      title={crumb.path}
                       onClick={() => navigate(crumb.path)}
+                      size="sm"
+                      title={crumb.path}
+                      variant="ghost"
                     >
                       {crumb.label}
-                    </button>
+                    </Button>
                   </span>
                 ))}
               </div>
@@ -306,29 +304,29 @@ export default function CloudBrowserDialog({
                 <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
                   {parent && (
                     <li>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2.5 rounded-[var(--radius)] px-3 py-2 text-left text-sm text-[var(--muted)] transition-colors hover:bg-[var(--panel)] hover:text-[var(--text)]"
+                      <Button
+                        className="h-auto w-full justify-start gap-2.5 rounded-[var(--radius)] px-3 py-2 text-sm text-[var(--muted)]"
                         onClick={() => navigate(parent)}
+                        variant="ghost"
                       >
                         <Folder className="h-4 w-4" aria-hidden />
                         返回上一级
-                      </button>
+                      </Button>
                     </li>
                   )}
                   {visibleEntries.map((entry) =>
                     entry.isDir ? (
                       <li key={entry.path}>
-                        <button
-                          type="button"
-                          className="flex w-full items-center gap-2.5 rounded-[var(--radius)] px-3 py-2 text-left transition-colors hover:bg-[var(--panel)]"
+                        <Button
+                          className="h-auto w-full justify-start gap-2.5 rounded-[var(--radius)] px-3 py-2"
                           onClick={() => navigate(entry.path)}
                           title={entry.path}
+                          variant="ghost"
                         >
                           <Folder className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
                           <span className="min-w-0 flex-1 truncate text-sm">{entry.name}</span>
                           <ChevronRight className="h-4 w-4 shrink-0 text-[var(--muted)]" aria-hidden />
-                        </button>
+                        </Button>
                       </li>
                     ) : (
                       <li key={entry.path}>
@@ -339,11 +337,12 @@ export default function CloudBrowserDialog({
                           )}
                           title={entry.path}
                         >
-                          <input
-                            type="checkbox"
-                            className="h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
-                            checked={selected.has(entry.path)}
+                          <CheckboxInput
+                            isLabelHidden
+                            label={entry.name}
                             onChange={() => toggle(entry.path)}
+                            size="sm"
+                            value={selected.has(entry.path)}
                           />
                           <FileVideo className="h-4 w-4 shrink-0 text-[var(--muted)]" aria-hidden />
                           <span className="min-w-0 flex-1 truncate text-sm">{entry.name}</span>
@@ -360,14 +359,15 @@ export default function CloudBrowserDialog({
 
             <DialogFooter className="shrink-0 items-center border-t border-[var(--border)] px-5 py-3 sm:justify-between">
               <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
-                <button
-                  type="button"
-                  className="rounded px-1 py-0.5 transition-colors hover:text-[var(--text)] disabled:opacity-50"
-                  onClick={toggleAll}
+                <Button
+                  className="px-1 py-0.5"
                   disabled={videoEntries.length === 0 || adding}
+                  onClick={toggleAll}
+                  size="sm"
+                  variant="ghost"
                 >
                   {selected.size > 0 ? "取消全选" : "全选本页视频"}
-                </button>
+                </Button>
                 <span>已选 {selected.size} 个</span>
               </div>
               <div className="flex items-center gap-2">

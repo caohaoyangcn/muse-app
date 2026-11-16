@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GroupSuggestion } from "../types";
+import { CheckboxInput } from "../ui/astryx";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -144,24 +145,23 @@ export default function GroupSuggestDialog({
                       {f.suggested.map((g) => (
                         <div
                           key={g.groupId}
-                          className={`flex cursor-pointer items-center gap-2.5 rounded-lg border p-2 px-3 ${
+                          className={`rounded-lg border p-2 px-3 ${
                             (checked[f.videoId] ?? new Set()).has(g.groupId)
                               ? "border-[var(--accent)] bg-[var(--panel)]"
                               : "border-[var(--border)] bg-[var(--panel-2)]"
                           }`}
-                          onClick={() => {
-                            const next = new Set(checked[f.videoId] ?? new Set());
-                            if (next.has(g.groupId)) next.delete(g.groupId);
-                            else next.add(g.groupId);
-                            setChecked((prev) => ({ ...prev, [f.videoId]: next }));
-                          }}
                         >
-                          <input
-                            type="checkbox"
-                            checked={(checked[f.videoId] ?? new Set()).has(g.groupId)}
-                            onChange={() => {}}
+                          <CheckboxInput
+                            label={g.name}
+                            onChange={(nextChecked) => {
+                              const next = new Set(checked[f.videoId] ?? new Set());
+                              if (nextChecked) next.add(g.groupId);
+                              else next.delete(g.groupId);
+                              setChecked((prev) => ({ ...prev, [f.videoId]: next }));
+                            }}
+                            size="sm"
+                            value={(checked[f.videoId] ?? new Set()).has(g.groupId)}
                           />
-                          <span className="min-w-0 flex-1 text-[var(--text)]">{g.name}</span>
                         </div>
                       ))}
                     </div>
