@@ -40,6 +40,9 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   size?: ButtonSize;
   /** Leading icon rendered in Astryx's icon slot (not as children). */
   icon?: React.ReactNode;
+  /** Hover hint rendered by Astryx's Tooltip. `title` is accepted as an alias so
+   *  call sites keep working, but it is not forwarded as a native attribute. */
+  tooltip?: string;
 }
 
 /** Visible text of a children tree, ignoring elements that carry no words. */
@@ -52,7 +55,7 @@ function textOf(node: React.ReactNode): string {
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", size = "default", type = "button", icon, children, ...props }, ref) => {
+  ({ className, variant = "default", size = "default", type = "button", icon, tooltip, title, children, ...props }, ref) => {
     // Astryx takes the accessible name as `label` and the visible content as
     // `children`; when the two differ it emits `aria-label` itself. Passing both
     // is therefore the whole adapter: icon+text rows keep their words, and a
@@ -66,6 +69,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         type={type}
         icon={icon}
         label={text}
+        tooltip={tooltip ?? title}
         variant={VARIANTS[variant]}
         size={SIZES[size]}
         isDisabled={disabled}

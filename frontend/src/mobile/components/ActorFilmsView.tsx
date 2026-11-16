@@ -42,6 +42,7 @@ export function ActorFilmsView({
           label="返回"
           onClick={onBack}
           size="sm"
+          tooltip="返回"
           variant="ghost"
         />
         <div className="flex min-w-0 flex-1 items-center gap-2">

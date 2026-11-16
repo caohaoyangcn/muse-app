@@ -5,10 +5,8 @@ import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
 } from "../ui/dialog";
 
 /** One file's suggestion entry, decorated with the backend video id so group
@@ -105,17 +103,17 @@ export default function GroupSuggestDialog({
   );
 
   return (
-    <Dialog open width={520} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open width={520} onOpenChange={(open) => !open && onClose()} purpose="form">
       <DialogContent>
-        <div className="flex items-baseline justify-between gap-3">
-          <DialogHeader>
-            <DialogTitle>加入分组建议</DialogTitle>
-            <DialogDescription className="sr-only">选择要加入的视频分组</DialogDescription>
-          </DialogHeader>
-          <div className="text-xs text-[var(--muted)]">
-            {index + 1} / {files.length} · {matchCount} 个建议
-          </div>
-        </div>
+        <DialogHeader
+          endContent={
+            <div className="text-xs text-[var(--muted)]">
+              {index + 1} / {files.length} · {matchCount} 个建议
+            </div>
+          }
+          subtitle={<span className="sr-only">选择要加入的视频分组</span>}
+          title="加入分组建议"
+        />
 
         <div className="mt-3 flex items-center gap-2">
           {files.length > 1 && (

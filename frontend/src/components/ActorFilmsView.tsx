@@ -127,16 +127,16 @@ export default function ActorFilmsView({
       <Toolbar
         className="sticky top-0 z-[5] mb-3 bg-[var(--bg)] px-0 py-3.5 text-[13px] text-[var(--muted)]"
         label="演员作品筛选"
+        size="sm"
         startContent={
           <div className="flex w-full items-center gap-2">
             <Button
               aria-label="返回演员列表"
               className="mr-1 h-auto px-0 text-[13px] text-[var(--muted)] hover:text-[var(--accent)]"
+              icon={<Icon className="size-3.5" name="arrow-left" />}
               onClick={onBack}
-              size="sm"
               variant="ghost"
             >
-              <Icon className="size-3.5" name="arrow-left" />
               演员
             </Button>
             <span>

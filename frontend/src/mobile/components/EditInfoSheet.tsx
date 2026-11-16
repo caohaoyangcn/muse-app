@@ -33,7 +33,7 @@ export function EditInfoSheet({
   }, [open, video.id, video.title, video.notes]);
 
   return (
-    <BottomSheet onClose={onClose} open={open} title="编辑信息">
+    <BottomSheet height="tall" onClose={onClose} open={open} title="编辑信息">
       <div className="flex flex-col gap-4 px-3 pb-2 pt-1">
         <label className="flex flex-col gap-1.5">
           <span className="text-xs text-[var(--muted)]">

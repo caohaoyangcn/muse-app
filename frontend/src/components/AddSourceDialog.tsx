@@ -6,9 +6,7 @@ import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
-  DialogTitle,
 } from "../ui/dialog";
 
 export interface CloudSummary {
@@ -101,12 +99,9 @@ export default function AddSourceDialog({
   };
 
   return (
-    <Dialog open={open} width={520} onOpenChange={(next) => !next && onClose()}>
+    <Dialog open={open} width={520} onOpenChange={(next) => !next && onClose()} padding={0} purpose="form">
       <DialogContent className="gap-0 p-0" onKeyDown={onKeyDown}>
-        <DialogHeader className="px-5 pb-3 pt-5 pr-10">
-          <DialogTitle>添加视频</DialogTitle>
-          <DialogDescription>选择来源</DialogDescription>
-        </DialogHeader>
+        <DialogHeader className="px-5 pb-3 pt-5" title="添加视频" subtitle="选择来源" />
 
         <div className="flex flex-col gap-2 px-5 pb-2">
           <SourceCard

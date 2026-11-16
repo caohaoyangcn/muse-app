@@ -85,26 +85,25 @@ export default function TrashView({
           mode === "trash" ? (
             <Button
               disabled={videos.length === 0 || emptying}
+              icon={<Icon className="size-3.5" name="archive" />}
               onClick={() => setEmptyTarget(true)}
-              size="sm"
               variant="danger"
             >
-              <Icon className="size-3.5" name="archive" />
               {emptying ? "清空中…" : "清空回收站"}
             </Button>
           ) : (
             <Button
               disabled={videos.length === 0 || clearingArchive}
+              icon={<Icon className="size-3.5" name="archive" />}
               onClick={() => setClearArchiveTarget(true)}
-              size="sm"
               variant="danger"
             >
-              <Icon className="size-3.5" name="archive" />
               {clearingArchive ? "清理中…" : "清空归档"}
             </Button>
           )
         }
         label="归档与回收站"
+        size="sm"
         startContent={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h2 className="m-0 text-[15px] font-semibold tracking-[0.1px]">归档与回收站</h2>
@@ -124,11 +123,10 @@ export default function TrashView({
             {mode === "trash" ? (
               <Button
                 className="text-xs text-[var(--muted)]"
+                icon={<Icon className="size-3" name="filter" />}
                 onClick={() => onOpenSettings("trash")}
-                size="sm"
                 variant="ghost"
               >
-                <Icon className="size-3" name="filter" />
                 保留 {retentionDays} 天
               </Button>
             ) : null}
@@ -288,11 +286,11 @@ function TrashRow({
         <span className="flex shrink-0 items-center gap-2">
           <Button
             disabled={busy || restoreBlocked}
+            icon={<Icon className="size-3.5" name="history" />}
             onClick={onRestore}
             size="sm"
-            title={restoreBlocked ? "先在设置中启用该网盘，再恢复这条收藏" : undefined}
+            tooltip={restoreBlocked ? "先在设置中启用该网盘，再恢复这条收藏" : undefined}
           >
-            <Icon className="size-3.5" name="history" />
             恢复
           </Button>
           <Button disabled={busy} onClick={onPurge} size="sm" variant="danger">

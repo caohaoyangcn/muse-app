@@ -37,7 +37,7 @@ export function VideoActionSheet({
   const missing = video?.status === "missing" && !offline && !sourceOffline;
   const unavailable = missing || offline || sourceOffline;
   return (
-    <BottomSheet onClose={onClose} open={open && !!video} title={video ? videoName(video) : undefined}>
+    <BottomSheet height="capped" onClose={onClose} open={open && !!video} title={video ? videoName(video) : undefined}>
       <List className="flex flex-col">
         <ListItem
           isDisabled={unavailable}

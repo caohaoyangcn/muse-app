@@ -132,6 +132,7 @@ export default function ActorIndexView({
         </Button>
         <div className="ml-auto w-[240px] max-w-full">
           <Input
+            aria-label="筛选演员"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             placeholder="筛选演员"

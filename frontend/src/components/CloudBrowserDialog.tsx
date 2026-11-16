@@ -13,10 +13,8 @@ import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
 } from "../ui/dialog";
 import { addCloudVideos, browseCloud, listCloudConnections } from "../services/desktop";
 import type { AddVideoResult, CloudConnection, CloudEntry } from "../types";
@@ -174,17 +172,18 @@ export default function CloudBrowserDialog({
   };
 
   return (
-    <Dialog open={open} width={780} onOpenChange={(next) => !next && onClose()}>
+    <Dialog open={open} width={780} onOpenChange={(next) => !next && onClose()} padding={0} purpose="form">
       <DialogContent className="flex h-[620px] flex-col gap-0 p-0">
-        <DialogHeader className="shrink-0 border-b border-[var(--border)] px-5 pb-3.5 pt-5 pr-12">
-          <DialogTitle className="flex items-center gap-2">
-            <Cloud className="h-[18px] w-[18px] text-[var(--accent)]" aria-hidden />
-            从网盘添加
-          </DialogTitle>
-          <DialogDescription>
-            浏览 WebDAV / OpenList 中的视频，加入收藏后仍由网盘保存原文件。Muse 不会修改网盘内容。
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHeader
+          className="shrink-0 border-b border-[var(--border)] px-5 pb-3.5 pt-5"
+          subtitle="浏览 WebDAV / OpenList 中的视频，加入收藏后仍由网盘保存原文件。Muse 不会修改网盘内容。"
+          title={
+            <span className="flex items-center gap-2">
+              <Cloud className="h-[18px] w-[18px] text-[var(--accent)]" aria-hidden />
+              从网盘添加
+            </span>
+          }
+        />
 
         {connections !== null && (enabledConnections?.length ?? 0) === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
@@ -256,8 +255,9 @@ export default function CloudBrowserDialog({
                 onClick={() => connection && void loadEntries(connection.id, path)}
                 disabled={connection == null || loadingEntries || adding}
                 aria-label="刷新目录"
+                tooltip="刷新目录"
+                icon={<RefreshCw className={cn("h-3.5 w-3.5", loadingEntries && "animate-spin")} aria-hidden />}
               >
-                <RefreshCw className={cn("h-3.5 w-3.5", loadingEntries && "animate-spin")} aria-hidden />
                 刷新
               </Button>
             </div>

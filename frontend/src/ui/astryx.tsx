@@ -7,6 +7,7 @@
  * have stable, documented props, and a wrapper would only rename them.
  */
 
+export { AlertDialog } from "@astryxdesign/core/AlertDialog";
 export { AspectRatio } from "@astryxdesign/core/AspectRatio";
 export { Avatar } from "@astryxdesign/core/Avatar";
 export { Badge } from "@astryxdesign/core/Badge";

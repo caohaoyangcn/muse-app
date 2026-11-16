@@ -20,6 +20,7 @@ export default function SearchBar({
       <Icon className="pointer-events-none absolute left-3 z-10 size-4 text-[var(--muted)]" name="search" />
       <Input
         ref={inputRef}
+        aria-label={placeholder ?? "搜索"}
         className="pl-9 pr-9"
         placeholder={placeholder}
         value={value}

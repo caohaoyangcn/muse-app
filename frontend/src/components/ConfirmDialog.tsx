@@ -1,12 +1,4 @@
-import { Button } from "../ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
+import { AlertDialog } from "../ui/astryx";
 
 interface ConfirmDialogProps {
   title: string;
@@ -18,6 +10,11 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
+/**
+ * Astryx's AlertDialog, not a Dialog with two buttons: the component owns the
+ * alertdialog role, the title/description wiring, the blocked backdrop and the
+ * focus order (Cancel is the least destructive target).
+ */
 export default function ConfirmDialog({
   title,
   message,
@@ -28,19 +25,15 @@ export default function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <Dialog open onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription className="whitespace-pre-wrap break-words">{message}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button onClick={onCancel}>{cancelLabel}</Button>
-          <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>
-            {confirmLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <AlertDialog
+      isOpen
+      actionLabel={confirmLabel}
+      actionVariant={danger ? "destructive" : "primary"}
+      cancelLabel={cancelLabel}
+      description={message}
+      onAction={onConfirm}
+      onOpenChange={(open) => !open && onCancel()}
+      title={title}
+    />
   );
 }

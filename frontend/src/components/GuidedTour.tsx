@@ -11,6 +11,7 @@ import {
   type Rect,
   type TourStep,
 } from "../utils/tour";
+import { IconButton } from "../ui/astryx";
 import { Button } from "../ui/button";
 
 const OVERLAY_Z = 500;
@@ -399,16 +400,16 @@ export default function GuidedTour({
                   {stepIndex === TOUR_STEPS.length - 1 ? "完成" : "下一步"}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="ghost"
+                <IconButton
                   className="border border-[var(--border)]"
+                  icon={<ArrowLeft className="h-4 w-4" />}
+                  label="上一步"
                   onClick={back}
-                  disabled={stepIndex === 0}
-                  aria-label="上一步"
-                  title="上一步 (←)"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
+                  isDisabled={stepIndex === 0}
+                  size="md"
+                  tooltip="上一步 (←)"
+                  variant="ghost"
+                />
               </>
             )}
           </div>

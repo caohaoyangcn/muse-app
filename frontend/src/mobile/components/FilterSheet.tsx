@@ -3,6 +3,7 @@ import type { DiskOption } from "../../utils/diskFilter";
 import {
   Divider,
   Section,
+  IconButton,
   SegmentedControl,
   SegmentedControlItem,
   ToggleButton,
@@ -73,17 +74,17 @@ export function FilterSheet({
   return (
     <BottomSheet
       headerEnd={
-        <Button
-          aria-label="关闭筛选"
+        <IconButton
           className="size-8 p-0 text-[var(--muted)]"
+          icon={<Icon className="size-4" name="x" />}
+          label="关闭筛选"
           onClick={onClose}
           size="sm"
+          tooltip="关闭筛选"
           variant="ghost"
-        >
-          <Icon className="size-4" name="x" />
-        </Button>
+        />
       }
-      height="auto"
+      height="hug"
       onClose={onClose}
       open={open}
       title="筛选与排序"

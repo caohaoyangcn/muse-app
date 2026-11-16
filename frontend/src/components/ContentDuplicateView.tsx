@@ -20,10 +20,8 @@ import { Icon } from "../ui/icon";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import {
@@ -135,6 +133,7 @@ export default function ContentDuplicatePanel({
         />
         <div className="ml-auto w-[240px] max-w-full">
           <Input
+            aria-label="筛选文件名或指纹"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             placeholder="筛选文件名或指纹"
@@ -408,14 +407,12 @@ function KeepCopyDialog({
   onConfirm: () => void;
 }) {
   return (
-    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+    <Dialog open onOpenChange={(open) => !open && onCancel()} purpose="form">
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>保留这个拷贝？</DialogTitle>
-          <DialogDescription>
-            将保留「{keep.fileName}」，并把内容相同的其他 {others.length} 个拷贝移入回收站：
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHeader
+          title="保留这个拷贝？"
+          subtitle={<>将保留「{keep.fileName}」，并把内容相同的其他 {others.length} 个拷贝移入回收站：</>}
+        />
         <List className="max-h-[220px] overflow-y-auto">
           {others.map((v) => (
             <ListItem key={v.id} label={<span title={v.path}>{v.path}</span>} />

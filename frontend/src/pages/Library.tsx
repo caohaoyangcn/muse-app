@@ -10,7 +10,7 @@ import DiskFilterBar from "../components/DiskFilterBar";
 import DropOverlay from "../components/DropOverlay";
 import DuplicateView from "../components/DuplicateView";
 import EditVideoDialog from "../components/EditVideoDialog";
-import { EmptyState, Spinner } from "../ui/astryx";
+import { EmptyState, IconButton, Spinner } from "../ui/astryx";
 import ErrorBoundary from "../ui/error-boundary";
 import FileScanButton from "../components/FileScanButton";
 import GroupContextMenu, { type GroupMenuAction } from "../components/GroupContextMenu";
@@ -1595,24 +1595,26 @@ export default function Library({
           <span className="whitespace-nowrap">Muse Video</span>
         </h1>
         <div className="flex items-center gap-1">
-          <Button
+          <IconButton
             className="px-2"
-            disabled={backStack.length === 0}
+            isDisabled={backStack.length === 0}
+            icon={<ChevronLeft className="h-4 w-4" />}
+            label="后退"
             onClick={goBack}
-            title="后退 (Alt+←)"
-            aria-label="后退"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
+            size="md"
+            tooltip="后退 (Alt+←)"
+            variant="secondary"
+          />
+          <IconButton
             className="px-2"
-            disabled={forwardStack.length === 0}
+            isDisabled={forwardStack.length === 0}
+            icon={<ChevronRight className="h-4 w-4" />}
+            label="前进"
             onClick={goForward}
-            title="前进 (Alt+→)"
-            aria-label="前进"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+            size="md"
+            tooltip="前进 (Alt+→)"
+            variant="secondary"
+          />
         </div>
         <Button data-tour="add-video" variant="primary" onClick={() => setAddSourceOpen(true)}>
           + 添加视频

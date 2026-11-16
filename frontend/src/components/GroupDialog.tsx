@@ -1,14 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "../ui/dialog";
 
 interface GroupDialogProps {
   title: string;
@@ -44,12 +37,9 @@ export default function GroupDialog({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+    <Dialog open onOpenChange={(open) => !open && onCancel()} purpose="form">
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription className="sr-only">请输入分组名称</DialogDescription>
-        </DialogHeader>
+        <DialogHeader title={title} subtitle={<span className="sr-only">请输入分组名称</span>} />
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -58,7 +48,8 @@ export default function GroupDialog({
           className="space-y-4"
         >
           <Input
-          ref={inputRef}
+            aria-label={placeholder}
+            ref={inputRef}
             value={name}
             placeholder={placeholder}
             spellCheck={false}

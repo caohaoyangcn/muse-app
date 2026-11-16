@@ -115,6 +115,7 @@ export default function VideoList({
                         className="h-5 w-5 p-0 text-[var(--muted)] hover:text-[var(--accent)]"
                         icon={<Icon className="size-3" name="heart" />}
                         label={`点赞（${v.likeCount || 0}）`}
+                        tooltip="点赞（可多次点赞）"
                         onClick={(event) => {
                           event.stopPropagation();
                           onLike(v.id);

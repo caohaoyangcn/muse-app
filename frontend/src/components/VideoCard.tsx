@@ -146,15 +146,15 @@ export default function VideoCard({
               <Button
                 aria-label="点赞"
                 className="ml-2 inline-flex h-5 items-center gap-0.5 px-1.5 text-xs leading-none text-[var(--muted)] hover:text-[var(--accent)]"
+                icon={<Icon className="size-3" name="heart" />}
                 onClick={(event) => {
                   event.stopPropagation();
                   onLike(video.id);
                 }}
                 size="sm"
-                title="点赞（可多次点赞）"
+                tooltip="点赞（可多次点赞）"
                 variant="ghost"
               >
-                <Icon className="size-3" name="heart" />
                 <span className="tabular-nums">{video.likeCount || 0}</span>
               </Button>
             </>

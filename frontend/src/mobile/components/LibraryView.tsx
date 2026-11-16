@@ -7,6 +7,7 @@ import { client, videosInGroup } from "../../services/web";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { cn } from "../../lib/utils";
 import {
+  IconButton,
   SegmentedControl,
   SegmentedControlItem,
   Toolbar,
@@ -205,7 +206,6 @@ export function LibraryView({
                 label="视图切换"
                 layout="hug"
                 onChange={(value) => setView(value as ViewMode)}
-                size="sm"
                 value={viewMode}
               >
                 <SegmentedControlItem
@@ -228,6 +228,7 @@ export function LibraryView({
             </div>
           }
           label="片库工具栏"
+          size="sm"
           startContent={
             <div className="flex items-center gap-1.5">
               <Button
@@ -238,11 +239,10 @@ export function LibraryView({
                     ? "border-[var(--accent)] bg-[rgba(124,92,255,0.16)] text-[var(--text)]"
                     : "border-[var(--border)] bg-[var(--panel-2)] text-[var(--muted)]",
                 )}
+                icon={<Icon className="size-3.5" name="filter" />}
                 onClick={() => onFilterOpenChange(true)}
-                size="sm"
                 variant="ghost"
               >
-                <Icon className="size-3.5" name="filter" />
                 筛选
                 {count > 0 ? (
                   <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--accent)] px-1 text-[10px] font-semibold leading-none text-white tabular-nums">
@@ -350,15 +350,15 @@ function AppliedChip({ chip, onRemove }: { chip: FilterChip; onRemove: () => voi
       <span className="max-w-[9rem] truncate text-[11px] leading-none text-[var(--text)]">
         {chip.label}
       </span>
-      <Button
-        aria-label={`移除筛选：${chipKindLabel(chip.kind)} ${chip.label}`}
+      <IconButton
         className="size-5 min-w-0 shrink-0 rounded-full p-0 text-[var(--muted)]"
+        icon={<Icon className="size-3" name="x" />}
+        label={`移除筛选：${chipKindLabel(chip.kind)} ${chip.label}`}
         onClick={onRemove}
         size="sm"
+        tooltip="移除筛选"
         variant="ghost"
-      >
-        <Icon className="size-3" name="x" />
-      </Button>
+      />
     </span>
   );
 }

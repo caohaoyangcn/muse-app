@@ -24,12 +24,7 @@ import {
   Spinner,
   Toolbar,
 } from "../ui/astryx";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "../ui/dialog";
+import { Dialog, DialogCloseButton, DialogContent } from "../ui/dialog";
 
 type OverrideMode = "auto" | "manual" | "skip";
 
@@ -364,6 +359,7 @@ export default function VideoDetailPanel({
             </RadioList>
             {mode === "manual" && (
               <Input
+                aria-label="番号"
                 className="mt-3 max-w-[300px]"
                 value={code}
                 onChange={(e) => { setCode(e.target.value); setFormTouched(true); }}
@@ -411,10 +407,14 @@ export default function VideoDetailPanel({
         </>
       )}
 
-      <Dialog open={coverPreviewOpen} width="min(900px, calc(100vw - 48px))" onOpenChange={setCoverPreviewOpen}>
+      <Dialog
+        open={coverPreviewOpen}
+        width="min(900px, calc(100vw - 48px))"
+        label="封面大图"
+        onOpenChange={setCoverPreviewOpen}
+      >
         <DialogContent className="p-4">
-          <DialogTitle className="sr-only">封面大图</DialogTitle>
-          <DialogDescription className="sr-only">查看当前影片的完整封面</DialogDescription>
+          <DialogCloseButton />
           <div className="flex max-h-[calc(100vh-96px)] min-h-[240px] items-center justify-center overflow-auto rounded-[var(--radius)] bg-black/30 p-2">
             <img
               className="max-h-[calc(100vh-128px)] max-w-full object-contain"

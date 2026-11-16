@@ -84,16 +84,16 @@ export default function ScrapeTaskView({
         endContent={
           <Button
             className="ml-auto"
+            icon={<Icon className="size-3.5" name={sortDir === "desc" ? "arrow-down" : "arrow-up"} />}
             onClick={toggleSort}
-            size="sm"
-            title={sortDir === "desc" ? "按创建时间升序" : "按创建时间降序"}
+            tooltip={sortDir === "desc" ? "按创建时间升序" : "按创建时间降序"}
             variant="ghost"
           >
-            <Icon className="size-3.5" name={sortDir === "desc" ? "arrow-down" : "arrow-up"} />
             创建时间
           </Button>
         }
         label="刮削任务"
+        size="sm"
         startContent={
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="mr-2 shrink-0 text-base font-semibold">刮削任务</h2>
@@ -101,7 +101,6 @@ export default function ScrapeTaskView({
           className="flex flex-wrap items-center gap-1.5"
           label="刮削状态"
           onChange={(value) => value && onStatusChange(value as ScrapeTaskStatus)}
-          size="sm"
           type="single"
           value={status}
         >

@@ -10,7 +10,7 @@ import type {
 import { BrowserOpenURL } from "../../wailsjs/runtime";
 import { invalidate } from "../services/live";
 import ConfirmDialog from "../components/ConfirmDialog";
-import { CheckboxInput, Field as AstryxField } from "../ui/astryx";
+import { CheckboxInput } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { cn } from "../lib/utils";
@@ -634,7 +634,7 @@ function JavBusSection() {
               onClick={() => setShowCookie((visible) => !visible)}
               disabled={!cookie}
               aria-label={showCookie ? "隐藏 Cookie" : "显示 Cookie"}
-              aria-pressed={showCookie}
+              tooltip={showCookie ? "隐藏 Cookie" : "显示 Cookie"}
             >
               {showCookie ? "隐藏" : "显示"}
             </Button>
@@ -942,7 +942,7 @@ function FC2Section() {
               autoComplete="off"
               spellCheck={false}
             />
-            <Button onClick={() => setShowCookie((visible) => !visible)} disabled={!cookie} aria-label={showCookie ? "隐藏 Cookie" : "显示 Cookie"} aria-pressed={showCookie}>
+            <Button onClick={() => setShowCookie((visible) => !visible)} disabled={!cookie} aria-label={showCookie ? "隐藏 Cookie" : "显示 Cookie"} tooltip={showCookie ? "隐藏 Cookie" : "显示 Cookie"}>
               {showCookie ? "隐藏" : "显示"}
             </Button>
           </div>
@@ -1320,82 +1320,76 @@ function CloudSection() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="名称" htmlFor="cloud-name">
-              <Input
-                id="cloud-name"
-                value={draft.name}
-                onChange={(e) => updateDraft({ name: e.target.value })}
-                placeholder="例如：比特球"
-                autoFocus
-              />
-            </Field>
-            <Field label="根目录" htmlFor="cloud-root">
-              <Input
-                id="cloud-root"
-                value={draft.rootPath}
-                onChange={(e) => updateDraft({ rootPath: e.target.value })}
-                placeholder="/"
-                spellCheck={false}
-              />
-            </Field>
+            <Input
+              id="cloud-name"
+              label="名称"
+              value={draft.name}
+              onChange={(e) => updateDraft({ name: e.target.value })}
+              placeholder="例如：比特球"
+              autoFocus
+            />
+            <Input
+              id="cloud-root"
+              label="根目录"
+              value={draft.rootPath}
+              onChange={(e) => updateDraft({ rootPath: e.target.value })}
+              placeholder="/"
+              spellCheck={false}
+            />
           </div>
 
           <div className="mt-3">
-            <Field label="WebDAV 地址" htmlFor="cloud-endpoint">
-              <Input
-                id="cloud-endpoint"
-                value={draft.endpoint}
-                onChange={(e) => updateDraft({ endpoint: e.target.value })}
-                placeholder="http://127.0.0.1:5244/dav"
-                spellCheck={false}
-                autoComplete="url"
-              />
-            </Field>
+            <Input
+              id="cloud-endpoint"
+              label="WebDAV 地址"
+              value={draft.endpoint}
+              onChange={(e) => updateDraft({ endpoint: e.target.value })}
+              placeholder="http://127.0.0.1:5244/dav"
+              spellCheck={false}
+              autoComplete="url"
+            />
           </div>
 
           <div className="mt-3">
-            <Field label="OpenList 网页地址（可选）" htmlFor="cloud-web">
-              <Input
-                id="cloud-web"
-                value={draft.webUrl}
-                onChange={(e) => updateDraft({ webUrl: e.target.value })}
-                placeholder="http://127.0.0.1:5244"
-                spellCheck={false}
-                autoComplete="url"
-              />
-            </Field>
+            <Input
+              id="cloud-web"
+              label="OpenList 网页地址（可选）"
+              value={draft.webUrl}
+              onChange={(e) => updateDraft({ webUrl: e.target.value })}
+              placeholder="http://127.0.0.1:5244"
+              spellCheck={false}
+              autoComplete="url"
+            />
             <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
               留空时从 WebDAV 地址推导；用于「在 OpenList 中打开」。
             </p>
           </div>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Field label="用户名（可选）" htmlFor="cloud-user">
-              <Input
-                id="cloud-user"
-                value={draft.username}
-                onChange={(e) => updateDraft({ username: e.target.value })}
-                autoComplete="username"
-                spellCheck={false}
-              />
-            </Field>
-            <Field label="密码（可选）" htmlFor="cloud-password">
-              <Input
-                id="cloud-password"
-                type="password"
-                value={draft.password}
-                onChange={(e) => updateDraft({ password: e.target.value })}
-                placeholder={
-                  !storageAvailable
-                    ? "当前平台不支持安全保存密码"
-                    : draft.id > 0
-                      ? "留空保持原密码"
-                      : "留空表示匿名访问"
-                }
-                disabled={!storageAvailable}
-                autoComplete="new-password"
-              />
-            </Field>
+            <Input
+              id="cloud-user"
+              label="用户名（可选）"
+              value={draft.username}
+              onChange={(e) => updateDraft({ username: e.target.value })}
+              autoComplete="username"
+              spellCheck={false}
+            />
+            <Input
+              id="cloud-password"
+              label="密码（可选）"
+              type="password"
+              value={draft.password}
+              onChange={(e) => updateDraft({ password: e.target.value })}
+              placeholder={
+                !storageAvailable
+                  ? "当前平台不支持安全保存密码"
+                  : draft.id > 0
+                    ? "留空保持原密码"
+                    : "留空表示匿名访问"
+              }
+              disabled={!storageAvailable}
+              autoComplete="new-password"
+            />
           </div>
 
           <div className="mt-3">
@@ -1588,22 +1582,6 @@ function CloudSection() {
         />
       )}
     </section>
-  );
-}
-
-function Field({
-  label,
-  htmlFor,
-  children,
-}: {
-  label: string;
-  htmlFor: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <AstryxField inputID={htmlFor} label={label}>
-      {children}
-    </AstryxField>
   );
 }
 

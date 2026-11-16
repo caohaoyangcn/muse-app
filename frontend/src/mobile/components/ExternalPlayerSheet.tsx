@@ -16,7 +16,7 @@ type Props = {
 /** Chooser/fallback sheet for handing a favorite to an iOS-native player. */
 export function ExternalPlayerSheet({ video, open, preferred, notice, onChoose, onCopy, onClose }: Props) {
   return (
-    <BottomSheet onClose={onClose} open={open && !!video} title="选择播放器">
+    <BottomSheet height="capped" onClose={onClose} open={open && !!video} title="选择播放器">
       <p className="px-3 pb-2 text-xs leading-relaxed text-[var(--muted)]">
         {notice || "选择后将记住默认播放器。浏览器无法读取已安装应用列表，此入口会尝试直接打开对应客户端。"}
       </p>

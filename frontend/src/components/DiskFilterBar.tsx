@@ -1,7 +1,6 @@
 import type { DiskOption } from "../utils/diskFilter";
 import { cn } from "../lib/utils";
 import { ToggleButton, ToggleButtonGroup, toggleChipClass } from "../ui/astryx";
-import { Button } from "../ui/button";
 import { Icon } from "../ui/icon";
 
 /**
@@ -32,21 +31,18 @@ export default function DiskFilterBar({
       aria-label="按硬盘筛选"
     >
       <span className="text-xs text-[var(--muted)]">硬盘</span>
-      <Button
-        aria-pressed={selected.size === 0}
-        className={cn(
-          "h-7 shrink-0 rounded-full px-3 text-xs",
-          selected.size === 0
-            ? "border-[var(--accent)] bg-[rgba(124,92,255,0.14)] text-[var(--text)]"
-            : "text-[var(--muted)]",
-        )}
-        onClick={onClear}
+      <ToggleButton
+        className={cn(toggleChipClass, "h-7 shrink-0")}
+        isPressed={selected.size === 0}
+        label="全部"
+        onPressedChange={(pressed) => {
+          if (pressed) onClear();
+        }}
         size="sm"
-        title="显示所有硬盘的影片"
-        variant="ghost"
+        tooltip="显示所有硬盘的影片"
       >
         全部
-      </Button>
+      </ToggleButton>
       <ToggleButtonGroup
         className="flex min-w-0 flex-wrap items-center gap-1.5"
         label="按硬盘筛选"

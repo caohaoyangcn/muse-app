@@ -67,6 +67,7 @@ export default function SortBar({
         ) : undefined
       }
       label="排序与视图"
+      size="sm"
       startContent={
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2">
           <span className="text-xs text-[var(--muted)]">排序</span>
@@ -74,7 +75,6 @@ export default function SortBar({
             className="flex flex-wrap"
             label="排序字段"
             onChange={select}
-            size="sm"
             type="single"
             value={sortBy}
           >

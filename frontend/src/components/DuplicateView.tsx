@@ -21,10 +21,8 @@ import { Icon } from "../ui/icon";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { filterJavGroups, useJavDuplicates } from "../views/duplicates/useJavDuplicates";
@@ -139,6 +137,7 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
         />
         <div className="ml-auto w-[240px] max-w-full">
           <Input
+            aria-label="筛选番号或文件名"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             placeholder="筛选番号或文件名"
@@ -306,14 +305,12 @@ function KeepVersionDialog({
   onConfirm: () => void;
 }) {
   return (
-    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+    <Dialog open onOpenChange={(open) => !open && onCancel()} purpose="form">
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>保留这个版本？</DialogTitle>
-          <DialogDescription>
-            将保留「{keep.fileName}」，并把同一作品的其他 {others.length} 个版本移入回收站：
-          </DialogDescription>
-        </DialogHeader>
+        <DialogHeader
+          title="保留这个版本？"
+          subtitle={<>将保留「{keep.fileName}」，并把同一作品的其他 {others.length} 个版本移入回收站：</>}
+        />
         <List className="max-h-[220px] overflow-y-auto">
           {others.map((v) => (
             <ListItem key={v.id} label={<span title={v.path}>{v.fileName}</span>} />

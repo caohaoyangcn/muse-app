@@ -8,10 +8,8 @@ import { videoCoverURL } from "../utils/format";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
 } from "../ui/dialog";
 
 interface Props {
@@ -86,12 +84,12 @@ export default function EditVideoDialog({ video, onClose, onSaved }: Props) {
   };
 
   return (
-    <Dialog open width={620} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open width={620} onOpenChange={(open) => !open && onClose()} purpose="form">
       <DialogContent className="flex flex-col">
-        <DialogHeader>
-          <DialogTitle>编辑影片信息</DialogTitle>
-          <DialogDescription className="sr-only">编辑影片标题、备注和封面</DialogDescription>
-        </DialogHeader>
+        <DialogHeader
+          title="编辑影片信息"
+          subtitle={<span className="sr-only">编辑影片标题、备注和封面</span>}
+        />
 
         <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
           <div className="mb-1 flex flex-col gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-3">

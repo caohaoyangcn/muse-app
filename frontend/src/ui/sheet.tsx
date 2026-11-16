@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { BottomSheet as AstryxBottomSheet } from "@astryxdesign/core/BottomSheet";
 
 import { Button } from "./button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "./dialog";
 
 /**
  * A bottom sheet — the touch stand-in for the desktop app's context menus and
@@ -15,15 +15,15 @@ export function BottomSheet({
   title,
   onClose,
   children,
-  height = "85dvh",
+  height = "capped",
   headerEnd,
 }: {
   open: boolean;
   title?: string;
   onClose: () => void;
   children: ReactNode;
-  /** A sheet that hugs its content passes "auto"; task sheets keep the default
-   *  tall surface so their rows stay in one reachable scroll area. */
+  /** Astryx's starting-height token: `hug` for short content, `capped` for
+   *  lists, `tall` for forms. */
   height?: string;
   /** Replaces the default 完成 control. A sheet with its own footer action can
    *  use a compact close icon instead of saying "done" twice. */
@@ -78,10 +78,8 @@ export function ConfirmSheet({
 }) {
   return (
     <Dialog open={open} width={380} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent label={title}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
+      <DialogContent>
+        <DialogHeader title={title} />
         {message ? (
           <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{message}</p>
         ) : null}

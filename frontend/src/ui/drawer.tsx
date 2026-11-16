@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Drawer as AstryxDrawer } from "@astryxdesign/core/Drawer";
 
+export { DrawerHeader } from "@astryxdesign/core/Drawer";
+
 import { cn } from "../lib/utils";
 import { Button } from "./button";
 
@@ -73,6 +75,18 @@ export function DrawerRow({
         "relative flex h-auto w-full shrink-0 items-center justify-start gap-3 rounded-[var(--radius)] px-3 py-2.5 text-left text-[15px]",
         active ? "bg-[rgba(124,92,255,0.12)] text-[var(--text)]" : "text-[var(--muted)]",
       )}
+      icon={
+        icon ? (
+          <span
+            className={cn(
+              "flex w-5 shrink-0 items-center justify-center",
+              active && "text-[var(--accent)]",
+            )}
+          >
+            {icon}
+          </span>
+        ) : undefined
+      }
       onClick={onClick}
     >
       {active ? (
@@ -80,16 +94,6 @@ export function DrawerRow({
           aria-hidden="true"
           className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--accent)]"
         />
-      ) : null}
-      {icon ? (
-        <span
-          className={cn(
-            "flex w-5 shrink-0 items-center justify-center",
-            active && "text-[var(--accent)]",
-          )}
-        >
-          {icon}
-        </span>
       ) : null}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {hint ? <span className="shrink-0 text-xs text-[var(--muted)]">{hint}</span> : null}

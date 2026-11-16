@@ -189,10 +189,10 @@ export function VideoDetailView({
             </Button>
             <Button
               disabled={busy}
+              icon={<Icon className="size-4" name="heart" />}
               onClick={() => void like()}
               variant="default"
             >
-              <Icon className="size-4" name="heart" />
               {v.likeCount > 0 ? v.likeCount : "点赞"}
             </Button>
           </div>
@@ -286,8 +286,8 @@ export function VideoDetailView({
         </MetaSection>
       </div>
 
-      <Dialog onOpenChange={setLightbox} open={lightbox} width="min(92vw, 900px)">
-        <DialogContent label="封面预览">
+      <Dialog onOpenChange={setLightbox} open={lightbox} width="min(92vw, 900px)" label="封面预览">
+        <DialogContent>
           <img alt="" className="max-h-[80vh] w-full object-contain" src={coverURL(v)} />
         </DialogContent>
       </Dialog>
@@ -316,15 +316,17 @@ function DetailHeader({
       }
       className="border-b border-[var(--border)] px-2 py-1"
       endContent={
-        onEdit ? <Button onClick={onEdit} size="sm" variant="ghost">编辑</Button> : null
+        onEdit ? <Button onClick={onEdit} variant="ghost">编辑</Button> : null
       }
       label="视频详情"
+      size="sm"
       startContent={
         <IconButton
           icon={<Icon className="size-4" name="arrow-left" />}
           label="返回"
           onClick={onBack}
           size="sm"
+          tooltip="返回"
           variant="ghost"
         />
       }

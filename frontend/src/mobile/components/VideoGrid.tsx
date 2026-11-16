@@ -4,11 +4,11 @@ import {
   Badge,
   ClickableCard,
   Grid,
+  IconButton,
   List,
   ListItem,
   compactBadgeClass,
 } from "../../ui/astryx";
-import { Button } from "../../ui/button";
 import { Icon } from "../../ui/icon";
 import { useVirtualRows } from "../../hooks/useVirtualRows";
 import { cn } from "../../lib/utils";
@@ -57,18 +57,18 @@ function StatusBadges({ v }: { v: Video }) {
 
 function CardMenu({ onOpen }: { onOpen: () => void }) {
   return (
-    <Button
-      aria-label="更多操作"
+    <IconButton
       className="absolute right-2 top-2 z-20 size-8 rounded-full bg-black/55 p-0 text-white active:bg-black/80"
+      icon={<Icon className="size-4" name="more-horizontal" />}
+      label="更多操作"
       onClick={(event) => {
         event.stopPropagation();
         onOpen();
       }}
       size="sm"
+      tooltip="更多操作"
       variant="ghost"
-    >
-      <Icon className="size-4" name="more-horizontal" />
-    </Button>
+    />
   );
 }
 
@@ -209,18 +209,18 @@ export function VideoList({
                       {v.likeCount}
                     </span>
                   ) : null}
-                  <Button
-                    aria-label="更多操作"
+                  <IconButton
                     className="size-8 rounded-full p-0 text-[var(--muted)]"
+                    icon={<Icon className="size-4" name="more-horizontal" />}
+                    label="更多操作"
                     onClick={(event) => {
                       event.stopPropagation();
                       onMenu(v);
                     }}
                     size="sm"
+                    tooltip="更多操作"
                     variant="ghost"
-                  >
-                    <Icon className="size-4" name="more-horizontal" />
-                  </Button>
+                  />
                 </span>
               }
               key={v.id}

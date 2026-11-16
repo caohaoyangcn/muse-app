@@ -374,9 +374,15 @@ export default function Sidebar({
 
         <SidebarSection className="mt-4 shrink-0">
           <span>分组</span>
-          <Button variant="ghost" size="sm" className="h-5 w-5 rounded p-0" title="新建分组" onClick={onCreate}>
-            <Icon name="plus" className="h-3.5 w-3.5" />
-          </Button>
+          <IconButton
+            className="h-5 w-5 rounded p-0"
+            icon={<Icon name="plus" className="h-3.5 w-3.5" />}
+            label="新建分组"
+            onClick={onCreate}
+            size="sm"
+            tooltip="新建分组"
+            variant="ghost"
+          />
         </SidebarSection>
 
         {/* The tree is the only shrinkable child: short lists sit right above

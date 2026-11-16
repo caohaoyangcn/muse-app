@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Video } from "../types";
 import { NO_FILTERS, type LibraryFilters } from "./libraryFilters";
 import ErrorBoundary from "../ui/error-boundary";
-import { Drawer, DrawerRow, DrawerSection } from "../ui/drawer";
+import { Drawer, DrawerHeader, DrawerRow, DrawerSection } from "../ui/drawer";
 import { IconButton } from "../ui/astryx";
 import { Icon, type MuseIconName } from "../ui/icon";
 import { Input } from "../ui/input";
@@ -489,6 +489,7 @@ export default function App() {
           label="打开导航"
           onClick={() => setDrawerOpen(true)}
           size="sm"
+          tooltip="打开导航"
           variant="ghost"
         />
         <span className="shrink-0 font-semibold">Muse Video</span>
@@ -563,21 +564,15 @@ export default function App() {
         open={drawerOpen}
         title="导航"
       >
-        <div className="flex items-center gap-2.5 border-b border-[var(--border)] px-4 py-3">
-          <img alt="" className="size-9 rounded-[10px] object-cover" src="/assets/muse-logo.png" />
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-semibold">Muse Video</div>
-            <div className="truncate text-[11px] text-[var(--muted)]">局域网收藏</div>
-          </div>
-          <IconButton
-            className="size-8 shrink-0 rounded-full text-[var(--muted)]"
-            icon={<Icon name="x" className="size-4" />}
-            label="关闭导航"
-            onClick={() => setDrawerOpen(false)}
-            size="sm"
-            variant="ghost"
-          />
-        </div>
+        <DrawerHeader
+          className="border-b border-[var(--border)] px-4 py-3"
+          onOpenChange={() => setDrawerOpen(false)}
+          startContent={
+            <img alt="" className="size-9 rounded-[10px] object-cover" src="/assets/muse-logo.png" />
+          }
+          subtitle="局域网收藏"
+          title="Muse Video"
+        />
 
         <nav aria-label="主导航" className="scroll-area min-h-0 flex-1 px-2 py-1.5">
           <DrawerSection>浏览</DrawerSection>
