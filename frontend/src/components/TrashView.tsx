@@ -1,12 +1,21 @@
 import { useState } from "react";
-import { Trash2, RotateCcw, SlidersHorizontal } from "lucide-react";
 import type { Video } from "../types";
 import { formatFileSize, videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import ConfirmDialog from "./ConfirmDialog";
 import type { ToastItem } from "../ui/toast";
+import {
+  Badge,
+  EmptyState,
+  List,
+  ListItem,
+  SegmentedControl,
+  SegmentedControlItem,
+  Spinner,
+  Toolbar,
+} from "../ui/astryx";
 import { Button } from "../ui/button";
-import { cn } from "../lib/utils";
+import { Icon } from "../ui/icon";
 import { groupTrashBySource, remainingDays, useTrash } from "../views/trash/useTrash";
 
 /**
@@ -50,105 +59,92 @@ export default function TrashView({
   const [clearArchiveTarget, setClearArchiveTarget] = useState(false);
 
   const groupedArchive = groupTrashBySource(archivedVideos);
-  // The hook already scopes these to the mode on screen.
-  const activeLoading = loading;
-  const activeError = error;
-  const activeReload = reload;
 
-  if (activeLoading) {
-    return <div className="flex min-h-[320px] items-center justify-center text-[var(--muted)]">加载中…</div>;
-  }
-  if (activeError && videos.length === 0) {
+  if (loading) {
     return (
-      <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 text-center text-[var(--muted)]">
-        <div>回收站加载失败</div>
-        <Button onClick={activeReload}>重试</Button>
+      <div className="flex min-h-[320px] items-center justify-center">
+        <Spinner label="加载中…" size="lg" />
       </div>
+    );
+  }
+  if (error && videos.length === 0) {
+    return (
+      <EmptyState
+        actions={<Button onClick={reload} variant="primary">重试</Button>}
+        description={error}
+        title="回收站加载失败"
+      />
     );
   }
 
   return (
     <div className="flex min-h-0 flex-col">
-      <div className="sticky top-0 z-[5] -mx-5 mb-3 border-b border-[var(--border)] bg-[var(--bg)] px-5">
-        <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 className="m-0 text-[15px] font-semibold tracking-[0.1px]">归档与回收站</h2>
-          <div className="flex items-center gap-1 text-xs" role="tablist" aria-label="归档与回收站">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "archive"}
-              className={cn(
-                "rounded px-2 py-1 transition-colors",
-                mode === "archive" ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--muted)] hover:text-[var(--text)]",
-              )}
-              onClick={() => setMode("archive")}
+      <Toolbar
+        className="sticky top-0 z-[5] -mx-5 mb-3 rounded-none border-b border-[var(--border)] bg-[var(--bg)] px-5"
+        endContent={
+          mode === "trash" ? (
+            <Button
+              disabled={videos.length === 0 || emptying}
+              onClick={() => setEmptyTarget(true)}
+              size="sm"
+              variant="danger"
             >
-              归档 {archivedVideos.length}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "trash"}
-              className={cn(
-                "rounded px-2 py-1 transition-colors",
-                mode === "trash" ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--muted)] hover:text-[var(--text)]",
-              )}
-              onClick={() => setMode("trash")}
+              <Icon className="size-3.5" name="archive" />
+              {emptying ? "清空中…" : "清空回收站"}
+            </Button>
+          ) : (
+            <Button
+              disabled={videos.length === 0 || clearingArchive}
+              onClick={() => setClearArchiveTarget(true)}
+              size="sm"
+              variant="danger"
             >
-              回收站 {trashVideos.length}
-            </button>
-          </div>
-          <span className="text-xs text-[var(--muted)]">
-            {videos.length} 项
-            {totalSize > 0 ? ` · ${formatFileSize(totalSize)}` : ""}
-          </span>
-          {mode === "trash" && (
-            <button
-              className="inline-flex items-center gap-1 text-xs text-[var(--muted)] underline-offset-2 hover:text-[var(--text)] hover:underline"
-              onClick={() => onOpenSettings("trash")}
-              type="button"
+              <Icon className="size-3.5" name="archive" />
+              {clearingArchive ? "清理中…" : "清空归档"}
+            </Button>
+          )
+        }
+        label="归档与回收站"
+        startContent={
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="m-0 text-[15px] font-semibold tracking-[0.1px]">归档与回收站</h2>
+            <SegmentedControl
+              className="w-auto text-xs"
+              label="归档与回收站"
+              onChange={(value) => setMode(value as "archive" | "trash")}
+              value={mode}
             >
-              <SlidersHorizontal className="h-3 w-3" aria-hidden />
-              保留 {retentionDays} 天
-            </button>
-          )}
-          <div className="ml-auto flex items-center gap-2">
+              <SegmentedControlItem label={`归档 ${archivedVideos.length}`} value="archive" />
+              <SegmentedControlItem label={`回收站 ${trashVideos.length}`} value="trash" />
+            </SegmentedControl>
+            <span className="text-xs text-[var(--muted)]">
+              {videos.length} 项
+              {totalSize > 0 ? ` · ${formatFileSize(totalSize)}` : ""}
+            </span>
             {mode === "trash" ? (
               <Button
-                variant="danger"
+                className="text-xs text-[var(--muted)]"
+                onClick={() => onOpenSettings("trash")}
                 size="sm"
-                disabled={videos.length === 0 || emptying}
-                onClick={() => setEmptyTarget(true)}
+                variant="ghost"
               >
-                <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                {emptying ? "清空中…" : "清空回收站"}
+                <Icon className="size-3" name="filter" />
+                保留 {retentionDays} 天
               </Button>
-            ) : (
-              <Button
-                variant="danger"
-                size="sm"
-                disabled={videos.length === 0 || clearingArchive}
-                onClick={() => setClearArchiveTarget(true)}
-              >
-                <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                {clearingArchive ? "清理中…" : "清空归档"}
-              </Button>
-            )}
+            ) : null}
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {videos.length === 0 ? (
-        <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
-          <div className="mb-1.5 text-xl text-[var(--text)]">
-            {mode === "archive" ? "归档是空的" : "回收站是空的"}
-          </div>
-          <div className="max-w-[420px] leading-relaxed">
-            {mode === "archive"
+        <EmptyState
+          description={
+            mode === "archive"
               ? "停用网盘来源后，它的收藏会长期保留在这里。归档不会自动清理，也不会出现在片库、分组和查重里。"
-              : `从收藏中移除的影片会先来到这里，保留 ${retentionDays} 天后自动彻底清理。期间可以随时恢复，分组、点赞和刮削资料都还在。`}
-          </div>
-        </div>
+              : `从收藏中移除的影片会先来到这里，保留 ${retentionDays} 天后自动彻底清理。期间可以随时恢复，分组、点赞和刮削资料都还在。`
+          }
+          title={mode === "archive" ? "归档是空的" : "回收站是空的"}
+        />
       ) : mode === "archive" ? (
         <div className="flex flex-col gap-3">
           {groupedArchive.map((group) => (
@@ -157,35 +153,35 @@ export default function TrashView({
                 <span>{group.name}</span>
                 <span className="font-normal">· {group.videos.length} 项</span>
               </h3>
-              <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)]">
+              <List className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)]">
                 {group.videos.map((video) => (
                   <TrashRow
-                    key={video.id}
                     archived
                     busy={busyId === video.id}
-                    retentionDays={0}
-                    video={video}
+                    key={video.id}
                     onPurge={() => setPurgeTarget(video)}
                     onRestore={() => void restore(video)}
+                    retentionDays={0}
+                    video={video}
                   />
                 ))}
-              </div>
+              </List>
             </section>
           ))}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)]">
+        <List className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)]">
           {videos.map((video) => (
             <TrashRow
-              key={video.id}
               busy={busyId === video.id}
-              retentionDays={retentionDays}
-              video={video}
+              key={video.id}
               onPurge={() => setPurgeTarget(video)}
               onRestore={() => void restore(video)}
+              retentionDays={retentionDays}
+              video={video}
             />
           ))}
-        </div>
+        </List>
       )}
 
       <p className="mt-3 text-xs leading-relaxed text-[var(--muted)]">
@@ -195,47 +191,47 @@ export default function TrashView({
 
       {purgeTarget && (
         <ConfirmDialog
-          title="彻底删除"
-          message={`确定彻底删除“${videoDisplayName(purgeTarget)}”吗？\n\n这条收藏记录与生成的缩略图/封面都会被删除；原始视频或网盘文件不会被删除。此操作无法撤销。`}
-          confirmLabel="彻底删除"
           cancelLabel="取消"
+          confirmLabel="彻底删除"
           danger
+          message={`确定彻底删除“${videoDisplayName(purgeTarget)}”吗？\n\n这条收藏记录与生成的缩略图/封面都会被删除；原始视频或网盘文件不会被删除。此操作无法撤销。`}
+          onCancel={() => setPurgeTarget(null)}
           onConfirm={() => {
             const target = purgeTarget;
             setPurgeTarget(null);
             if (target) void purge(target);
           }}
-          onCancel={() => setPurgeTarget(null)}
+          title="彻底删除"
         />
       )}
 
       {emptyTarget && (
         <ConfirmDialog
-          title="清空回收站"
-          message={`确定彻底删除回收站里的 ${trashVideos.length} 项收藏吗？\n\n只删除 Muse 的收藏记录与生成的缩略图/封面；原始视频文件不会被删除。此操作无法撤销。`}
-          confirmLabel="清空回收站"
           cancelLabel="取消"
+          confirmLabel="清空回收站"
           danger
+          message={`确定彻底删除回收站里的 ${trashVideos.length} 项收藏吗？\n\n只删除 Muse 的收藏记录与生成的缩略图/封面；原始视频文件不会被删除。此操作无法撤销。`}
+          onCancel={() => setEmptyTarget(false)}
           onConfirm={() => {
             setEmptyTarget(false);
             void empty();
           }}
-          onCancel={() => setEmptyTarget(false)}
+          title="清空回收站"
         />
       )}
 
       {clearArchiveTarget && (
         <ConfirmDialog
-          title="清空归档"
-          message={`确定彻底删除归档里的 ${archivedVideos.length} 项收藏吗？\n\n只删除 Muse 的收藏记录与生成的缩略图/封面；网盘源文件不会被删除。此操作无法撤销。`}
-          confirmLabel="清空归档"
           cancelLabel="取消"
+          confirmLabel="清空归档"
           danger
+          message={`确定彻底删除归档里的 ${archivedVideos.length} 项收藏吗？\n\n只删除 Muse 的收藏记录与生成的缩略图/封面；网盘源文件不会被删除。此操作无法撤销。`}
+          onCancel={() => setClearArchiveTarget(false)}
           onConfirm={() => {
             setClearArchiveTarget(false);
             void clearArchive();
           }}
-          onCancel={() => setClearArchiveTarget(false)}
+          title="清空归档"
         />
       )}
     </div>
@@ -267,66 +263,66 @@ function TrashRow({
   const deletedAt = video.deletedAt > 0 ? formatDateTime(video.deletedAt) : "未知时间";
   const remaining = remainingDays(video.deletedAt, retentionDays);
   const restoreBlocked = video.sourceId > 0 && !video.sourceEnabled;
+  const variant =
+    video.deleteReason === "missing" ? "warning" : archived ? "purple" : "neutral";
   return (
-    <div className="flex items-center gap-4 border-b border-[var(--border)] bg-[var(--panel)] p-3 last:border-b-0">
-      <div className="relative h-[64px] w-[112px] shrink-0 overflow-hidden rounded-[6px] bg-[#111114]">
-        {video.thumbnailPath ? (
-          <img
-            alt=""
-            className="block h-full w-full object-contain"
-            draggable={false}
-            src={videoCoverURL(video)}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-xl opacity-40">🎞</div>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-medium">{videoDisplayName(video)}</span>
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[11px]",
-              video.deleteReason === "missing"
-                ? "bg-[rgba(224,182,79,0.16)] text-[#e0b64f]"
-                : archived
-                  ? "bg-[rgba(124,92,255,0.16)] text-[#cdc2ff]"
-                  : "bg-[var(--panel-2)] text-[var(--muted)]",
-            )}
-          >
-            {reason}
+    <ListItem
+      className="border-b border-[var(--border)] bg-[var(--panel)] last:border-b-0"
+      description={
+        <>
+          <span>
+            {formatFileSize(video.fileSize) ? `${formatFileSize(video.fileSize)} · ` : ""}
+            {archived
+              ? `归档于 ${deletedAt} · 长期保留${video.sourceName ? ` · ${video.sourceName}` : ""}`
+              : `移入于 ${deletedAt} · ${remaining > 0 ? `${remaining} 天后自动清理` : "即将清理"}`}
           </span>
-        </div>
-        <div className="mt-1 text-xs text-[var(--muted)]">
-          {formatFileSize(video.fileSize) ? `${formatFileSize(video.fileSize)} · ` : ""}
-          {archived
-            ? `归档于 ${deletedAt} · 长期保留${video.sourceName ? ` · ${video.sourceName}` : ""}`
-            : `移入于 ${deletedAt} · ${remaining > 0 ? `${remaining} 天后自动清理` : "即将清理"}`}
-        </div>
-        {groupNames.length > 0 && (
-          <div className="mt-1 truncate text-xs text-[var(--muted)]">
-            原分组：{groupNames.join(" / ")}
-          </div>
-        )}
-        <div className="mt-1 truncate text-[11px] text-[var(--muted)]" title={video.remotePath || video.path}>
-          {video.remotePath || video.path}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Button
-          size="sm"
-          disabled={busy || restoreBlocked}
-          title={restoreBlocked ? "先在设置中启用该网盘，再恢复这条收藏" : undefined}
-          onClick={onRestore}
-        >
-          <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-          恢复
-        </Button>
-        <Button variant="danger" size="sm" disabled={busy} onClick={onPurge}>
-          彻底删除
-        </Button>
-      </div>
-    </div>
+          {groupNames.length > 0 ? (
+            <span className="mt-1 block truncate">原分组：{groupNames.join(" / ")}</span>
+          ) : null}
+          <span className="mt-1 block truncate" title={video.remotePath || video.path}>
+            {video.remotePath || video.path}
+          </span>
+        </>
+      }
+      endContent={
+        <span className="flex shrink-0 items-center gap-2">
+          <Button
+            disabled={busy || restoreBlocked}
+            onClick={onRestore}
+            size="sm"
+            title={restoreBlocked ? "先在设置中启用该网盘，再恢复这条收藏" : undefined}
+          >
+            <Icon className="size-3.5" name="history" />
+            恢复
+          </Button>
+          <Button disabled={busy} onClick={onPurge} size="sm" variant="danger">
+            彻底删除
+          </Button>
+        </span>
+      }
+      label={
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="truncate font-medium">{videoDisplayName(video)}</span>
+          <Badge label={reason} variant={variant} />
+        </span>
+      }
+      startContent={
+        <span className="block h-[64px] w-[112px] shrink-0 overflow-hidden rounded-[6px] bg-[#111114]">
+          {video.thumbnailPath ? (
+            <img
+              alt=""
+              className="block h-full w-full object-contain"
+              draggable={false}
+              src={videoCoverURL(video)}
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-[var(--muted)]">
+              <Icon className="size-5" name="archive" />
+            </span>
+          )}
+        </span>
+      }
+    />
   );
 }
 
