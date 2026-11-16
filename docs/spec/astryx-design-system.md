@@ -52,19 +52,45 @@ token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScri
 | `astryx.tsx` | 再导出 | — | 业务文件只从这里取 Astryx 组件；`compactBadgeClass` / `toggleChipClass` 收口紧凑徽标与 Chip 的房规 |
 | `icon.tsx` / `muse-icons.tsx` | `Icon` + `registerIcons` | `<Icon name="…"/>` | 内置名映射到 Astryx，Muse 专有 SVG 注册为 `muse:*`；自定义图标只以 ReactNode 注册 |
 | `menu.tsx` | `DropdownMenu` | `MenuSurface({x,y,label,onClose,children})` | 1×1 隐藏触发器放在光标坐标，保留任意坐标右键；菜单内容由业务传 `DropdownMenuItem`/`DropdownMenuSubMenu` |
-| `button.tsx` | `Button` | 不变（`variant` / `size` / children） | 文字经 `children` 传入；`label` 取 children 的纯文本，图标+文字按钮由 Astryx 自动产出 `aria-label`。`default→secondary`、`danger→destructive` |
-| `input.tsx` | `TextInput` | 不变（原生 input props） | 事件转回原生 `onChange(event)`；`id` 透传给真输入框，外部 `<label htmlFor>` 关联保留；`number` 无对应字段，降级为 `text + inputMode=numeric` |
-| `dialog.tsx` | `Dialog` | 不变（`open`/`onOpenChange` + Header/Title/Description/Footer） | 宽度改为 `<Dialog width>`（Astryx 用内联自定义属性写宽度，`w-[…]` 类打不过）；关闭按钮与 `aria-labelledby` 由本层补 |
+| `button.tsx` | `Button` | 不变（`variant` / `size` / children）+ `icon` / `tooltip` | 文字经 `children` 传入；`label` 取 children 的纯文本。图标必须走 `icon` 插槽（不能塞 children，否则会掉进 block 级 label 里、失去间距）；原生 `title` 自动转成 Astryx `tooltip`。`default→secondary`、`danger→destructive`；纯图标按钮改 `IconButton`。 |
+| `input.tsx` | `TextInput` | 原生 input props + `label` / `isLabelHidden` | 事件转回原生 `onChange(event)`；`id` 透传给真输入框。传 `label` 时显示 Astryx 可见标签，否则标签隐藏、靠外部 `<label htmlFor>` / `aria-label` 命名；`number` 无对应字段，降级为 `text + inputMode=numeric` |
+| `dialog.tsx` | `Dialog` + `DialogHeader` + `AlertDialog` | 不变（`open`/`onOpenChange` + `DialogHeader`/`Footer`） | 标题、`aria-labelledby`、聚焦与关闭按钮全部交给 Astryx `DialogHeader`；`purpose` 透传（表单对话框用 `form`）。确认类对话框改 `AlertDialog`；无标题的图片灯箱用 `DialogCloseButton`。宽度/内边距走 props，不用 class |
 | `toast.tsx` | `Toast` + `ToastViewport` | 不变（受控 `toasts`） | 卡片用 `renderContent` 保住左色条与详情列表；堆叠与进动画交给 Astryx，锚点仍由本层定位（viewport 不脱离文档流） |
-| `drawer.tsx` | `Drawer` | 不变 | `side` 映射 `start`/`end`；行改为 `Button` |
-| `sheet.tsx` | `BottomSheet` + `Dialog` | 不变 | `ConfirmSheet` 改用 Astryx Dialog；行改为 `Button` |
-| `astryx.tsx` | `Badge`、`EmptyState`、`Spinner`、`Skeleton`、`Banner`、`Toolbar`、`SegmentedControl`、`ToggleButtonGroup`、`Slider`、`ClickableCard`、`AspectRatio`、`Grid`、`List`/`ListItem`、`Section`、`Divider` 等 | 直接 re-export | 业务层只经这个 barrel 取用；`toggleChipClass` 统一多选 Chip 的静态样式 |
+| `drawer.tsx` | `Drawer` + `DrawerHeader` | 不变 | `side` 映射 `start`/`end`；头部改用 Astryx `DrawerHeader`（标题、副标题、关闭按钮），行改为 `Button` 并把图标放进 `icon` 插槽 |
+| `sheet.tsx` | `BottomSheet` + `Dialog` | 不变 | `height` 使用 Astryx 的 `hug` / `capped` / `tall` 起始高度；`ConfirmSheet` 改用 Astryx Dialog；行改为 `Button` |
+| `astryx.tsx` | `AlertDialog`、`Badge`、`EmptyState`、`Spinner`、`Skeleton`、`Banner`、`Toolbar`、`SegmentedControl`、`ToggleButtonGroup`、`Slider`、`ClickableCard`、`AspectRatio`、`Grid`、`List`/`ListItem`、`Section`、`Divider` 等 | 直接 re-export | 业务层只经这个 barrel 取用；`toggleChipClass` 统一多选 Chip 的静态样式 |
 | `icon.tsx` | `Icon` + `registerIcons` | `name` 仍用 kebab-case | Muse SVG 注册为 `muse:*`；menu/close/warning/funnel/chevron 等直接映射 Astryx 内置语义名 |
 | `muse-icons.tsx` | — | — | Muse 自有 SVG 路径转成组件，交给 `Icon` 渲染；资产仍是唯一图形来源 |
 
 随之删除：`ui/NavIcon.tsx`、`ui/backup-badge.tsx`、`ui/restored-badge.tsx`、`ui/sticky-bar.tsx`、`mobile/components/States.tsx`、`components/EmptyState.tsx`。
 
 随之删除的历史文件：`ui/overlay.ts`（聚焦陷阱与 Escape 由 Astryx 负责）、`ui/sheet.css`、`ui/drawer.css`、`@radix-ui/react-dialog` 依赖。
+
+## 2026-11-16 逐组件复核
+
+对照包内每个组件的 `*.doc.mjs`（props、bestPractices、anatomy）逐个检查了业务层的实际调用，修掉了这些系统性问题：
+
+| 问题 | 表现 | 处理 |
+|---|---|---|
+| 图标塞进 `children` | Astryx `Button` 会把 children 放进 block 级 label span，图标和文字没有间距（侧栏、工具栏、列表行都中过） | 统一走 `Button icon` 插槽；纯图标按钮改 `IconButton` |
+| 原生 `title` 当提示 | 浏览器 tooltip，和 Astryx 的无障碍/主题不一致 | `ui/button.tsx` 把 `title` 映射到 Astryx `tooltip`，调用点也可显式写 `tooltip` |
+| `IconButton` 缺 `tooltip` | 文档明确要求图标按钮给视觉用户 hover 提示 | 全部补齐；`label` 只留给读屏 |
+| 手绘对话框头 | 标题是裸 `<h2>`，关闭按钮是 `Button` 包 `<X>`，`aria-labelledby` 由适配层自己接 | 改用 Astryx `DialogHeader`（自动聚焦标题、命名、关闭按钮带 tooltip） |
+| 确认框不是 `AlertDialog` | 破坏性操作只用普通 Dialog + 两个按钮，遮罩可点、没有 alertdialog 语义 | `ConfirmDialog` 改 `AlertDialog`；取消是初始焦点，遮罩不可关 |
+| 表单对话框没 `purpose` | 误点遮罩会丢输入 | 表单/编辑类 Dialog 传 `purpose="form"` |
+| 底部抽屉高度写死 | `height="auto"` / `85dvh` 不是 Astryx 的高度语义 | 改为 `hug` / `capped` / `tall` |
+| `Field` 包 `TextInput` | 文档明确说 TextInput 已有 Field 壳，不能再包一层 | 删掉 Settings 的 `Field` 包装，`Input` 直接传 `label` |
+| `Toolbar` 子按钮各自设 `size` | 文档要求 size 设在 Toolbar 上一次级联 | Toolbar 统一 `size="sm"`，子控件去掉 size |
+| 用 `Button` + `aria-pressed` 当开关 | 文档要求持久开关用 `ToggleButton` | 硬盘「全部」改 `ToggleButton`；显示 Cookie 是瞬时动作，去掉 `aria-pressed` 保留 `aria-label` |
+
+复核后仍有四类**产品取舍**（不是 API 用错，未强行改）：
+
+1. **Toast 带多行详情**：`ui/toast.tsx` 的扫描结果/错误会带 `details` 列表，文档建议 toast 只放一句话、长内容用 `Banner`。改成 Banner 需要新的常驻报告区，暂保留；后续若做，应把详情移出 toast。
+2. **可点击 `ListItem` 里嵌按钮**：`VideoList`/移动 `VideoGrid`/`TrashView` 在 `endContent` 放点赞、更多、恢复等按钮，文档不建议在可交互行里嵌交互元素。当前用 `stopPropagation` 保证行为正确，属于列表行动作的产品设计。
+3. **`Badge` 承载元数据**：时长、数量、哈希、版本数用了 Badge，文档建议元数据用普通文本。它们同时承担分组/识别的视觉作用，暂按分类标签处理。
+4. **导航仍用 `Button`**：侧栏、移动抽屉、`WorkspaceTabs` 的导航行是 `Button`；文档建议用链接/`SideNav`/`TabList`。外壳的拖拽、分组嵌套与标签关闭是业务状态机，已在迁移计划里记为显式例外。
+
+另外，虚拟滚动网格用数字 `columns` + 内联 `gridTemplateColumns`，文档默认建议 `{minWidth,max}`；这里列数必须和虚拟行窗口的数学一致，保留为性能例外。
 
 ## 刻意没有替换的
 

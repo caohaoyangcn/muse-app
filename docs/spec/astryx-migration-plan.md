@@ -1,6 +1,6 @@
 # Astryx 全量替换方案
 
-> 状态：Phase 1–7 已实施（2026-11-16）；保留少数业务组合例外，见文末。
+> 状态：Phase 1–8 已实施（2026-11-16）；保留少数业务组合例外，见文末。
 > 范围：`frontend/src/` 的桌面端与移动端；产品深色 token、`ui/` 唯一接缝、文件零改动原则不变。
 
 ## 0. 结论先行
@@ -225,6 +225,20 @@
 - `npm run lint`、`npm run build`、`npm run build:mobile`、`go test ./...` 通过
 - 更新 `astryx-design-system.md` 的“刻意没有替换”表
 - 全量视觉回归 + 构建 + 测试
+
+### Phase 8：对照组件文档复核 — ✅ 已完成
+
+逐个组件对照包内 `src/<Component>/<Component>.doc.mjs` 的 props 与 bestPractices，修掉了 Phase 1–7 遗留的“组件用了 Astryx、用法还是自绘范式”的问题：
+
+- `Button`：图标统一走 `icon` 插槽；纯图标按钮改 `IconButton` 并补 `tooltip`；原生 `title` 在适配层映射成 Astryx `tooltip`
+- `Dialog`：标题/关闭/`aria-labelledby`/初始焦点改用 Astryx `DialogHeader`；表单对话框加 `purpose="form"`；确认框改 `AlertDialog`；无标题灯箱用 `DialogCloseButton`
+- `BottomSheet`：高度改用 `hug` / `capped` / `tall`
+- `Drawer`：头部改 `DrawerHeader`，行图标进 `icon` 插槽
+- `TextInput`：删掉 `Field` 包 `TextInput`，支持直接传 `label` 显示可见标签
+- `Toolbar`：`size` 设在 Toolbar 上一次级联，子控件不再各自设 `size`
+- 开关：硬盘「全部」由 `Button aria-pressed` 改 `ToggleButton`
+
+剩余未改的四类产品取舍（Toast 多行详情、可点击 ListItem 内嵌按钮、Badge 承载元数据、导航行用 Button）记录在 `astryx-design-system.md` 的「2026-11-16 逐组件复核」一节。
 
 ---
 
