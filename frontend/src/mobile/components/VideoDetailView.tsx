@@ -167,123 +167,125 @@ export function VideoDetailView({
       />
 
       <div className="scroll-area flex-1 px-4 pb-8 pt-3" data-scroll-key="main">
-        <ClickableCard
-          className="w-full overflow-hidden bg-[#111114]"
-          label="查看封面"
-          onClick={() => setLightbox(true)}
-          padding={0}
-          variant="default"
-        >
-          <img alt="" className="w-full object-contain" src={coverURL(v)} />
-        </ClickableCard>
-
-        <div className="mt-4">
-          <div className="flex gap-2">
-            <Button
-              className="flex-1 py-3"
-              disabled={v.status === "missing" || v.volumeOffline || v.sourceOffline}
-              onClick={() => onPlay(v)}
-              variant="primary"
-            >
-              ▶ 播放
-            </Button>
-            <Button
-              disabled={busy}
-              icon={<Icon className="size-4" name="heart" />}
-              onClick={() => void like()}
-              variant="default"
-            >
-              {v.likeCount > 0 ? v.likeCount : "点赞"}
-            </Button>
-          </div>
-          {v.volumeOffline ? (
-            <p className="mt-2 text-xs text-[var(--muted)]">
-              磁盘 {v.volumeRoot || ""} 未接入，插回移动硬盘后即可播放。
-            </p>
-          ) : v.sourceOffline ? (
-            <p className="mt-2 text-xs text-[var(--muted)]">
-              网盘「{v.sourceName || "连接"}」当前离线，恢复后即可播放。
-            </p>
-          ) : null}
-          <Button
-            className="mt-2 w-full"
-            disabled={v.status === "missing" || v.volumeOffline || v.sourceOffline || v.sourceId > 0}
-            onClick={() => onChoosePlayer(v)}
-            size="sm"
-            variant="ghost"
+        <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)]">
+          <ClickableCard
+            className="w-full overflow-hidden bg-[#111114]"
+            label="查看封面"
+            onClick={() => setLightbox(true)}
+            padding={0}
+            variant="default"
           >
-            播放器选项
-          </Button>
-        </div>
+            <img alt="" className="block w-full object-contain" src={coverURL(v)} />
+          </ClickableCard>
 
-        {v.notes ? (
-          <div className="mt-4 whitespace-pre-wrap rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] p-3 text-sm text-[var(--muted)]">
-            {v.notes}
-          </div>
-        ) : null}
+          <div className="min-w-0 break-words">
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 py-3"
+                disabled={v.status === "missing" || v.volumeOffline || v.sourceOffline}
+                onClick={() => onPlay(v)}
+                variant="primary"
+              >
+                ▶ 播放
+              </Button>
+              <Button
+                disabled={busy}
+                icon={<Icon className="size-4" name="heart" />}
+                onClick={() => void like()}
+                variant="default"
+              >
+                {v.likeCount > 0 ? v.likeCount : "点赞"}
+              </Button>
+            </div>
+            {v.volumeOffline ? (
+              <p className="mt-2 text-xs text-[var(--muted)]">
+                磁盘 {v.volumeRoot || ""} 未接入，插回移动硬盘后即可播放。
+              </p>
+            ) : v.sourceOffline ? (
+              <p className="mt-2 text-xs text-[var(--muted)]">
+                网盘「{v.sourceName || "连接"}」当前离线，恢复后即可播放。
+              </p>
+            ) : null}
+            <Button
+              className="mt-2 w-full"
+              disabled={v.status === "missing" || v.volumeOffline || v.sourceOffline || v.sourceId > 0}
+              onClick={() => onChoosePlayer(v)}
+              size="sm"
+              variant="ghost"
+            >
+              播放器选项
+            </Button>
 
-        <MetaSection title="刮削状态">
-          <div className="text-sm">
-            {loading ? (
-              <span className="text-[var(--muted)]">加载中…</span>
-            ) : status ? (
-              <span>
-                状态：{status}
-                {currentError ? (
-                  <span className="text-[var(--danger)]"> · {currentError}</span>
+            {v.notes ? (
+              <div className="mt-4 whitespace-pre-wrap rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] p-3 text-sm text-[var(--muted)]">
+                {v.notes}
+              </div>
+            ) : null}
+
+            <MetaSection title="刮削状态">
+              <div className="text-sm">
+                {loading ? (
+                  <span className="text-[var(--muted)]">加载中…</span>
+                ) : status ? (
+                  <span>
+                    状态：{status}
+                    {currentError ? (
+                      <span className="text-[var(--danger)]"> · {currentError}</span>
+                    ) : null}
+                  </span>
+                ) : (
+                  <span className="text-[var(--muted)]">尚未刮削（可在桌面端发起刮削）</span>
+                )}
+              </div>
+            </MetaSection>
+
+            {detail ? (
+              <>
+                <MetaSection title="元数据">
+                  <MetadataList label={{ position: "start", width: 64 }}>
+                    {javRows(detail).map(([label, value]) => (
+                      <MetadataListItem key={label} label={label}>{value}</MetadataListItem>
+                    ))}
+                  </MetadataList>
+                </MetaSection>
+
+                {actors.length > 0 ? (
+                  <MetaSection title="演员">
+                    <div className="flex flex-wrap gap-2">
+                      {actors.map((name) => (
+                        <Button
+                          className="rounded-full"
+                          key={name}
+                          onClick={() => onSelectActor(name)}
+                          size="sm"
+                          variant="default"
+                        >
+                          {name}
+                        </Button>
+                      ))}
+                    </div>
+                  </MetaSection>
                 ) : null}
-              </span>
-            ) : (
-              <span className="text-[var(--muted)]">尚未刮削（可在桌面端发起刮削）</span>
-            )}
-          </div>
-        </MetaSection>
 
-        {detail ? (
-          <>
-            <MetaSection title="元数据">
-              <MetadataList label={{ position: "start", width: 80 }}>
-                {javRows(detail).map(([label, value]) => (
+                {tags.length > 0 ? (
+                  <MetaSection title="标签">
+                    <div className="flex flex-wrap gap-2">
+                      {tags.map((tag) => <Badge key={tag} label={tag} variant="neutral" />)}
+                    </div>
+                  </MetaSection>
+                ) : null}
+              </>
+            ) : null}
+
+            <MetaSection title="文件信息">
+              <MetadataList label={{ position: "start", width: 64 }}>
+                {fileRows.map(([label, value]) => (
                   <MetadataListItem key={label} label={label}>{value}</MetadataListItem>
                 ))}
               </MetadataList>
             </MetaSection>
-
-            {actors.length > 0 ? (
-              <MetaSection title="演员">
-                <div className="flex flex-wrap gap-2">
-                  {actors.map((name) => (
-                    <Button
-                      className="rounded-full"
-                      key={name}
-                      onClick={() => onSelectActor(name)}
-                      size="sm"
-                      variant="default"
-                    >
-                      {name}
-                    </Button>
-                  ))}
-                </div>
-              </MetaSection>
-            ) : null}
-
-            {tags.length > 0 ? (
-              <MetaSection title="标签">
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => <Badge key={tag} label={tag} variant="neutral" />)}
-                </div>
-              </MetaSection>
-            ) : null}
-          </>
-        ) : null}
-
-        <MetaSection title="文件信息">
-          <MetadataList label={{ position: "start", width: 80 }}>
-            {fileRows.map(([label, value]) => (
-              <MetadataListItem key={label} label={label}>{value}</MetadataListItem>
-            ))}
-          </MetadataList>
-        </MetaSection>
+          </div>
+        </div>
       </div>
 
       <Dialog onOpenChange={setLightbox} open={lightbox} width="min(92vw, 900px)" label="封面预览">
