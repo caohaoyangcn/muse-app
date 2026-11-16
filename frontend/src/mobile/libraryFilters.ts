@@ -54,6 +54,18 @@ export interface ActorOption {
   count: number;
 }
 
+/** How many actor chips the filter sheet shows before offering 展示更多. */
+export const ACTOR_PAGE_SIZE = 20;
+
+/** One page of the actor section: what to render, and what is still behind 展示更多. */
+export interface ActorPage {
+  visible: ActorOption[];
+  /** Options matching the actor keyword, before the page limit. */
+  matched: number;
+  /** Matches the page limit is still hiding. */
+  hidden: number;
+}
+
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 
 /**
@@ -88,6 +100,34 @@ export function withSelectedActors(
     .filter((name) => !known.has(name))
     .map((name) => ({ name, count: 0 }));
   return missing.length === 0 ? [...options] : [...options, ...missing];
+}
+
+/**
+ * The actor chips the sheet renders: the first `limit` matches of the keyword,
+ * plus every selected actor.
+ *
+ * The pin matters: the sheet caps the list at 20, so a selection made earlier
+ * (or one the keyword no longer matches) would otherwise vanish from the sheet
+ * while still narrowing the library — a filter with no way to turn it off.
+ */
+export function pageActorOptions(
+  options: readonly ActorOption[],
+  selected: readonly string[],
+  keyword: string,
+  limit: number = ACTOR_PAGE_SIZE,
+): ActorPage {
+  const needle = keyword.trim().toLowerCase();
+  const matched = needle
+    ? options.filter((option) => option.name.toLowerCase().includes(needle))
+    : [...options];
+  const head = matched.slice(0, Math.max(limit, 0));
+  const shown = new Set(head.map((option) => option.name));
+  const pinned = options.filter((option) => selected.includes(option.name) && !shown.has(option.name));
+  return {
+    visible: [...head, ...pinned],
+    matched: matched.length,
+    hidden: Math.max(0, matched.length - head.length),
+  };
 }
 
 /** A disk's display name. The Unix root is too cryptic on a phone. */

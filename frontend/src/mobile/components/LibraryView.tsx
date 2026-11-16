@@ -36,6 +36,8 @@ import {
   writeViewMode,
 } from "../prefs";
 import { FilterSheet } from "./FilterSheet";
+import { SortSheet } from "./SortSheet";
+import { SORT_LABELS } from "../sortOptions";
 import { VideoGrid, VideoList } from "./VideoGrid";
 import type { VideoMenuActions } from "../videoMenu";
 import { EmptyState, Spinner } from "../../ui/astryx";
@@ -45,14 +47,6 @@ const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base"
 // Stable identities for the empty answers.
 const NO_VIDEOS: Video[] = [];
 const NO_GROUPS: Group[] = [];
-
-const SORT_LABELS: Record<SortKey, string> = {
-  createdAt: "添加时间",
-  lastOpenedAt: "最近播放",
-  fileSize: "文件大小",
-  fileName: "文件名",
-  likeCount: "点赞数",
-};
 
 /**
  * The library tab: a cinematic poster grid, one compact control line, the
@@ -87,6 +81,7 @@ export function LibraryView({
 }) {
   const [sortKey, setSortKey] = useState<SortKey>(readSortKey);
   const [sortDir, setSortDir] = useState<SortDir>(readSortDir);
+  const [sortOpen, setSortOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
 
   const groupIds = filters.groupIds;
@@ -259,7 +254,7 @@ export function LibraryView({
               <Button
                 aria-label={`排序：${SORT_LABELS[sortKey]} ${sortDir === "asc" ? "升序" : "降序"}，点击调整`}
                 className="h-9 min-w-0 shrink gap-1 rounded-full border-[var(--border)] bg-[var(--panel-2)] px-3 text-xs text-[var(--text)]"
-                onClick={() => onFilterOpenChange(true)}
+                onClick={() => setSortOpen(true)}
                 size="sm"
                 variant="ghost"
               >
@@ -350,9 +345,14 @@ export function LibraryView({
         onChange={onFiltersChange}
         onClose={() => onFilterOpenChange(false)}
         onReset={resetFilters}
+        open={filterOpen}
+      />
+
+      <SortSheet
+        onClose={() => setSortOpen(false)}
         onSortDir={setDir}
         onSortKey={setSort}
-        open={filterOpen}
+        open={sortOpen}
         sortDir={sortDir}
         sortKey={sortKey}
       />
