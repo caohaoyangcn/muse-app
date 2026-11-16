@@ -1,7 +1,8 @@
 import type { Group, Video } from "../types";
-import GroupFlyout from "./GroupFlyout";
+import { DropdownMenuItem } from "../ui/astryx";
+import { MenuSurface } from "../ui/menu";
 import { videoDisplayName } from "../utils/videoName";
-import { MenuSurface, type MenuItemSpec } from "../ui/menu";
+import GroupFlyout from "./GroupFlyout";
 
 export type MenuAction = "open" | "details" | "openFolder" | "copyPath" | "edit" | "remove";
 
@@ -25,13 +26,8 @@ const ITEMS: { action: MenuAction; label: string; danger?: boolean }[] = [
 ];
 
 /**
- * Right-click menu for a library card.
- *
- * 添加到分组 is a submenu rather than a dialog: the flyout is rendered inside
- * the menu surface (see MenuSurface / FlyoutShell), so hovering into it keeps
- * the menu open, and the flyout flips to the left instead of leaving the
- * viewport when the menu sits near the right edge.
- *
+ * Right-click menu for a library card, built from Astryx DropdownMenu rows.
+ * "添加到分组…" is an Astryx submenu; membership saves live through GroupFlyout.
  * Network-drive favorites have no local folder to reveal, so the two path rows
  * say what they actually do (open in OpenList / copy the remote path).
  */
@@ -44,33 +40,28 @@ export default function ContextMenu({
   onSaveGroups,
   onClose,
 }: ContextMenuProps) {
-  const items: MenuItemSpec[] = [
-    ...ITEMS.map((item) => ({
-      key: item.action,
-      danger: item.danger,
-      label:
-        item.action === "openFolder" && video.sourceId > 0
-          ? "在 OpenList 中打开"
-          : item.action === "copyPath" && video.sourceId > 0
-            ? "复制网盘路径"
-            : item.label,
-      onSelect: () => onAction(item.action, video),
-    })),
-    {
-      key: "groups",
-      label: "添加到分组…",
-      renderFlyout: (anchor) => (
-        <GroupFlyout
-          videoId={video.id}
-          videoName={videoDisplayName(video)}
-          groups={groups}
-          anchor={anchor}
-          onSave={onSaveGroups}
-          onClose={onClose}
+  return (
+    <MenuSurface label="收藏操作" onClose={onClose} x={x} y={y}>
+      {ITEMS.map((item) => (
+        <DropdownMenuItem
+          key={item.action}
+          label={
+            item.action === "openFolder" && video.sourceId > 0
+              ? "在 OpenList 中打开"
+              : item.action === "copyPath" && video.sourceId > 0
+                ? "复制网盘路径"
+                : item.label
+          }
+          onClick={() => onAction(item.action, video)}
+          variant={item.danger ? "destructive" : "default"}
         />
-      ),
-    },
-  ];
-
-  return <MenuSurface items={items} label="收藏操作" onClose={onClose} x={x} y={y} />;
+      ))}
+      <GroupFlyout
+        groups={groups}
+        onSave={onSaveGroups}
+        videoId={video.id}
+        videoName={videoDisplayName(video)}
+      />
+    </MenuSurface>
+  );
 }

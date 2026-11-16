@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { BottomSheet as AstryxBottomSheet } from "@astryxdesign/core/BottomSheet";
 
-import { cn } from "../lib/utils";
 import { Button } from "./button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./dialog";
 
@@ -54,39 +53,6 @@ export function BottomSheet({
       </div>
       <div className="scroll-area max-h-[70dvh] px-2 pb-[var(--safe-bottom)]">{children}</div>
     </AstryxBottomSheet>
-  );
-}
-
-/** A tappable row inside a sheet. */
-export function SheetAction({
-  label,
-  hint,
-  icon,
-  danger,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  hint?: string;
-  icon?: ReactNode;
-  danger?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      variant="ghost"
-      disabled={disabled}
-      className={cn(
-        "flex h-auto w-full items-center justify-start gap-3 rounded-[var(--radius)] px-3 py-3 text-left text-[15px]",
-        danger ? "text-[var(--danger)]" : "text-[var(--text)]",
-      )}
-      onClick={onClick}
-    >
-      {icon ? <span className="w-5 text-center text-[var(--muted)]">{icon}</span> : null}
-      <span className="flex-1">{label}</span>
-      {hint ? <span className="text-xs text-[var(--muted)]">{hint}</span> : null}
-    </Button>
   );
 }
 

@@ -49,6 +49,9 @@ token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScri
 
 | 模块 | Astryx 组件 | 对外 API | 适配说明 |
 |---|---|---|---|
+| `astryx.tsx` | 再导出 | — | 业务文件只从这里取 Astryx 组件；`compactBadgeClass` / `toggleChipClass` 收口紧凑徽标与 Chip 的房规 |
+| `icon.tsx` / `muse-icons.tsx` | `Icon` + `registerIcons` | `<Icon name="…"/>` | 内置名映射到 Astryx，Muse 专有 SVG 注册为 `muse:*`；自定义图标只以 ReactNode 注册 |
+| `menu.tsx` | `DropdownMenu` | `MenuSurface({x,y,label,onClose,children})` | 1×1 隐藏触发器放在光标坐标，保留任意坐标右键；菜单内容由业务传 `DropdownMenuItem`/`DropdownMenuSubMenu` |
 | `button.tsx` | `Button` | 不变（`variant` / `size` / children） | 文字经 `children` 传入；`label` 取 children 的纯文本，图标+文字按钮由 Astryx 自动产出 `aria-label`。`default→secondary`、`danger→destructive` |
 | `input.tsx` | `TextInput` | 不变（原生 input props） | 事件转回原生 `onChange(event)`；`id` 透传给真输入框，外部 `<label htmlFor>` 关联保留；`number` 无对应字段，降级为 `text + inputMode=numeric` |
 | `dialog.tsx` | `Dialog` | 不变（`open`/`onOpenChange` + Header/Title/Description/Footer） | 宽度改为 `<Dialog width>`（Astryx 用内联自定义属性写宽度，`w-[…]` 类打不过）；关闭按钮与 `aria-labelledby` 由本层补 |
@@ -65,10 +68,11 @@ token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScri
 
 ## 刻意没有替换的
 
-- **`ui/menu.tsx` + `ui/flyout-shell.tsx`**：右键菜单在**任意坐标**打开，且带 hover-intent 子面板（`renderFlyout(anchor)` 自定义 JSX）。Astryx 的 `ContextMenu` 是「在触发区域右键」，子菜单走条目数据，替换等于重写三个菜单包装器与两个 flyout 组件，收益不抵风险。行本身已用 Astryx `Button`。
 - **`ui/sidebar.tsx`**：分组树的拖拽排序/嵌套/投放规则是业务状态机；视觉行后续换 `SideNav`/`TreeList`（Phase 5）。
+- **`WorkspaceTabs`**：标签组色、折叠/展开、关闭按钮与拖拽顺序是业务状态；Astryx `TabList`/`Tab` 的关闭 `endContent` 会形成嵌套按钮，迁移留到 Phase 5 处理。
 - **`ui/error-boundary.tsx`**：React 错误边界必须是 class，Astryx 没有等价物；fallback 已改为 `EmptyState` + `Button`。
-- 其它 Phase 1/2 已替换的 `NavIcon`、业务徽标、StickyBar、移动端 States 不再保留。
+- 其它已替换的 `NavIcon`、业务徽标、StickyBar、移动端 States、旧 `menu`/`flyout-shell`、`MetadataPopup` 自绘定位、`SheetAction` 不再保留。
+- Phase 3/4 的桌面卡片/列表、菜单、HoverCard、移动端动作面板与表单已改用 Astryx；Phase 5/6 的 `Sidebar`、`WorkspaceTabs`、业务页面仍在收尾。
 
 ## 复验方法
 

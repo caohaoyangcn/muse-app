@@ -1,5 +1,3 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import type { Video } from "../types";
 import {
   formatBitrate,
@@ -8,24 +6,13 @@ import {
   formatFrameRate,
   videoResolution,
 } from "../utils/format";
-import { cn } from "../lib/utils";
 import { videoDisplayName } from "../utils/videoName";
 import { Badge } from "../ui/astryx";
-
-const GAP = 8;
 
 /**
  * Hover tooltip that shows a video file's metadata.
  */
-export default function MetadataPopup({
-  video,
-  show,
-  anchorEl,
-}: {
-  video: Video;
-  show: boolean;
-  anchorEl: HTMLElement | null;
-}) {
+export default function MetadataPopup({ video }: { video: Video }) {
   const remote = video.sourceId > 0;
   const rows: [string, string][] = (
     [
@@ -38,41 +25,8 @@ export default function MetadataPopup({
     ] as [string, string][]
   ).filter((e) => e[1] !== "");
 
-  const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
-  const [placed, setPlaced] = useState(false);
-
-  useLayoutEffect(() => {
-    if (!show) {
-      setPlaced(false);
-      return;
-    }
-    if (!anchorEl || !ref.current) return;
-    const anchor = anchorEl.getBoundingClientRect();
-    const el = ref.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let top = anchor.bottom + GAP;
-    if (top + el.height > vh - 4) top = Math.max(4, anchor.top - GAP - el.height);
-    let left = anchor.left;
-    if (left + el.width > vw - 4) left = Math.max(4, vw - el.width - 4);
-    setPos({ left, top });
-    setPlaced(true);
-  }, [show, anchorEl, rows.length]);
-
-  if (!anchorEl) return null;
-
-  const visible = show && placed;
-  return createPortal(
-    <div
-      ref={ref}
-      className={cn(
-        "fixed z-40 min-w-[230px] max-w-[340px] rounded-[var(--radius)] border border-[var(--border)] bg-[rgba(30,30,37,0.97)] p-3.5 opacity-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition duration-300 pointer-events-none",
-        visible && "translate-y-0 opacity-100",
-        !visible && "invisible -translate-y-1",
-      )}
-      style={{ left: pos.left, top: pos.top }}
-    >
+  return (
+    <div className="pointer-events-none min-w-[230px] max-w-[340px] rounded-[var(--radius)] border border-[var(--border)] bg-[rgba(30,30,37,0.97)] p-3.5 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
       <div className="mb-2 flex min-w-0 items-center gap-1.5">
         <div className="min-w-0 break-all font-semibold">{videoDisplayName(video)}</div>
         {video.mosaicRestored && <Badge label="马赛克破解" variant="purple" />}
@@ -86,7 +40,6 @@ export default function MetadataPopup({
           </div>
         ))}
       </dl>
-    </div>,
-    document.body,
+    </div>
   );
 }

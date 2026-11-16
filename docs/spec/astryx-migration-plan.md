@@ -1,6 +1,6 @@
 # Astryx 全量替换方案
 
-> 状态：Phase 1 + Phase 2 已实施（2026-11-16）；Phase 3 起待继续。
+> 状态：Phase 1–4 已实施（2026-11-16）；Phase 5/6 部分完成，Phase 7 待继续。  
 > 范围：`frontend/src/` 的桌面端与移动端；产品深色 token、`ui/` 唯一接缝、文件零改动原则不变。
 
 ## 0. 结论先行
@@ -43,8 +43,8 @@
 | `ui/NavIcon.tsx` | `?raw` SVG + `dangerouslySetInnerHTML` | `Icon` + `registerIcons`；内置名直接映射，Muse 图标注册为 `muse:*` |
 | `ui/backup-badge.tsx` | 自绘胶囊 | `Badge variant="success"` |
 | `ui/restored-badge.tsx` | 自绘胶囊 | `Badge variant="purple"` |
-| `ui/menu.tsx` | 光标定位 + 手写键盘/外点关闭 + hover-intent flyout | `ContextMenu`、`DropdownMenu`、`DropdownMenuSubMenu`；触摸端自动 bottom sheet |
-| `ui/flyout-shell.tsx` | 手写锚点翻转、bridge | 由 `DropdownMenuSubMenu`/`Popover` 承担，删除 |
+| `ui/menu.tsx` | 已改为 `DropdownMenu` 的 1×1 坐标触发器适配层 | `DropdownMenu`/`DropdownMenuItem`/`DropdownMenuSubMenu`；已删除旧键盘/定位逻辑 |
+| `ui/flyout-shell.tsx` | 已删除 | `DropdownMenuSubMenu` 承担锚点、翻转与 hover-intent |
 | `ui/sidebar.tsx` | 手写 aside/nav/section | `SideNav` + `SideNavSection` + `SideNavItem` |
 | `ui/sticky-bar.tsx` | 手写 sticky div | `Toolbar className="sticky top-0"`（或 `Section` + `Stack`） |
 | `ui/error-boundary.tsx` | class + 自绘 fallback | 保留 class；fallback 改用 `EmptyState`/`Banner` + `Button` |
@@ -184,37 +184,39 @@
 
 **结果**：320/390/768 视觉通过；`ClickableCard padding=0` + 透明 Card 保留了全出血海报；筛选多选、关闭保留、返回键、海报比例、列表/网格切换与虚拟滚动已回归。卡片菜单/动作面板仍未替换，留在 Phase 4。
 
-### Phase 3：桌面卡片与工具栏
+### Phase 3：桌面卡片与工具栏 — ✅ 已完成
 
 - `VideoCard` → `SelectableCard` + `AspectRatio` + `Badge` + `MoreMenu`
 - `VideoGrid`/`VideoList` → `Grid`/`List` + 保留窗口化
 - `SortBar`/`ViewControls`/`DiskFilterBar`/`SearchBar` → 同 Phase 1 的 Astryx 控件
 
-**退出条件**：框选/多选、右键、双击播放、拖拽、卡片尺寸滑块、键盘导航全部回归。
+**结果**：`VideoCard` 用 `ClickableCard` + `CheckboxInput`（保留“点卡片打开、勾选框多选”的原行为，比 `SelectableCard` 的“点卡片即选中”更贴合产品）；`VideoGrid` 用 `Grid` 承载固定宽度轨道；`VideoList` 用 `List`/`ListItem`；`SearchBar` 用 `Input` + `IconButton`。卡片尺寸滑块、窗口化、右键、双击、拖拽、多选均已保留。
 
-### Phase 4：菜单与浮层（高风险）
+### Phase 4：菜单与浮层（高风险）— ✅ 已完成
 
 - `ui/menu` + `ui/flyout-shell` → `ContextMenu`/`DropdownMenuSubMenu`
 - `GroupFlyout`/`GroupRelationFlyout`/`MetadataPopup` → 子菜单/`HoverCard`
 - 移动端 `VideoActionSheet` → `MoreMenu` adaptive
 
-**退出条件**：任意坐标右键、子菜单 hover-intent、键盘方向键/Home/End/Tab、焦点归还、触摸 bottom sheet、分组关系面板全部回归。
+**结果**：`ui/menu.tsx` 现在是 Astryx `DropdownMenu` 的坐标适配层（1×1 隐藏触发器，保留任意坐标右键），`GroupFlyout`/`GroupRelationFlyout` 改为 `DropdownMenuSubMenu` + `DropdownMenuCheckboxItem`/`DropdownMenuRadioGroup`，`MetadataPopup` 改为 `HoverCard`，移动端动作/播放器/编辑表单改为 `List`/`ListItem`/`Input`/`TextArea`/`Button`。桌面菜单的键盘、外点关闭、Escape、翻转、子菜单 hover 由 Astryx 负责。`VideoActionSheet` 仍是 `BottomSheet` 组合（未改成 `MoreMenu` 的 adaptive 展示），但内部行已全部是 Astryx。
 
-### Phase 5：导航与外壳
+### Phase 5：导航与外壳（部分完成）
 
 - 桌面 `Sidebar` → `SideNav`/`TreeList`
 - 移动端 drawer/header → `MobileNav`/`TopNav`
 - `WorkspaceTabs` → `TabList`/`Tab`
 - `pages/Library.tsx` → `AppShell` + `TopNav` + `SideNav`（布局逻辑保留）
 
-**退出条件**：分组拖拽排序/嵌套/投放到分组、标签滚动/关闭、移动端返回手势、滚动还原全部回归。
+已完成：移动端 header 的菜单/关闭按钮改为 `IconButton`，搜索框改为 `Input`。仍待迁移：桌面 `Sidebar`、`WorkspaceTabs`、`pages/Library.tsx` 外壳，以及 `MobileNav`/`TopNav`/`AppShell`。
 
-### Phase 6：业务页面
+### Phase 6：业务页面（部分完成）
 
 - 演员索引/作品、查重（番号 + 内容）、刮削、回收站、视频详情、设置
+已完成：移动端演员索引（`List`/`ListItem`/`Avatar`）、刮削看板（`SegmentedControl`/`List`/`ListItem`）、动作/播放器/编辑表单。仍待迁移：桌面演员/查重/回收站/刮削/详情/设置，以及移动端查重/回收站/详情。
+
 - 统一 `Section`/`List`/`Card`/`Badge`/`EmptyState`/`Banner`/`FormLayout`
 
-### Phase 7：清理
+### Phase 7：清理（待继续）
 
 - 删除已无引用的自绘文件与 CSS
 - 裸按钮上限降到 0（或只保留例外清单）

@@ -8,15 +8,27 @@
  */
 
 export { AspectRatio } from "@astryxdesign/core/AspectRatio";
+export { Avatar } from "@astryxdesign/core/Avatar";
 export { Badge } from "@astryxdesign/core/Badge";
 export { Banner } from "@astryxdesign/core/Banner";
 export { ButtonGroup } from "@astryxdesign/core/ButtonGroup";
+export { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 export { CheckboxList, CheckboxListItem } from "@astryxdesign/core/CheckboxList";
 export { ClickableCard } from "@astryxdesign/core/ClickableCard";
 export { Divider } from "@astryxdesign/core/Divider";
+export {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuDivider,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSubMenu,
+} from "@astryxdesign/core/DropdownMenu";
 export { EmptyState } from "@astryxdesign/core/EmptyState";
 export { Grid } from "@astryxdesign/core/Grid";
 export { HoverCard } from "@astryxdesign/core/HoverCard";
+export { IconButton } from "@astryxdesign/core/IconButton";
 export { List, ListItem } from "@astryxdesign/core/List";
 export { MoreMenu } from "@astryxdesign/core/MoreMenu";
 export { ProgressBar } from "@astryxdesign/core/ProgressBar";
@@ -25,6 +37,7 @@ export { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/Segme
 export { Skeleton } from "@astryxdesign/core/Skeleton";
 export { Slider } from "@astryxdesign/core/Slider";
 export { Spinner } from "@astryxdesign/core/Spinner";
+export { TextArea } from "@astryxdesign/core/TextArea";
 export { ToggleButton, ToggleButtonGroup } from "@astryxdesign/core/ToggleButton";
 export { Toolbar } from "@astryxdesign/core/Toolbar";
 

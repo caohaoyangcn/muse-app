@@ -2,6 +2,7 @@ import type { CardSize, Video } from "../types";
 import { useVirtualRows } from "../hooks/useVirtualRows";
 import { scaleBetween } from "../utils/cardSize";
 import { DESKTOP_CARD_SIZE } from "../utils/viewPrefs";
+import { Grid } from "../ui/astryx";
 import VideoCard from "./VideoCard";
 
 /**
@@ -54,9 +55,10 @@ export default function VideoGrid({
       className="relative"
       style={windowed ? { height: totalHeight } : undefined}
     >
-      <div
+      <Grid
         ref={(el) => { virtual.windowRef.current = el; }}
-        className="grid"
+        columns={Math.max(1, columns)}
+        gap={2}
         // An explicit track list keeps the rendered rows aligned with the
         // window's row maths; the count still follows the container width.
         // `min(..., 100%)` is a safety net when the window is narrower than
@@ -82,7 +84,7 @@ export default function VideoGrid({
             onLike={onLike}
           />
         ))}
-      </div>
+      </Grid>
     </div>
   );
 }

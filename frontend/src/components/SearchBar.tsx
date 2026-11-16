@@ -1,7 +1,7 @@
 import type { Ref } from "react";
-import { Search, X } from "lucide-react";
-import { Button } from "../ui/button";
+import { IconButton } from "../ui/astryx";
 import { Input } from "../ui/input";
+import { Icon } from "../ui/icon";
 
 export default function SearchBar({
   value,
@@ -17,7 +17,7 @@ export default function SearchBar({
 }) {
   return (
     <div className="relative flex w-[280px] items-center" data-tour="search">
-      <Search className="pointer-events-none absolute left-3 h-4 w-4 text-[var(--muted)]" />
+      <Icon className="pointer-events-none absolute left-3 z-10 size-4 text-[var(--muted)]" name="search" />
       <Input
         ref={inputRef}
         className="pl-9 pr-9"
@@ -27,16 +27,15 @@ export default function SearchBar({
         spellCheck={false}
       />
       {value && (
-        <Button
-          variant="ghost"
-          size="sm"
+        <IconButton
           className="absolute right-1 h-7 w-7 p-0"
-          title="清除"
-          aria-label="清除搜索"
+          icon={<Icon className="size-4" name="x" />}
+          label="清除搜索"
           onClick={() => onChange("")}
-        >
-          <X className="h-4 w-4" />
-        </Button>
+          size="sm"
+          tooltip="清除"
+          variant="ghost"
+        />
       )}
     </div>
   );

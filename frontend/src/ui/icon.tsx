@@ -54,6 +54,7 @@ const BUILTIN = {
   filter: "funnel",
   menu: "menu",
   "more-horizontal": "moreHorizontal",
+  search: "search",
   x: "close",
 } as const;
 
