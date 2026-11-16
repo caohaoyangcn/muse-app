@@ -38,6 +38,8 @@ export type ButtonSize = keyof typeof SIZES;
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /** Leading icon rendered in Astryx's icon slot (not as children). */
+  icon?: React.ReactNode;
 }
 
 /** Visible text of a children tree, ignoring elements that carry no words. */
@@ -50,7 +52,7 @@ function textOf(node: React.ReactNode): string {
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", size = "default", type = "button", children, ...props }, ref) => {
+  ({ className, variant = "default", size = "default", type = "button", icon, children, ...props }, ref) => {
     // Astryx takes the accessible name as `label` and the visible content as
     // `children`; when the two differ it emits `aria-label` itself. Passing both
     // is therefore the whole adapter: icon+text rows keep their words, and a
@@ -62,6 +64,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <AstryxButton
         ref={ref}
         type={type}
+        icon={icon}
         label={text}
         variant={VARIANTS[variant]}
         size={SIZES[size]}

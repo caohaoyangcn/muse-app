@@ -85,14 +85,15 @@ export default function FileScanButton({
 
   return (
     <Button
+      className="shrink-0 whitespace-nowrap"
       size="sm"
       disabled={running}
+      icon={<RefreshCw className={cn("h-3.5 w-3.5", running && "animate-spin")} aria-hidden />}
       onClick={() => void start()}
       title={buttonTitle(status)}
       aria-label="检测每个收藏的文件是否存在"
       aria-busy={running}
     >
-      <RefreshCw className={cn("h-3.5 w-3.5", running && "animate-spin")} aria-hidden />
       <span className="tabular-nums">{label}</span>
     </Button>
   );

@@ -200,25 +200,27 @@ const SourceCard = ({
     )}
     variant="ghost"
   >
-    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--panel-2)] text-[var(--accent)]">
-      <Icon className="h-[18px] w-[18px]" aria-hidden />
-    </span>
-    <span className="min-w-0 flex-1">
-      <span className="flex items-center gap-2">
-        <span className="text-sm font-medium text-[var(--text)]">{title}</span>
-        {badge && (
-          <span className="rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[10px] leading-none text-[var(--muted)]">
-            {badge}
-          </span>
-        )}
+    <span className="flex w-full items-center gap-3 text-left">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[var(--panel-2)] text-[var(--accent)]">
+        <Icon className="h-[18px] w-[18px]" aria-hidden />
       </span>
-      <span className="mt-0.5 block text-xs leading-relaxed text-[var(--muted)]">{description}</span>
-    </span>
-    <span className="flex shrink-0 items-center gap-1 text-[var(--muted)]">
-      <kbd className="rounded-[5px] border border-[var(--border)] bg-[var(--panel-2)] px-1.5 py-0.5 font-sans text-[10px]">
-        {shortcut}
-      </kbd>
-      <ChevronRight className="h-4 w-4 transition-colors group-hover:text-[var(--accent)]" aria-hidden />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="text-sm font-medium text-[var(--text)]">{title}</span>
+          {badge && (
+            <span className="rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[10px] leading-none text-[var(--muted)]">
+              {badge}
+            </span>
+          )}
+        </span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-[var(--muted)]">{description}</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1 text-[var(--muted)]">
+        <kbd className="rounded-[5px] border border-[var(--border)] bg-[var(--panel-2)] px-1.5 py-0.5 font-sans text-[10px]">
+          {shortcut}
+        </kbd>
+        <ChevronRight className="h-4 w-4 transition-colors group-hover:text-[var(--accent)]" aria-hidden />
+      </span>
     </span>
   </Button>
 );

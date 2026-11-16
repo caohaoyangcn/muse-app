@@ -1794,7 +1794,7 @@ export default function Library({
                   </div>
                 )}
                 {filter.kind === "recent" ? (
-                  <div className="mb-2 flex justify-end">
+                  <div className="mb-2 mt-2 flex justify-end">
                     <ViewControls
                       view={view}
                       onViewChange={handleViewChange}
@@ -1803,7 +1803,7 @@ export default function Library({
                     />
                   </div>
                 ) : (
-                  <div className="mb-2 min-w-0">
+                  <div className="mb-2 mt-2 min-w-0">
                     <SortBar
                       sortBy={sortBy}
                       sortDir={sortDir}

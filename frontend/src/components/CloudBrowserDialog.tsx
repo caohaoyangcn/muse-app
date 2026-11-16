@@ -309,8 +309,10 @@ export default function CloudBrowserDialog({
                         onClick={() => navigate(parent)}
                         variant="ghost"
                       >
-                        <Folder className="h-4 w-4" aria-hidden />
-                        返回上一级
+                        <span className="flex w-full items-center gap-2.5">
+                          <Folder className="h-4 w-4" aria-hidden />
+                          返回上一级
+                        </span>
                       </Button>
                     </li>
                   )}
@@ -323,9 +325,11 @@ export default function CloudBrowserDialog({
                           title={entry.path}
                           variant="ghost"
                         >
-                          <Folder className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
-                          <span className="min-w-0 flex-1 truncate text-sm">{entry.name}</span>
-                          <ChevronRight className="h-4 w-4 shrink-0 text-[var(--muted)]" aria-hidden />
+                          <span className="flex w-full items-center gap-2.5">
+                            <Folder className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden />
+                            <span className="min-w-0 flex-1 truncate text-sm">{entry.name}</span>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-[var(--muted)]" aria-hidden />
+                          </span>
                         </Button>
                       </li>
                     ) : (
