@@ -238,7 +238,7 @@
 - `Toolbar`：`size` 设在 Toolbar 上一次级联，子控件不再各自设 `size`
 - 开关：硬盘「全部」由 `Button aria-pressed` 改 `ToggleButton`
 
-剩余未改的四类产品取舍（Toast 多行详情、可点击 ListItem 内嵌按钮、Badge 承载元数据、导航行用 Button）记录在 `astryx-design-system.md` 的「2026-11-16 逐组件复核」一节。
+剩余未改的五类产品取舍（Toast 多行详情、可点击 ListItem 内嵌按钮、Badge 承载元数据、导航行用 Button、Grid 固定列数）已单独整理为 [`astryx-usage-audit.md`](./astryx-usage-audit.md)，含截图、文档建议与建议方案。
 
 ---
 
