@@ -68,9 +68,14 @@ export function ToastStack({
               onClick={onDismiss ? () => onDismiss(toast.id) : undefined}
               className={cn(
                 "pointer-events-auto",
+                // Astryx's toast root paints an inverted surface with 14px of
+                // padding. The custom card is the surface, so the negative
+                // margin lets it cover that padding instead of leaving a white
+                // frame around it.
+                "-m-[14px] rounded-xl",
                 bottom
-                  ? "fade-enter rounded-[var(--radius)] border px-3 py-2 text-sm shadow-lg"
-                  : "cursor-pointer rounded-lg border border-[var(--border)] border-l-[3px] bg-[var(--panel-2)] px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.45)]",
+                  ? "fade-enter border px-3 py-2 text-sm shadow-lg"
+                  : "cursor-pointer border border-[var(--border)] border-l-[3px] bg-[var(--panel-2)] px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.45)]",
                 bottom && toast.kind === "error"
                   ? "border-[var(--danger)] bg-[var(--danger)] text-white"
                   : bottom

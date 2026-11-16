@@ -55,7 +55,7 @@ token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScri
 | `button.tsx` | `Button` | 不变（`variant` / `size` / children）+ `icon` / `tooltip` | 文字经 `children` 传入；`label` 取 children 的纯文本。图标必须走 `icon` 插槽（不能塞 children，否则会掉进 block 级 label 里、失去间距）；原生 `title` 自动转成 Astryx `tooltip`。`default→secondary`、`danger→destructive`；纯图标按钮改 `IconButton`。 |
 | `input.tsx` | `TextInput` | 原生 input props + `label` / `isLabelHidden` | 事件转回原生 `onChange(event)`；`id` 透传给真输入框。传 `label` 时显示 Astryx 可见标签，否则标签隐藏、靠外部 `<label htmlFor>` / `aria-label` 命名；`number` 无对应字段，降级为 `text + inputMode=numeric` |
 | `dialog.tsx` | `Dialog` + `DialogHeader` + `AlertDialog` | 不变（`open`/`onOpenChange` + `DialogHeader`/`Footer`） | 标题、`aria-labelledby`、聚焦与关闭按钮全部交给 Astryx `DialogHeader`；`purpose` 透传（表单对话框用 `form`）。确认类对话框改 `AlertDialog`；无标题的图片灯箱用 `DialogCloseButton`。宽度/内边距走 props，不用 class |
-| `toast.tsx` | `Toast` + `ToastViewport` | 不变（受控 `toasts`） | 卡片用 `renderContent` 保住左色条与详情列表；堆叠与进动画交给 Astryx，锚点仍由本层定位（viewport 不脱离文档流） |
+| `toast.tsx` | `Toast` + `ToastViewport` | 不变（受控 `toasts`） | 卡片用 `renderContent` 保住左色条与详情列表，并用负 margin 覆盖 Astryx 反色壳的 14px 内边距（否则会露出一圈白边）；堆叠与进动画交给 Astryx，锚点仍由本层定位 |
 | `drawer.tsx` | `Drawer` + `DrawerHeader` | 不变 | `side` 映射 `start`/`end`；头部改用 Astryx `DrawerHeader`（标题、副标题、关闭按钮），行改为 `Button` 并把图标放进 `icon` 插槽 |
 | `sheet.tsx` | `BottomSheet` + `Dialog` | 不变 | `height` 使用 Astryx 的 `hug` / `capped` / `tall` 起始高度；`ConfirmSheet` 改用 Astryx Dialog；行改为 `Button` |
 | `astryx.tsx` | `AlertDialog`、`Badge`、`EmptyState`、`Spinner`、`Skeleton`、`Banner`、`Toolbar`、`SegmentedControl`、`ToggleButtonGroup`、`Slider`、`ClickableCard`、`AspectRatio`、`Grid`、`List`/`ListItem`、`Section`、`Divider` 等 | 直接 re-export | 业务层只经这个 barrel 取用；`toggleChipClass` 统一多选 Chip 的静态样式 |
