@@ -6,7 +6,7 @@
 
 ## 1. 结论
 
-Phase 1–8 之后，业务层已经没有“自己画按钮、自己接对话框焦点、自己写 tooltip”的组件级替代品。本轮又修掉了 10 类“组件是 Astryx、用法仍是自绘范式”的问题。
+Phase 1–9 之后，业务层已经没有“自己画按钮、自己接对话框焦点、自己写 tooltip”的组件级替代品。Phase 9 又解决了最后两类组件级偏差（Toast 多行详情、可点击 ListItem 内嵌按钮），并把标签条与移动卡片菜单换成了原生组件。
 
 目前还有 **5 类刻意保留的产品取舍**。它们不是 API 用错，而是换成文档推荐方案会改变交互或性能模型，因此先记录、不强行改。
 
@@ -25,60 +25,54 @@ Phase 1–8 之后，业务层已经没有“自己画按钮、自己接对话�
 | `TextInput` / `Field` | 用 `Field` 包 `TextInput` | `TextInput` 已有 Field 壳，不能再包；直接传 `label` | 删除 Settings 的 `Field` 包装，`Input` 支持可见 `label` |
 | `Toolbar` | 子按钮各自设 `size="sm"` | `size` 设在 Toolbar 上一次级联 | Toolbar 统一 `size`；`Button` 默认不再强写 `md`，可以继承上下文 |
 | `Button` + `aria-pressed` | 硬盘“全部”用普通 Button 当开关 | 持久开关用 `ToggleButton` | “全部”改 `ToggleButton`；Cookie 显示/隐藏是瞬时动作，去掉 `aria-pressed` |
+| 工作区标签 | 自绘 `<nav>` + `Button` + 标签内关闭 X + 分组容器 | `TabList`/`Tab`；`Tab` 是一个按钮，`endContent` 不能放交互元素 | 改为一条 `TabList`；关闭走右键菜单/中键；分组扁平化，组色改为前置圆点 |
+| 移动卡片菜单 | 全局 `BottomSheet` + `List` + `ListItem` | `MoreMenu`（adaptive/bottom-sheet） | 每张卡片一个 `MoreMenu`；点赞次数并入 label；footer 与视频名标题移除 |
+| 视频列表行 | `List` + 可点击 `ListItem` + 行内点赞/更多 | 可交互列表行内不能放交互元素 | 桌面 `VideoList` 与移动列表改用 `ClickableCard`；回收站行不可点击，保留 `List` |
+| Toast 多行详情 | `renderContent` 自绘卡片 + `details` 列表 | Toast 只放一句话；长内容用 `Banner` | `ui/toast.tsx` 改纯原生；长结果进 `ui/report.tsx` 的 `ReportBanner` |
 
-相关提交：`f902590`、`516a684`、`56f706d`。
+相关提交：`f902590`、`516a684`、`56f706d`。Phase 9：`4edc7ef`、`b04a582`、`6fd2785`、`a0e66b6`。
 
 ## 3. 仍然保留的取舍
 
-### 3.1 Toast 放多行详情
-
-![文件检测 toast 的多行详情](./astryx-audit/1-toast-details.png)
+### 3.1 标签关闭没有可见入口，分组不能折叠
 
 **现状**
 
-- `frontend/src/ui/toast.tsx:66` 用 `renderContent` 画自定义卡片
-- 同文件 `:87` 渲染 `details: string[]`
-- `frontend/src/components/FileScanButton.tsx:139` 的 `summarize()` 最多生成 5 行检测结果
-- `frontend/src/pages/Library.tsx` 通过 `pushToast` 把它送进 toast，并给 6 秒 TTL
+- `frontend/src/components/WorkspaceTabs.tsx` 已改用 `TabList`/`Tab`；`Tab` 是一个按钮，`endContent` 只能放非交互内容，因此每个标签上的关闭 X 被移除。
+- 关闭路径只剩右键菜单（关闭 / 关闭其他 / 关闭右侧）和中键点击。
+- 演员标签组随 `TabList` 扁平化：组色保留为标签前置圆点，但组不能再折叠。
 
 **文档建议**
 
-- Toast 只放“几分钟内能读完的一两句话”
-- 长内容、需要逐条阅读的内容用 `Banner`
-- 需要用户确认的阻塞性错误不要用 toast
+`TabList` 用于视图切换；`Tab` 的 `endContent` 不得包含按钮、链接等可聚焦控件；`TabList` 的 children 只接受 `Tab`/`TabMenu`。
 
 **为什么没改**
 
-文件检测结果需要保留“清理了几个、恢复了几个、几个离线、几个网盘跳过”这类明细。改成 Banner 需要在 Library 增加一个常驻报告区，属于新的界面区域，不只是替换组件。
+这是 `TabList` 的结构约束，不是样式问题：关闭按钮无法塞进 `Tab`，分组容器也无法放进 `TabList`。要保留可见关闭入口，只能在标签条外再加一个“关闭当前”按钮，或把关闭动作放进 `TabMenu`。
 
 **建议方案**
 
-在 Library 工具栏下方增加可关闭的 `Banner`（`status="info"`，`collapsible` 承载明细），toast 只保留“检测完成”一句话。
+如果用户反馈“标签关不掉”，在 `TabList` 外增加一个“关闭当前标签”的 `IconButton`，并保留右键菜单；分组折叠若要恢复，只能退回自绘标签条，不再算原生。
 
-### 3.2 可点击的 ListItem 内嵌按钮
-
-![移动端列表行内的更多按钮](./astryx-audit/2-list-row-actions.png)
+### 3.2 `MoreMenu` 丢失视频名标题与 footer
 
 **现状**
 
-- 移动列表：`frontend/src/mobile/components/VideoGrid.tsx:204` 的 `endContent` 放“更多” `IconButton`
-- 桌面列表：`frontend/src/components/VideoList.tsx:107` 的 `endContent` 放点赞 `IconButton`
-- 回收站：`frontend/src/components/TrashView.tsx:287` 在行尾放“恢复 / 彻底删除”
+- 移动卡片菜单已改为 `MoreMenu presentation="bottom-sheet"`。
+- 点赞次数并入菜单项文字（`点赞（3 次）`）；离线/缺失原因并入“播放（磁盘未接入）”这类 label。
+- 视频名标题和底部“源视频不会被删除”说明不再出现在菜单里；后者由“移入回收站”的确认框承担。
 
 **文档建议**
 
-`List` 文档明确说不要在可交互 list item 里再放交互元素，否则会形成嵌套点击目标。
+`MoreMenu` 用于次要/溢出动作，`items` 只提供 `label`、`icon`、`variant`、`items`，没有 `header`/`footer`/`description`。
 
 **为什么没改**
 
-整行点击打开视频是列表的主交互；点赞、更多、恢复又是高频行级动作。当前用 `stopPropagation` 保证不会误触，但 DOM 结构上仍是嵌套按钮。
+`MoreMenu` 的 sheet 标题来自触发按钮的可访问名，无法按视频动态设置；菜单项也没有描述槽。保留这些信息就得改用 `DropdownMenu` 的 `header`/`footer`，不再是 `MoreMenu` 的封装。
 
 **建议方案**
 
-- 列表行只保留一个行尾“更多”菜单，把点赞/恢复/删除收进菜单
-- 或者把行改成“非交互容器 + 标题链接 + 行尾动作”
-
-这会改变列表的快捷操作路径，需要产品确认。
+如果视频名上下文变得重要，改用 `DropdownMenu` + `header`/`footer`；否则维持 `MoreMenu`，把说明留在确认框和卡片状态徽标里。
 
 ### 3.3 Badge 承载元数据
 
@@ -115,7 +109,9 @@ Badge 只用于状态或分类；时长、数量、哈希、日期属于元数�
 
 - 移动抽屉：`frontend/src/ui/drawer.tsx:57` 的 `DrawerRow`
 - 桌面侧栏：`frontend/src/components/Sidebar.tsx:66` 的 `NavRow`
-- 工作区标签：`frontend/src/components/WorkspaceTabs.tsx:154`
+- Settings 分类导航：`frontend/src/pages/Settings.tsx:73` 的 `<nav>` + `Button`
+
+工作区标签已不再属于这一类，已换 `TabList`。
 
 **文档建议**
 
@@ -125,12 +121,11 @@ Badge 只用于状态或分类；时长、数量、哈希、日期属于元数�
 **为什么没改**
 
 - 侧栏行是原生 HTML5 拖拽的宿主：分组排序、嵌套、投放视频都挂在这些行上
-- `WorkspaceTabs` 有“分组容器 + 标签内关闭按钮”，`TabList` 的关闭按钮会形成嵌套 button
 - 这些不是“画一个导航按钮”，而是带业务状态机的行
 
 **建议方案**
 
-保留外层业务状态机，只把每行的可点击表面换成 `SideNavItem`/`Tab` 的样式与语义；需要先验证拖拽事件、关闭按钮嵌套和键盘导航不受影响。这是五项里改动最大的一项。
+Settings 分类导航没有拖拽，可以先换 `SideNav`/`NavItem`；桌面侧栏与移动抽屉保留外层状态机，只把每行的可点击表面换成 `SideNavItem` 的样式与语义，需要先验证拖拽事件和键盘导航。
 
 ### 3.5 Grid 用固定列数 + 手写模板
 
@@ -158,7 +153,7 @@ Badge 只用于状态或分类；时长、数量、哈希、日期属于元数�
 
 以下组件未发现 API 误用或与文档冲突的用法：
 
-`AlertDialog`、`AspectRatio`、`Avatar`、`Banner`、`CheckboxInput`、`ClickableCard`、`Divider`、`EmptyState`、`HoverCard`、`List`（结构本身）、`MetadataList`、`ProgressBar`、`Section`、`SegmentedControl`、`Selector`、`Skeleton`、`Slider`、`Spinner`、`TextArea`、`ToggleButton`。
+`AlertDialog`、`AspectRatio`、`Avatar`、`Banner`、`CheckboxInput`、`ClickableCard`、`Divider`、`EmptyState`、`HoverCard`、`List`（结构本身）、`MetadataList`、`MoreMenu`、`ProgressBar`、`Section`、`SegmentedControl`、`Selector`、`Skeleton`、`Slider`、`Spinner`、`TabList`、`TextArea`、`Toast`、`ToggleButton`。
 
 两点说明：
 
@@ -171,13 +166,13 @@ Badge 只用于状态或分类；时长、数量、哈希、日期属于元数�
 - `npm run lint`（裸 `<button>` 2/2，裸表单控件 0/0）
 - `npm run build`、`npm run build:mobile`
 - `go test ./...`
-- `wails build --clean --platform darwin/arm64`，覆盖安装 `/Applications/Muse.app`
-- 无头 Chrome 实拍：Toast、移动列表、移动网格、移动抽屉、Settings 表单、添加视频对话框、AlertDialog、图片灯箱
+- Phase 9 手工回归：标签右键/中键关闭、`TabList` 键盘方向键、移动 `MoreMenu` 底部面板与返回手势、`ClickableCard` 行内勾选/点赞/更多、长结果 Banner 的展开/关闭、原生 Toast 的关闭与错误常驻
+- `wails build` 后覆盖安装，检查桌面端与局域网移动端
 
 ## 6. 建议的后续顺序
 
-1. **Toast → Banner**：收益最大，改动局限在 Library 与 `FileScanButton` 的返回结构。
-2. **Badge 元数据 → 普通文本**：纯展示改动，风险低。
-3. **ListItem 行内动作收敛**：需要产品确认交互。
-4. **导航行换 `SideNav`/`TabList`**：牵动拖拽与标签关闭，建议单独排期。
+1. **标签关闭可见入口**：先观察右键/中键是否够用；若不够，在 `TabList` 外增加“关闭当前”按钮，而不是恢复标签内 X。
+2. **Settings 分类导航 → `SideNav`/`NavItem`**：没有拖拽，风险最低的一处导航行。
+3. **Badge 元数据 → 普通文本**：纯展示改动，风险低；时长需要补一层 scrim。
+4. **桌面侧栏 / 移动抽屉 → `SideNavItem`**：需要先验证拖拽、嵌套与键盘导航。
 5. **Grid 响应式列**：等虚拟滚动或 Astryx 提供列数回调后再做，暂不冒险。

@@ -1,6 +1,6 @@
 # Astryx 全量替换方案
 
-> 状态：Phase 1–8 已实施（2026-11-16）；保留少数业务组合例外，见文末。
+> 状态：Phase 1–9 已实施（2026-11-16）；保留少数业务组合例外，见文末。
 > 范围：`frontend/src/` 的桌面端与移动端；产品深色 token、`ui/` 唯一接缝、文件零改动原则不变。
 
 ## 0. 结论先行
@@ -150,7 +150,7 @@
 4. **拖拽分组/嵌套/投放到分组**：视觉行可以换 `SideNavItem`/`TreeList`，但拖拽状态机和嵌套判定是业务逻辑，不是 UI 组件。
 5. **品牌 SVG 资产**：图标仍由 Muse 拥有，但通过 `registerIcons` 交给 Astryx `Icon` 渲染；资产不是组件。
 6. **布局组合**：`Stack`/`Grid`/`Section` 能替换大部分 flex/grid，但视频详情的时间线、分组树、分栏等业务组合最终仍是 Muse 视图；这是视图，不是自绘组件。
-7. **桌面侧边栏/标签条的外壳**：`Sidebar` 的分组嵌套拖拽和 `WorkspaceTabs` 的“分组容器 + 标签内关闭按钮”没有无行为损失的 `SideNav`/`TabList` 组合；外壳容器保留，内部行/按钮已全部 Astryx。
+7. **桌面侧边栏的外壳**：`Sidebar` 的分组嵌套拖拽没有无行为损失的 `SideNav`/`TreeList` 组合；外壳与拖拽行保留。`WorkspaceTabs` 已在 Phase 9 换成 `TabList`。
 
 ---
 
@@ -238,7 +238,18 @@
 - `Toolbar`：`size` 设在 Toolbar 上一次级联，子控件不再各自设 `size`
 - 开关：硬盘「全部」由 `Button aria-pressed` 改 `ToggleButton`
 
-剩余未改的五类产品取舍（Toast 多行详情、可点击 ListItem 内嵌按钮、Badge 承载元数据、导航行用 Button、Grid 固定列数）已单独整理为 [`astryx-usage-audit.md`](./astryx-usage-audit.md)，含截图、文档建议与建议方案。
+Phase 8 记录的五类取舍中，Toast 多行详情与可点击 ListItem 内嵌按钮已在 Phase 9 解决；Badge 元数据、导航行 Button、Grid 固定列数仍保留，最新清单见 [`astryx-usage-audit.md`](./astryx-usage-audit.md)。
+
+### Phase 9：原生语义收尾 — ✅ 已完成
+
+2026-11-16，按“完全符合 Astryx 原生语义”的评审结果，替换了最后四个组件级缺口：
+
+- **工作区标签 → `TabList`/`Tab`**：去掉每个标签上的关闭 X，标签扁平化为一条 `TabList`；演员组不再折叠，组色改为标签前置圆点。关闭路径改为右键菜单（关闭/关闭其他/关闭右侧）与中键。
+- **移动卡片菜单 → `MoreMenu`**：`presentation="bottom-sheet"`，点赞次数并入菜单项文字；视频名标题与底部“源文件不会被删除”说明移除，后者由删除确认框承担。菜单状态仍由壳持有，Android 返回手势可关闭。
+- **视频列表行 → `ClickableCard`**：桌面 `VideoList` 与移动列表改用 `ClickableCard` 的隐藏整面按钮，行内勾选、点赞、更多按钮保持独立。回收站行本身不可点击，`List` + `ListItem` 已符合原生规则，未改。
+- **长结果 → `ReportBanner` + 原生 `Toast`**：`ui/report.tsx` 用 `Banner` 承载扫描结果与错误明细；`ui/toast.tsx` 只保留原生一句话卡片，`success` 映射为 `info`，错误 toast 不自动消失。`pushNotice` 统一路由：有 `details` 进 Banner，否则进 Toast。
+
+**取舍**：标签关闭不再有可见入口；标签组不能折叠；`MoreMenu` 丢失 footer/视频名标题；原生 Toast 没有 success 绿色；长错误改为常驻 Banner。详见 [`astryx-usage-audit.md`](./astryx-usage-audit.md) 与 [`astryx-design-system.md`](./astryx-design-system.md)。
 
 ---
 

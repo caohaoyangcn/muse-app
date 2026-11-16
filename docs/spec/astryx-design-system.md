@@ -2,7 +2,7 @@
 
 决定：引入 Meta 的 Astryx（`@astryxdesign/core` 0.7.15 + `theme-neutral`）作为设计系统，但**只从 `frontend/src/ui/` 暴露**，业务组件不直接 import。本文记录已验证的事实、必须遵守的两条规则，以及分批采用的顺序。
 
-> 全量替换自绘组件的逐项映射与分阶段方案见 [`astryx-migration-plan.md`](./astryx-migration-plan.md)，逐组件“现状 vs 文档建议”的完整对照见 [`astryx-usage-audit.md`](./astryx-usage-audit.md)。本文记录当前已采用的边界。2026-11-16 已完成 Phase 1–8。
+> 全量替换自绘组件的逐项映射与分阶段方案见 [`astryx-migration-plan.md`](./astryx-migration-plan.md)，逐组件“现状 vs 文档建议”的完整对照见 [`astryx-usage-audit.md`](./astryx-usage-audit.md)。本文记录当前已采用的边界。2026-11-16 已完成 Phase 1–9（Phase 9 为原生语义收尾：`TabList`、`MoreMenu`、`ClickableCard` 列表行、`Banner` 报告 + 原生 Toast）。
 
 ## 为什么只做接缝，不整体换皮
 
@@ -55,7 +55,11 @@ token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScri
 | `button.tsx` | `Button` | 不变（`variant` / `size` / children）+ `icon` / `tooltip` | 文字经 `children` 传入；`label` 取 children 的纯文本。图标必须走 `icon` 插槽（不能塞 children，否则会掉进 block 级 label 里、失去间距）；原生 `title` 自动转成 Astryx `tooltip`。`default→secondary`、`danger→destructive`；纯图标按钮改 `IconButton`。 |
 | `input.tsx` | `TextInput` | 原生 input props + `label` / `isLabelHidden` | 事件转回原生 `onChange(event)`；`id` 透传给真输入框。传 `label` 时显示 Astryx 可见标签，否则标签隐藏、靠外部 `<label htmlFor>` / `aria-label` 命名；`number` 无对应字段，降级为 `text + inputMode=numeric` |
 | `dialog.tsx` | `Dialog` + `DialogHeader` + `AlertDialog` | 不变（`open`/`onOpenChange` + `DialogHeader`/`Footer`） | 标题、`aria-labelledby`、聚焦与关闭按钮全部交给 Astryx `DialogHeader`；`purpose` 透传（表单对话框用 `form`）。确认类对话框改 `AlertDialog`；无标题的图片灯箱用 `DialogCloseButton`。宽度/内边距走 props，不用 class |
-| `toast.tsx` | `Toast` + `ToastViewport` | 不变（受控 `toasts`） | 卡片用 `renderContent` 保住左色条与详情列表，并用负 margin 覆盖 Astryx 反色壳的 14px 内边距（否则会露出一圈白边）；堆叠与进动画交给 Astryx，锚点仍由本层定位 |
+| `toast.tsx` | `Toast` + `ToastViewport` | 不变（受控 `toasts`） | 纯原生卡片，无 `details`；长结果走 `ReportBanner` |
+| `WorkspaceTabs.tsx` | `TabList` + `Tab` | 不变 | 扁平化标签；组色改为前置圆点；关闭走右键/中键 |
+| `mobile` 卡片菜单 | `MoreMenu` | — | 底部面板；点赞次数进 label，底部说明移除 |
+| `VideoList` / 移动列表 | `ClickableCard` | — | 行本身可点，内部勾选/点赞/更多独立 |
+| `ui/report.tsx` | `Banner` | `<ReportBanner>` | 长结果常驻；Toast 只留一句话 |
 | `drawer.tsx` | `Drawer` + `DrawerHeader` | 不变 | `side` 映射 `start`/`end`；头部改用 Astryx `DrawerHeader`（标题、副标题、关闭按钮），行改为 `Button` 并把图标放进 `icon` 插槽 |
 | `sheet.tsx` | `BottomSheet` + `Dialog` | 不变 | `height` 使用 Astryx 的 `hug` / `capped` / `tall` 起始高度；`ConfirmSheet` 改用 Astryx Dialog；行改为 `Button` |
 | `astryx.tsx` | `AlertDialog`、`Badge`、`EmptyState`、`Spinner`、`Skeleton`、`Banner`、`Toolbar`、`SegmentedControl`、`ToggleButtonGroup`、`Slider`、`ClickableCard`、`AspectRatio`、`Grid`、`List`/`ListItem`、`Section`、`Divider` 等 | 直接 re-export | 业务层只经这个 barrel 取用；`toggleChipClass` 统一多选 Chip 的静态样式 |
@@ -83,22 +87,20 @@ token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScri
 | `Toolbar` 子按钮各自设 `size` | 文档要求 size 设在 Toolbar 上一次级联 | Toolbar 统一 `size="sm"`，子控件去掉 size |
 | 用 `Button` + `aria-pressed` 当开关 | 文档要求持久开关用 `ToggleButton` | 硬盘「全部」改 `ToggleButton`；显示 Cookie 是瞬时动作，去掉 `aria-pressed` 保留 `aria-label` |
 
-复核后仍有四类**产品取舍**（不是 API 用错，未强行改）：
+复核后仍有五类**产品取舍**（不是 API 用错，未强行改）：
 
-1. **Toast 带多行详情**：`ui/toast.tsx` 的扫描结果/错误会带 `details` 列表，文档建议 toast 只放一句话、长内容用 `Banner`。改成 Banner 需要新的常驻报告区，暂保留；后续若做，应把详情移出 toast。
-2. **可点击 `ListItem` 里嵌按钮**：`VideoList`/移动 `VideoGrid`/`TrashView` 在 `endContent` 放点赞、更多、恢复等按钮，文档不建议在可交互行里嵌交互元素。当前用 `stopPropagation` 保证行为正确，属于列表行动作的产品设计。
+1. **标签关闭不再有可见入口**：`Tab` 是一个按钮，`endContent` 不能放关闭按钮，所以每个标签上的 X 去掉了；关闭只剩右键菜单（关闭/关闭其他/关闭右侧）和中键。分组容器也随 `TabList` 扁平化，组色改为前置圆点，组不能再折叠。
+2. **`MoreMenu` 没有 footer/标题**：移动动作面板的视频名标题、点赞次数说明和“源视频不会被删除”底部说明不再出现在菜单里；点赞次数并入菜单项文字，删除说明由确认框承担。
 3. **`Badge` 承载元数据**：时长、数量、哈希、版本数用了 Badge，文档建议元数据用普通文本。它们同时承担分组/识别的视觉作用，暂按分类标签处理。
-4. **导航仍用 `Button`**：侧栏、移动抽屉、`WorkspaceTabs` 的导航行是 `Button`；文档建议用链接/`SideNav`/`TabList`。外壳的拖拽、分组嵌套与标签关闭是业务状态机，已在迁移计划里记为显式例外。
-
-另外，虚拟滚动网格用数字 `columns` + 内联 `gridTemplateColumns`，文档默认建议 `{minWidth,max}`；这里列数必须和虚拟行窗口的数学一致，保留为性能例外。
+4. **导航仍用 `Button`**：桌面侧栏、移动抽屉、Settings 分类导航的导航行是 `Button`；文档建议用链接/`SideNav`/`NavItem`。侧栏的拖拽、分组嵌套是业务状态机，已在迁移计划里记为显式例外。
+5. **虚拟滚动网格用数字 `columns`**：列数必须和虚拟行窗口的数学一致，保留为性能例外；`Grid` 的响应式 `{minWidth,max}` 暂不冒险。
 
 ## 刻意没有替换的
 
-- **`ui/sidebar.tsx`**：分组树的拖拽排序/嵌套/投放规则是业务状态机；视觉行后续换 `SideNav`/`TreeList`（Phase 5）。
-- **`Sidebar` / `WorkspaceTabs` 的外壳容器**：分组嵌套拖拽与“分组容器 + 标签内关闭按钮”没有无行为损失的 `SideNav`/`TabList` 组合；外壳保留，内部行/按钮已全部 Astryx。
+- **`components/Sidebar.tsx` 的导航行**：分组树的拖拽排序/嵌套/投放规则是业务状态机；视觉行仍用 `Button`，后续若要换 `SideNav` 需先验证 DnD。`ui/sidebar.tsx` 只是无交互的 aside/nav/section 容器。
 - **`ui/error-boundary.tsx`**：React 错误边界必须是 class，Astryx 没有等价物；fallback 已改为 `EmptyState` + `Button`。
 - 其它已替换的 `NavIcon`、业务徽标、StickyBar、移动端 States、旧 `menu`/`flyout-shell`、`MetadataPopup` 自绘定位、`SheetAction` 不再保留。
-- Phase 1–7 已完成；业务层裸 `<button>` 只剩 `GuidedTour` 的 2 个聚光灯控制，裸 `<input>`/`<select>`/`<textarea>` 为 0（`ui/input.tsx` 除外）。
+- Phase 1–9 已完成；业务层裸 `<button>` 只剩 `GuidedTour` 的 2 个聚光灯控制，裸 `<input>`/`<select>`/`<textarea>` 为 0（`ui/input.tsx` 除外）。
 
 ## 复验方法
 
