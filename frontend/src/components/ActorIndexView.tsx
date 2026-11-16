@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { actorFillStatus, mergeActors, startActorFill, unmergeActor } from "../services/desktop";
 import { invalidate } from "../services/live";
 import { useLiveQuery } from "../hooks/useLiveQuery";
 import type { ActorFillStatus, ActorSummary } from "../types";
 import { MIME_ACTOR_DRAG } from "../types";
 import { actorAvatarURL } from "../utils/format";
+import { Avatar, Badge, DropdownMenuItem, EmptyState, Spinner } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { cn } from "../lib/utils";
+import { MenuSurface } from "../ui/menu";
 import { useActorIndex } from "../views/actors/useActorIndex";
 
 /**
@@ -119,15 +121,15 @@ export default function ActorIndexView({
           {filtered.length !== actors.length ? ` · 匹配 ${filtered.length} 位` : ""}
         </span>
         <span className="text-xs text-[var(--muted)]">拖动一个演员到另一个上可合并同一人的不同艺名</span>
-        <button
-          type="button"
-          onClick={handleStartFill}
+        <Button
           disabled={startingFill || (fill?.active ?? false)}
+          onClick={handleStartFill}
+          size="sm"
           title="为还没有头像与档案的演员逐个查询数据源"
-          className="rounded-[var(--radius)] border border-[var(--border)] px-2.5 py-1 text-xs hover:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
+          variant="ghost"
         >
           {fill?.active ? "补全中…" : "补全演员信息"}
-        </button>
+        </Button>
         <div className="ml-auto w-[240px] max-w-full">
           <Input
             value={keyword}
@@ -144,23 +146,15 @@ export default function ActorIndexView({
       )}
 
       {loading ? (
-        <div className="flex min-h-[320px] flex-col items-center justify-center text-[var(--muted)]">
-          加载中…
+        <div className="flex min-h-[320px] items-center justify-center">
+          <Spinner label="加载中…" size="lg" />
         </div>
       ) : error ? (
-        <div className="flex min-h-[320px] flex-col items-center justify-center text-[var(--danger)]">
-          加载演员失败：{error}
-        </div>
+        <EmptyState description={error} title="加载演员失败" />
       ) : actors.length === 0 ? (
-        <div className="flex min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
-          <div className="mb-1.5 text-xl text-[var(--text)]">暂无演员</div>
-          <div>刮削完成后，演员会在这里聚合展示</div>
-        </div>
+        <EmptyState description="刮削完成后，演员会在这里聚合展示" title="暂无演员" />
       ) : filtered.length === 0 ? (
-        <div className="flex min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
-          <div className="mb-1.5 text-xl text-[var(--text)]">无结果</div>
-          <div>没有匹配“{keyword.trim()}”的演员</div>
-        </div>
+        <EmptyState description={`没有匹配“${keyword.trim()}”的演员`} title="无结果" />
       ) : (
         <div className="flex flex-wrap gap-2">
           {filtered.map((a) => {
@@ -188,21 +182,20 @@ export default function ActorIndexView({
                 title={`查看 ${a.name} 出演的影片${a.aliases?.length ? `（已合并：${a.aliases.join("、")}）` : ""}`}
               >
                 <ActorAvatar actor={a} />
-                <button
-                  type="button"
-                  className="cursor-pointer hover:text-[var(--accent)]"
+                <Button
+                  className="h-auto px-0 text-sm text-[var(--text)] hover:text-[var(--accent)]"
                   onClick={() => onOpenActor(a.name)}
+                  size="sm"
+                  variant="ghost"
                 >
                   {a.name}
-                </button>
+                </Button>
                 {a.aliases && a.aliases.length > 0 && (
                   <span className="text-xs text-[var(--muted)]">
                     +{a.aliases.join("、")}
                   </span>
                 )}
-                <span className="rounded-[10px] bg-[var(--border)] px-2 py-px text-xs text-[var(--muted)]">
-                  {a.count}
-                </span>
+                <Badge label={String(a.count)} variant="neutral" />
               </div>
             );
           })}
@@ -222,20 +215,9 @@ export default function ActorIndexView({
   );
 }
 
-/** One actor's avatar, falling back to the first character of the name. */
+/** One actor's avatar, falling back to initials. */
 function ActorAvatar({ actor }: { actor: ActorSummary }) {
-  const src = actorAvatarURL(actor.profile);
-  return (
-    <span className="h-7 w-7 shrink-0 overflow-hidden rounded-full border border-[var(--border)] bg-[var(--panel-2)]">
-      {src ? (
-        <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center text-[11px] text-[var(--muted)]">
-          {actor.name.slice(0, 1)}
-        </span>
-      )}
-    </span>
-  );
+  return <Avatar name={actor.name} size="sm" src={actorAvatarURL(actor.profile) || undefined} />;
 }
 
 /** The 补全演员信息 progress line shown under the actor index header. */
@@ -262,52 +244,23 @@ function ActorMergeMenu({
   onUnmerge: (alias: string) => void;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const left = Math.min(x, window.innerWidth - 240);
-  const top = Math.min(y, window.innerHeight - 200);
-
-  useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("mousedown", close);
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("blur", onClose);
-    return () => {
-      window.removeEventListener("mousedown", close);
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("blur", onClose);
-    };
-  }, [onClose]);
-
   const aliases = actor.aliases ?? [];
   return (
-    <div
-      ref={ref}
-      className="fixed z-[200] min-w-[230px] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel-2)] p-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
-      style={{ left, top }}
-    >
-      <div className="px-3 py-1.5 text-xs text-[var(--muted)]">{actor.name}</div>
+    <MenuSurface label={`${actor.name} 操作`} onClose={onClose} x={x} y={y}>
       {aliases.length === 0 ? (
-        <div className="px-3 py-2 text-sm text-[var(--muted)]">没有已合并的艺名</div>
+        <DropdownMenuItem isDisabled label="没有已合并的艺名" />
       ) : (
         aliases.map((alias) => (
-          <Button
-            variant="ghost"
+          <DropdownMenuItem
             key={alias}
-            className="h-auto w-full justify-start rounded-md px-3 py-2 text-left text-[var(--text)]"
+            label={`解除合并「${alias}」`}
             onClick={() => {
               onUnmerge(alias);
               onClose();
             }}
-          >
-            解除合并「{alias}」
-          </Button>
+          />
         ))
       )}
-    </div>
+    </MenuSurface>
   );
 }

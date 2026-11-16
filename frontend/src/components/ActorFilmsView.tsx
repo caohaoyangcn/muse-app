@@ -8,7 +8,7 @@ import { compareLastOpened } from "../utils/sortVideos";
 import { readCardSize, readViewMode, writeCardSize, writeViewMode } from "../utils/viewPrefs";
 import SearchBar from "./SearchBar";
 import SortBar from "./SortBar";
-import { Toolbar } from "../ui/astryx";
+import { Avatar, EmptyState, Spinner, Toolbar } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Icon } from "../ui/icon";
 import VideoGrid from "./VideoGrid";
@@ -156,23 +156,15 @@ export default function ActorFilmsView({
       />
       {profile && <ActorProfileHeader profile={profile} />}
       {loading ? (
-        <div className="flex min-h-[320px] items-center justify-center text-[var(--muted)]">
-          加载中…
+        <div className="flex min-h-[320px] items-center justify-center">
+          <Spinner label="加载中…" size="lg" />
         </div>
       ) : error ? (
-        <div className="flex min-h-[320px] items-center justify-center text-[var(--danger)]">
-          加载失败：{error}
-        </div>
+        <EmptyState description={error} title="加载失败" />
       ) : videos.length === 0 ? (
-        <div className="flex min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
-          <div className="mb-1.5 text-xl text-[var(--text)]">暂无影片</div>
-          <div>未找到「{name}」出演的收藏影片</div>
-        </div>
+        <EmptyState description={`未找到「${name}」出演的收藏影片`} title="暂无影片" />
       ) : sortedVideos.length === 0 ? (
-        <div className="flex min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
-          <div className="mb-1.5 text-xl text-[var(--text)]">无结果</div>
-          <div>没有匹配“{keyword.trim()}”的影片</div>
-        </div>
+        <EmptyState description={`没有匹配“${keyword.trim()}”的影片`} title="无结果" />
       ) : (
         <>
           <SortBar
@@ -203,15 +195,7 @@ function ActorProfileHeader({ profile }: { profile: ActorProfile }) {
   const meta = profileMeta(profile);
   return (
     <div className="mb-4 flex items-start gap-3">
-      <span className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-[var(--border)] bg-[var(--panel-2)]">
-        {avatar ? (
-          <img src={avatar} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <span className="flex h-full w-full items-center justify-center text-lg text-[var(--muted)]">
-            {profile.name.slice(0, 1)}
-          </span>
-        )}
-      </span>
+      <Avatar name={profile.name} size={64} src={avatar || undefined} />
       <div className="min-w-0">
         <div className="text-sm font-semibold">{profile.name}</div>
         {meta && <div className="mt-0.5 text-xs text-[var(--muted)]">{meta}</div>}
