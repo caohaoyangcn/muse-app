@@ -26,6 +26,8 @@ export {
   DropdownMenuSubMenu,
 } from "@astryxdesign/core/DropdownMenu";
 export { EmptyState } from "@astryxdesign/core/EmptyState";
+export { Field } from "@astryxdesign/core/Field";
+export { FormLayout } from "@astryxdesign/core/FormLayout";
 export { Grid } from "@astryxdesign/core/Grid";
 export { HoverCard } from "@astryxdesign/core/HoverCard";
 export { IconButton } from "@astryxdesign/core/IconButton";

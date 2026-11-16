@@ -10,7 +10,7 @@ import type {
 import { BrowserOpenURL } from "../../wailsjs/runtime";
 import { invalidate } from "../services/live";
 import ConfirmDialog from "../components/ConfirmDialog";
-import { CheckboxInput } from "../ui/astryx";
+import { CheckboxInput, Field as AstryxField } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { cn } from "../lib/utils";
@@ -1601,12 +1601,9 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <label className="mb-1.5 block text-[13px] text-[var(--muted)]" htmlFor={htmlFor}>
-        {label}
-      </label>
+    <AstryxField inputID={htmlFor} label={label}>
       {children}
-    </div>
+    </AstryxField>
   );
 }
 
