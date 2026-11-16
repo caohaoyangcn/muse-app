@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Badge, EmptyState, List, ListItem, SegmentedControl, SegmentedControlItem, Spinner } from "../../ui/astryx";
 
 import type { Video } from "../../types";
-import { formatDateTime } from "../../utils/task";
+import { formatDateTime } from "../../utils/datetime";
 import { videoName } from "../videoDisplay";
 import {
   SCRAPE_CATEGORY_LABELS,

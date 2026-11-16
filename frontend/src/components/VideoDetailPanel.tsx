@@ -10,6 +10,7 @@ import {
   videoCoverURL,
   videoResolution,
 } from "../utils/format";
+import { formatDateTime, formatReleaseDate } from "../utils/datetime";
 import { videoDisplayName } from "../utils/videoName";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -48,16 +49,6 @@ const errorLabels: Record<string, string> = {
   network: "网络请求失败，任务会在稍后自动重试。",
   parse: "JavBus 页面结构无法识别。",
 };
-
-function formatDate(unix?: number): string {
-  if (!unix) return "未提供";
-  return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium" }).format(new Date(unix * 1000));
-}
-
-function formatDateTime(unix?: number): string {
-  if (!unix) return "未提供";
-  return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(unix));
-}
 
 function valueOrUnknown(value?: string | number | null): string {
   return value === undefined || value === null || value === "" ? "未提供" : String(value);
@@ -279,7 +270,7 @@ export default function VideoDetailPanel({
                     ["标题", valueOrUnknown(detail.title)],
                     ["制作商", valueOrUnknown(detail.studio)],
                     ["系列", valueOrUnknown(detail.series)],
-                    ["发行日期", formatDate(detail.releaseUnix)],
+                    ["发行日期", formatReleaseDate(detail.releaseUnix)],
                     ["时长", detail.durationMin ? `${detail.durationMin} 分钟` : "未提供"],
                     ["数据来源", valueOrUnknown(detail.provider)],
                     ["抓取时间", formatDateTime(detail.fetchedAt)],

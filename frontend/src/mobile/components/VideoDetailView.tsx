@@ -19,7 +19,7 @@ import {
   formatFrameRate,
   videoResolution,
 } from "../../utils/format";
-import { formatDateTime } from "../../utils/task";
+import { formatDateTime, formatReleaseDate } from "../../utils/datetime";
 import { client, coverURL, getVideo } from "../../services/web";
 import { invalidate } from "../../services/live";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
@@ -50,7 +50,7 @@ function javRows(d: JavDetail): [string, string][] {
     ["标题", d.title || "未提供"],
     ["制作商", d.studio || "未提供"],
     ["系列", d.series || "未提供"],
-    ["发行日期", d.releaseUnix ? formatDateTime(d.releaseUnix) : "未提供"],
+    ["发行日期", formatReleaseDate(d.releaseUnix)],
     ["时长", d.durationMin ? `${d.durationMin} 分钟` : "未提供"],
     ["数据来源", d.provider || "未提供"],
     ["抓取时间", d.fetchedAt ? formatDateTime(d.fetchedAt) : "未提供"],
