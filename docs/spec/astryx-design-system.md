@@ -2,6 +2,8 @@
 
 决定：引入 Meta 的 Astryx（`@astryxdesign/core` 0.7.15 + `theme-neutral`）作为设计系统，但**只从 `frontend/src/ui/` 暴露**，业务组件不直接 import。本文记录已验证的事实、必须遵守的两条规则，以及分批采用的顺序。
 
+> 全量替换自绘组件的逐项映射与分阶段方案见 [`astryx-migration-plan.md`](./astryx-migration-plan.md)。本文记录当前已采用的边界；迁移完成后需同步更新下方「刻意没有替换的」一节。
+
 ## 为什么只做接缝，不整体换皮
 
 Astryx 有 174 个组件入口，是一套完整设计语言（排版、间距、圆角、动效、a11y）。Muse 有自己的产品 token（`src/theme.css`）、CSS `zoom` 外壳（`--ui-zoom`，0.8–1.5）、自绘滚动条、中文界面。整体替换的代价不是 import 语句，而是第二套视觉语言。
