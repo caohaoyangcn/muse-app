@@ -1,5 +1,15 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { Badge, EmptyState, Spinner } from "../../ui/astryx";
+import {
+  Badge,
+  ClickableCard,
+  EmptyState,
+  IconButton,
+  MetadataList,
+  MetadataListItem,
+  Section,
+  Spinner,
+  Toolbar,
+} from "../../ui/astryx";
 
 import type { JavDetail, Video } from "../../types";
 import {
@@ -15,6 +25,8 @@ import { invalidate } from "../../services/live";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { videoName } from "../videoDisplay";
 import { Button } from "../../ui/button";
+import { Dialog, DialogContent } from "../../ui/dialog";
+import { Icon } from "../../ui/icon";
 
 const errorLabels: Record<string, string> = {
   no_code: "未识别到番号",
@@ -155,33 +167,34 @@ export function VideoDetailView({
       />
 
       <div className="scroll-area flex-1 px-4 pb-8 pt-3" data-scroll-key="main">
-        {/* Cover */}
-        <button
-          className="relative block w-full overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[#111114]"
+        <ClickableCard
+          className="w-full overflow-hidden bg-[#111114]"
+          label="查看封面"
           onClick={() => setLightbox(true)}
-          type="button"
+          padding={0}
+          variant="default"
         >
           <img alt="" className="w-full object-contain" src={coverURL(v)} />
-        </button>
+        </ClickableCard>
 
         <div className="mt-4">
           <div className="flex gap-2">
-            <button
-              className="flex-1 rounded-[var(--radius)] bg-[var(--accent)] py-3 font-medium text-white disabled:opacity-50"
+            <Button
+              className="flex-1 py-3"
               disabled={v.status === "missing" || v.volumeOffline || v.sourceOffline}
               onClick={() => onPlay(v)}
-              type="button"
+              variant="primary"
             >
               ▶ 播放
-            </button>
-            <button
-              className="rounded-[var(--radius)] border border-[var(--border)] px-4 py-3 active:bg-[var(--panel-2)] disabled:opacity-50"
+            </Button>
+            <Button
               disabled={busy}
               onClick={() => void like()}
-              type="button"
+              variant="default"
             >
-              ♥ {v.likeCount > 0 ? v.likeCount : "点赞"}
-            </button>
+              <Icon className="size-4" name="heart" />
+              {v.likeCount > 0 ? v.likeCount : "点赞"}
+            </Button>
           </div>
           {v.volumeOffline ? (
             <p className="mt-2 text-xs text-[var(--muted)]">
@@ -192,14 +205,15 @@ export function VideoDetailView({
               网盘「{v.sourceName || "连接"}」当前离线，恢复后即可播放。
             </p>
           ) : null}
-          <button
-            className="mt-2 w-full py-1 text-xs text-[var(--muted)] active:text-[var(--text)]"
+          <Button
+            className="mt-2 w-full"
             disabled={v.status === "missing" || v.volumeOffline || v.sourceOffline || v.sourceId > 0}
             onClick={() => onChoosePlayer(v)}
-            type="button"
+            size="sm"
+            variant="ghost"
           >
             播放器选项
-          </button>
+          </Button>
         </div>
 
         {v.notes ? (
@@ -208,8 +222,7 @@ export function VideoDetailView({
           </div>
         ) : null}
 
-        {/* Scrape status — read-only on mobile. */}
-        <Section title="刮削状态">
+        <MetaSection title="刮削状态">
           <div className="text-sm">
             {loading ? (
               <span className="text-[var(--muted)]">加载中…</span>
@@ -224,63 +237,60 @@ export function VideoDetailView({
               <span className="text-[var(--muted)]">尚未刮削（可在桌面端发起刮削）</span>
             )}
           </div>
-        </Section>
+        </MetaSection>
 
         {detail ? (
           <>
-            <Section title="元数据">
-              <Table rows={javRows(detail)} />
-            </Section>
+            <MetaSection title="元数据">
+              <MetadataList label={{ position: "start", width: 80 }}>
+                {javRows(detail).map(([label, value]) => (
+                  <MetadataListItem key={label} label={label}>{value}</MetadataListItem>
+                ))}
+              </MetadataList>
+            </MetaSection>
 
             {actors.length > 0 ? (
-              <Section title="演员">
+              <MetaSection title="演员">
                 <div className="flex flex-wrap gap-2">
                   {actors.map((name) => (
-                    <button
-                      className="rounded-full border border-[var(--border)] bg-[var(--panel-2)] px-3 py-1.5 text-sm active:bg-[var(--panel)]"
+                    <Button
+                      className="rounded-full"
                       key={name}
                       onClick={() => onSelectActor(name)}
-                      type="button"
+                      size="sm"
+                      variant="default"
                     >
                       {name}
-                    </button>
+                    </Button>
                   ))}
                 </div>
-              </Section>
+              </MetaSection>
             ) : null}
 
             {tags.length > 0 ? (
-              <Section title="标签">
+              <MetaSection title="标签">
                 <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <span
-                      className="rounded-full bg-[var(--panel-2)] px-3 py-1 text-xs text-[var(--muted)]"
-                      key={tag}
-                    >
-                      {tag}
-                    </span>
-                  ))}
+                  {tags.map((tag) => <Badge key={tag} label={tag} variant="neutral" />)}
                 </div>
-              </Section>
+              </MetaSection>
             ) : null}
           </>
         ) : null}
 
-        <Section title="文件信息">
-          <Table rows={fileRows} />
-        </Section>
+        <MetaSection title="文件信息">
+          <MetadataList label={{ position: "start", width: 80 }}>
+            {fileRows.map(([label, value]) => (
+              <MetadataListItem key={label} label={label}>{value}</MetadataListItem>
+            ))}
+          </MetadataList>
+        </MetaSection>
       </div>
 
-      {lightbox ? (
-        <button
-          aria-label="关闭封面"
-          className="fade-enter fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
-          onClick={() => setLightbox(false)}
-          type="button"
-        >
-          <img alt="" className="max-h-full max-w-full object-contain" src={coverURL(v)} />
-        </button>
-      ) : null}
+      <Dialog onOpenChange={setLightbox} open={lightbox} width="min(92vw, 900px)">
+        <DialogContent label="封面预览">
+          <img alt="" className="max-h-[80vh] w-full object-contain" src={coverURL(v)} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -297,57 +307,38 @@ function DetailHeader({
   onEdit?: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 border-b border-[var(--border)] px-2 py-2">
-      <button
-        aria-label="返回"
-        className="px-2 text-xl leading-none text-[var(--muted)]"
-        onClick={onBack}
-        type="button"
-      >
-        ←
-      </button>
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <div className="truncate text-sm font-medium">{title}</div>
-        {badge}
-      </div>
-      {onEdit ? (
-        <button
-          className="rounded-full border border-[var(--border)] px-3 py-1.5 text-xs active:bg-[var(--panel-2)]"
-          onClick={onEdit}
-          type="button"
-        >
-          编辑
-        </button>
-      ) : null}
-    </div>
+    <Toolbar
+      centerContent={
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-sm font-medium">{title}</span>
+          {badge}
+        </div>
+      }
+      className="border-b border-[var(--border)] px-2 py-1"
+      endContent={
+        onEdit ? <Button onClick={onEdit} size="sm" variant="ghost">编辑</Button> : null
+      }
+      label="视频详情"
+      startContent={
+        <IconButton
+          icon={<Icon className="size-4" name="arrow-left" />}
+          label="返回"
+          onClick={onBack}
+          size="sm"
+          variant="ghost"
+        />
+      }
+    />
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function MetaSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="mt-5">
+    <Section className="mt-5" padding={0} variant="transparent">
       <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
         {title}
       </div>
       {children}
-    </div>
-  );
-}
-
-function Table({ rows }: { rows: [string, string][] }) {
-  return (
-    <dl className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)]">
-      {rows.map(([k, val], i) => (
-        <div
-          className={`flex gap-3 px-3 py-2.5 text-sm ${
-            i % 2 ? "bg-[var(--panel)]" : "bg-[var(--card)]"
-          }`}
-          key={k}
-        >
-          <dt className="w-20 shrink-0 text-[var(--muted)]">{k}</dt>
-          <dd className="min-w-0 flex-1 break-all">{val}</dd>
-        </div>
-      ))}
-    </dl>
+    </Section>
   );
 }

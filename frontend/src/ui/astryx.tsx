@@ -30,6 +30,7 @@ export { Grid } from "@astryxdesign/core/Grid";
 export { HoverCard } from "@astryxdesign/core/HoverCard";
 export { IconButton } from "@astryxdesign/core/IconButton";
 export { List, ListItem } from "@astryxdesign/core/List";
+export { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 export { MoreMenu } from "@astryxdesign/core/MoreMenu";
 export { ProgressBar } from "@astryxdesign/core/ProgressBar";
 export { Section } from "@astryxdesign/core/Section";
