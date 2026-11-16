@@ -124,7 +124,10 @@ export default function App() {
   const toast = useCallback((message: string, tone: ToastItem["kind"] = "info") => {
     const id = ++toastSeq.current;
     setToasts((prev) => [...prev, { id, message, kind: tone }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 2600);
+    // Native error toasts stay until their own close control dismisses them.
+    if (tone !== "error") {
+      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 2600);
+    }
   }, []);
 
   // Debounce the search box (matching the desktop's 300ms behaviour).
@@ -694,7 +697,11 @@ export default function App() {
         />
       ) : null}
 
-      <ToastStack placement="bottom" toasts={toasts} />
+      <ToastStack
+        onDismiss={(id) => setToasts((prev) => prev.filter((toast) => toast.id !== id))}
+        placement="bottom"
+        toasts={toasts}
+      />
     </div>
   );
 }

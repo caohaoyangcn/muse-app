@@ -3,7 +3,7 @@ import { EventsOn } from "../../wailsjs/runtime";
 import { RefreshCw } from "lucide-react";
 import { fileScanStatus, scanFileStatuses } from "../services/desktop";
 import type { FileScanStatus } from "../types";
-import type { ToastItem } from "../ui/toast";
+import type { Notice } from "../ui/report";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 
@@ -19,22 +19,23 @@ import { cn } from "../lib/utils";
  *
  * The pass is asynchronous and can stat thousands of files on slow disks, so the
  * button shows the phase it is in and stays disabled rather than blocking the
- * library. The result arrives as a toast: silence would make a pass that found
- * nothing look like a pass that never ran.
+ * library. The result arrives as a persistent report: silence would make a pass
+ * that found nothing look like a pass that never ran, and the detail lines are
+ * too long for a toast.
  */
 export default function FileScanButton({
-  onNotify,
+  onReport,
 }: {
-  /** The shell's toast sink. Passed through so the pass can report its result. */
-  onNotify: (toast: Omit<ToastItem, "id">, ttl?: number) => void;
+  /** The shell's report sink. Passed through so the pass can publish its result. */
+  onReport: (notice: Notice) => void;
 }) {
   const [status, setStatus] = useState<FileScanStatus | null>(null);
   // Kept in a ref so the subscriptions below are installed once: callers pass an
   // inline handler, and resubscribing on every render could drop an event.
-  const notifyRef = useRef(onNotify);
-  notifyRef.current = onNotify;
+  const notifyRef = useRef(onReport);
+  notifyRef.current = onReport;
   // Only a pass this button asked for is announced. The startup check goes
-  // through the same events, and a toast for work the user did not request —
+  // through the same events, and a report for work the user did not request —
   // possibly minutes after launch — would be unexplained noise.
   const awaitingRef = useRef(false);
 
@@ -56,7 +57,7 @@ export default function FileScanButton({
       setStatus((prev) => newest(prev, next));
       if (!awaitingRef.current) return;
       awaitingRef.current = false;
-      notifyRef.current(summarize(next), 6000);
+      notifyRef.current(summarize(next));
     });
     return () => {
       alive = false;
@@ -132,11 +133,11 @@ function buttonTitle(status: FileScanStatus | null): string {
 }
 
 /**
- * The pass's result as one toast. A clean pass is stated too: pressing the
+ * The pass's result as one report. A clean pass is stated too: pressing the
  * button and seeing nothing happen would look like the button is broken, which
  * is the opposite of what it is for.
  */
-function summarize(status: FileScanStatus): Omit<ToastItem, "id"> {
+function summarize(status: FileScanStatus): Notice {
   if (status.error) {
     return { kind: "error", message: "文件检测未能完成", details: [status.error] };
   }

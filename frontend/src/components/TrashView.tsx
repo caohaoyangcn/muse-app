@@ -3,7 +3,7 @@ import type { Video } from "../types";
 import { formatFileSize, videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import ConfirmDialog from "./ConfirmDialog";
-import type { ToastItem } from "../ui/toast";
+import type { Notice } from "../ui/report";
 import {
   Badge,
   EmptyState,
@@ -28,7 +28,7 @@ export default function TrashView({
   onNotify,
   onOpenSettings,
 }: {
-  onNotify: (toast: Omit<ToastItem, "id">, ttl?: number) => void;
+  onNotify: (notice: Notice, ttl?: number) => void;
   onOpenSettings: (section?: string) => void;
 }) {
   const {

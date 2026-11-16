@@ -25,6 +25,7 @@ import ViewControls from "../components/ViewControls";
 import TabContextMenu, { type TabMenuAction } from "../components/TabContextMenu";
 import TrashView from "../components/TrashView";
 import { ToastStack, type ToastItem } from "../ui/toast";
+import { ReportBanner, type Notice, type ReportItem } from "../ui/report";
 import VideoGrid from "../components/VideoGrid";
 import VideoList from "../components/VideoList";
 import VideoDetailPanel from "../components/VideoDetailPanel";
@@ -108,6 +109,7 @@ export default function Library({
   // the group already on screen.
   const [groupKeyword, setGroupKeyword] = useState("");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [reports, setReports] = useState<ReportItem[]>([]);
   const [menu, setMenu] = useState<{ x: number; y: number; video: Video } | null>(null);
   const [groupMenu, setGroupMenu] = useState<{ x: number; y: number; group: Group } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Video | null>(null);
@@ -182,16 +184,34 @@ export default function Library({
   const [selectedDisks, setSelectedDisks] = useState<Map<string, string>>(() => new Map());
 
   const toastSeq = useRef(0);
+  const reportSeq = useRef(0);
 
-  const pushToast = useCallback((t: Omit<ToastItem, "id">, ttl = 4000) => {
-    const id = ++toastSeq.current;
-    setToasts((prev) => [...prev, { ...t, id }]);
-    window.setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== id)), ttl);
+  const pushReport = useCallback((notice: Notice) => {
+    const id = ++reportSeq.current;
+    setReports((prev) => [{ ...notice, id }, ...prev].slice(0, 20));
   }, []);
+
+  // One-liners stay toasts; anything with detail lines becomes a persistent
+  // report Banner. Every call site can keep passing `details` through here.
+  const pushNotice = useCallback((notice: Notice, ttl = 4000) => {
+    if (notice.details && notice.details.length > 0) {
+      pushReport(notice);
+      return;
+    }
+    const id = ++toastSeq.current;
+    setToasts((prev) => [...prev, { id, kind: notice.kind, message: notice.message }]);
+    // Native error toasts persist until dismissed; only the transient kinds
+    // carry the shell's own expiry timer.
+    if (notice.kind !== "error") {
+      window.setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== id)), ttl);
+    }
+  }, [pushReport]);
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((x) => x.id !== id));
   }, []);
+
+  const dismissReports = useCallback(() => setReports([]), []);
 
   // Debounced search: instant on clear, 300ms while typing.
   useEffect(() => {
@@ -229,12 +249,12 @@ export default function Library({
     {
       enabled: !panelView || detailTabs.length > 0,
       keepPreviousData: true,
-      onError: (e) => pushToast({ kind: "error", message: "加载收藏库失败", details: [String(e)] }),
+      onError: (e) => pushNotice({ kind: "error", message: "加载收藏库失败", details: [String(e)] }),
     },
   );
 
   const groupsQuery = useLiveQuery(client.listGroups, "groups", {
-    onError: (e) => pushToast({ kind: "error", message: "加载分组失败", details: [String(e)] }),
+    onError: (e) => pushNotice({ kind: "error", message: "加载分组失败", details: [String(e)] }),
   });
 
   // Only the add-source dialog needs this summary. It is a local read (the
@@ -364,12 +384,12 @@ export default function Library({
     forgetTabs(victims);
     setDetailTabs((prev) => prev.filter((tab) => !dead.has(tab.id)));
     setActorTabs((prev) => prev.filter((name) => !dead.has(actorTabID(name))));
-    pushToast({
+    pushNotice({
       kind: "info",
       message: `标签页超过 ${MAX_OPEN_TABS} 个，已自动关闭 ${victims.length} 个最旧标签页`,
       details: labels,
     });
-  }, [detailTabs, actorTabs, activeTab, forgetTabs, pushToast]);
+  }, [detailTabs, actorTabs, activeTab, forgetTabs, pushNotice]);
 
   useEffect(() => {
     const target = scrollPositionsRef.current.get(activeTab) ?? 0;
@@ -777,7 +797,7 @@ export default function Library({
         .filter(Boolean)
         .join("，");
       if (skipped.length === 0) {
-        pushToast({
+        pushNotice({
           kind: "success",
           message: summary,
         });
@@ -788,15 +808,15 @@ export default function Library({
         .map((r) => `${baseName(r.path)} — ${r.error ?? "失败"}`);
       if (skipped.length > 5) details.push(`…以及另外 ${skipped.length - 5} 个`);
       if (added.length === 0) {
-        pushToast({ kind: "error", message: "未添加任何内容", details }, 6000);
+        pushNotice({ kind: "error", message: "未添加任何内容", details }, 6000);
       } else {
-        pushToast(
+        pushNotice(
           { kind: "info", message: `${summary}，跳过 ${skipped.length} 个`, details },
           6000,
         );
       }
     },
-    [pushToast],
+    [pushNotice],
   );
 
   // After a batch add, infer per-file group suggestions from file names and open
@@ -822,10 +842,10 @@ export default function Library({
         if (files.length > 0) setSuggestFiles(files);
       } catch (e) {
         // Suggestions are purely additive — a failure never blocks the add flow.
-        pushToast({ kind: "error", message: "获取分组建议失败", details: [String(e)] });
+        pushNotice({ kind: "error", message: "获取分组建议失败", details: [String(e)] });
       }
     },
-    [pushToast],
+    [pushNotice],
   );
 
   // Data freshness is handled once in services/events.ts; this subscription is
@@ -838,14 +858,14 @@ export default function Library({
         if (!data) return;
         const where = data.root ? [`卷：${data.root}`] : [];
         if (data.removed) {
-          pushToast({
+          pushNotice({
             kind: "info",
             message: `已自动将 ${data.removed} 个文件缺失的收藏移入回收站`,
             details: [...where, "可在回收站恢复；源文件未被删除"],
           });
         }
         if (data.skipped) {
-          pushToast({
+          pushNotice({
             kind: "error",
             message: `有 ${data.skipped} 个文件缺失的收藏未自动移入回收站`,
             details: [
@@ -857,7 +877,7 @@ export default function Library({
       },
     );
     return off;
-  }, [pushToast]);
+  }, [pushNotice]);
 
   const handleApplySuggestedGroups = useCallback(
     async (videoId: number, groupIds: number[]) => {
@@ -877,21 +897,21 @@ export default function Library({
       (data?: { path?: string; added?: number; relocated?: number; failed?: number }) => {
         if (!data || !(data.added || data.relocated || data.failed)) return;
         if (data.added) {
-          pushToast({
+          pushNotice({
             kind: "success",
             message: `目录监控：已自动添加 ${data.added} 个视频`,
             details: data.path ? [data.path] : undefined,
           });
         }
         if (data.relocated) {
-          pushToast({
+          pushNotice({
             kind: "success",
             message: `目录监控：已重新连接 ${data.relocated} 个移动的文件`,
             details: data.path ? [data.path] : undefined,
           });
         }
         if (data.failed) {
-          pushToast({
+          pushNotice({
             kind: "error",
             message: `目录监控：${data.failed} 个文件添加失败`,
             details: data.path ? [data.path] : undefined,
@@ -900,7 +920,7 @@ export default function Library({
       },
     );
     return off;
-  }, [pushToast]);
+  }, [pushNotice]);
 
   // Native drag & drop of video files onto the window (spec-v1.1.md).
   useEffect(() => {
@@ -919,11 +939,11 @@ export default function Library({
         void showGroupSuggestions(results);
         invalidate();
       } catch (e) {
-        pushToast({ kind: "error", message: "添加视频失败", details: [String(e)] });
+        pushNotice({ kind: "error", message: "添加视频失败", details: [String(e)] });
       }
     }, true);
     return () => OnFileDropOff();
-  }, [showAddSummary, showGroupSuggestions, pushToast]);
+  }, [showAddSummary, showGroupSuggestions, pushNotice]);
 
   // Drag-over visuals for file drops.
   useEffect(() => {
@@ -973,7 +993,7 @@ export default function Library({
         invalidate();
       }
     } catch (e) {
-      pushToast({ kind: "error", message: "添加视频失败", details: [String(e)] });
+      pushNotice({ kind: "error", message: "添加视频失败", details: [String(e)] });
     }
   };
 
@@ -983,14 +1003,14 @@ export default function Library({
     try {
       dir = await pickWatchDir();
     } catch (e) {
-      pushToast({ kind: "error", message: "无法选择文件夹", details: [String(e)] });
+      pushNotice({ kind: "error", message: "无法选择文件夹", details: [String(e)] });
       return;
     }
     if (!dir) return;
 
     try {
       await addWatchDir(dir);
-      pushToast({
+      pushNotice({
         kind: "success",
         message: "已加入目录监控，正在扫描…",
         details: [dir],
@@ -1001,13 +1021,13 @@ export default function Library({
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       if (/already|已在/.test(message)) {
-        pushToast({
+        pushNotice({
           kind: "info",
           message: "该目录已在目录监控中",
           details: [dir],
         });
       } else {
-        pushToast({ kind: "error", message: "添加监控目录失败", details: [message] });
+        pushNotice({ kind: "error", message: "添加监控目录失败", details: [message] });
       }
     }
   };
@@ -1025,7 +1045,7 @@ export default function Library({
 
   const handleOpen = useCallback(async (video: Video) => {
     if (video.volumeOffline) {
-      pushToast({
+      pushNotice({
         kind: "error",
         message: "磁盘未接入",
         details: [`${video.volumeRoot || "磁盘"} 未接入，插回移动硬盘后即可播放`, video.path],
@@ -1042,7 +1062,7 @@ export default function Library({
       invalidate();
       const checked = await refreshStatus(video.id).catch(() => null);
       if (checked?.volumeOffline) {
-        pushToast({
+        pushNotice({
           kind: "error",
           message: "磁盘未接入",
           details: [`${checked.volumeRoot || "磁盘"} 未接入，插回后即可播放`, video.path],
@@ -1051,7 +1071,7 @@ export default function Library({
       }
       if (video.sourceId > 0) {
         if (checked?.sourceOffline) {
-          pushToast({
+          pushNotice({
             kind: "error",
             message: "网盘未连接",
             details: [`「${video.sourceName || "网盘"}」当前离线，恢复后即可播放`, video.remotePath],
@@ -1062,7 +1082,7 @@ export default function Library({
           setMissingOpen(video);
           return;
         }
-        pushToast({
+        pushNotice({
           kind: "error",
           message: "网盘视频播放失败",
           details: [String(e)],
@@ -1071,20 +1091,20 @@ export default function Library({
       }
       setMissingOpen(video);
     }
-  }, [pushToast]);
+  }, [pushNotice]);
 
   // Reveal a file in the OS file manager. A failure (usually a missing file)
   // makes the backend mark it missing, so refresh the views and report it.
   const handleRevealPath = useCallback((video: Video) => {
     openContainingFolder(video.id).catch((e) => {
       invalidate();
-      pushToast({
+      pushNotice({
         kind: "error",
         message: video.volumeOffline ? "磁盘未接入" : "无法定位文件",
         details: [String(e)],
       });
     });
-  }, [pushToast]);
+  }, [pushNotice]);
 
   // ---- Single-selection keyboard control ----
   // With exactly one card selected: arrow keys move the selection, Enter opens
@@ -1272,7 +1292,7 @@ export default function Library({
       case "openFolder":
         if (video.sourceId > 0) {
           openCloudPage(video.id).catch((e) =>
-            pushToast({ kind: "error", message: "无法打开 OpenList 管理页", details: [String(e)] }),
+            pushNotice({ kind: "error", message: "无法打开 OpenList 管理页", details: [String(e)] }),
           );
         } else {
           handleRevealPath(video);
@@ -1280,8 +1300,8 @@ export default function Library({
         break;
       case "copyPath":
         copyPath(video.id)
-          .then(() => pushToast({ kind: "success", message: "路径已复制" }))
-          .catch((e) => pushToast({ kind: "error", message: String(e) }));
+          .then(() => pushNotice({ kind: "success", message: "路径已复制" }))
+          .catch((e) => pushNotice({ kind: "error", message: String(e) }));
         break;
       case "edit":
         setEditVideo(video);
@@ -1309,7 +1329,7 @@ export default function Library({
     try {
       await client.removeVideo(target.id);
       closeDetail(target.id);
-      pushToast({ kind: "info", message: `已将“${videoDisplayName(target)}”移入回收站` });
+      pushNotice({ kind: "info", message: `已将“${videoDisplayName(target)}”移入回收站` });
       // The removed video may have belonged to groups, and its card has to
       // leave the grid, the sidebar counts and any open panel.
       invalidate();
@@ -1319,7 +1339,7 @@ export default function Library({
       // Follow the backend instead of leaving something the user cannot dismiss
       // (a removed duplicate, another window, the LAN client).
       dropStaleCard(target.id);
-      pushToast({ kind: "error", message: "移除失败", details: [String(e)] });
+      pushNotice({ kind: "error", message: "移除失败", details: [String(e)] });
     }
   };
 
@@ -1331,13 +1351,13 @@ export default function Library({
     try {
       await client.removeVideo(target.id);
       closeDetail(target.id);
-      pushToast({ kind: "info", message: `已将“${videoDisplayName(target)}”移入回收站` });
+      pushNotice({ kind: "info", message: `已将“${videoDisplayName(target)}”移入回收站` });
       invalidate();
     } catch (e) {
       // Same as confirmRemove: never leave behind a stale card that can only
       // fail again.
       dropStaleCard(target.id);
-      pushToast({ kind: "error", message: "移除失败", details: [String(e)] });
+      pushNotice({ kind: "error", message: "移除失败", details: [String(e)] });
     }
   };
 
@@ -1347,10 +1367,10 @@ export default function Library({
     setGroupDialog(null);
     try {
       await createGroup(name);
-      pushToast({ kind: "success", message: `已创建分组“${name}”` });
+      pushNotice({ kind: "success", message: `已创建分组“${name}”` });
       invalidate();
     } catch (e) {
-      pushToast({ kind: "error", message: "创建分组失败", details: [String(e)] });
+      pushNotice({ kind: "error", message: "创建分组失败", details: [String(e)] });
     }
   };
 
@@ -1360,10 +1380,10 @@ export default function Library({
     if (!g) return;
     try {
       await renameGroup(g.id, name);
-      pushToast({ kind: "success", message: `已重命名为“${name}”` });
+      pushNotice({ kind: "success", message: `已重命名为“${name}”` });
       invalidate();
     } catch (e) {
-      pushToast({ kind: "error", message: "重命名分组失败", details: [String(e)] });
+      pushNotice({ kind: "error", message: "重命名分组失败", details: [String(e)] });
     }
   };
 
@@ -1373,12 +1393,12 @@ export default function Library({
     setDeleteGroupTarget(null);
     try {
       await deleteGroup(target.id);
-      pushToast({ kind: "info", message: `已删除分组“${target.name}”` });
+      pushNotice({ kind: "info", message: `已删除分组“${target.name}”` });
       // If the active view was this group, fall back to All Favorites.
       setFilter((f) => (f.kind === "group" && f.id === target.id ? { kind: "all" } : f));
       invalidate();
     } catch (e) {
-      pushToast({ kind: "error", message: "删除分组失败", details: [String(e)] });
+      pushNotice({ kind: "error", message: "删除分组失败", details: [String(e)] });
     }
   };
 
@@ -1387,7 +1407,7 @@ export default function Library({
     try {
       await reorderGroups(order.map((g) => g.id));
     } catch (e) {
-      pushToast({ kind: "error", message: "调整顺序失败", details: [String(e)] });
+      pushNotice({ kind: "error", message: "调整顺序失败", details: [String(e)] });
       groupsQuery.reload(); // restore authoritative order
     }
   };
@@ -1435,9 +1455,9 @@ export default function Library({
     (id: number) => {
       client.likeVideo(id)
         .then(() => invalidate())
-        .catch((e) => pushToast({ kind: "error", message: "点赞失败", details: [String(e)] }));
+        .catch((e) => pushNotice({ kind: "error", message: "点赞失败", details: [String(e)] }));
     },
-    [pushToast],
+    [pushNotice],
   );
 
   // Both views (grid/list) share the exact same data and interaction wiring.
@@ -1466,10 +1486,10 @@ export default function Library({
     const n = videoIds.length;
     try {
       await Promise.all(videoIds.map((videoId) => addVideoToGroup(videoId, group.id)));
-      if (batch) pushToast({ kind: "success", message: `已将 ${n} 个视频添加到“${group.name}”` });
+      if (batch) pushNotice({ kind: "success", message: `已将 ${n} 个视频添加到“${group.name}”` });
       invalidate();
     } catch (e) {
-      pushToast({ kind: "error", message: "添加视频到分组失败", details: [String(e)] });
+      pushNotice({ kind: "error", message: "添加视频到分组失败", details: [String(e)] });
     }
   };
 
@@ -1617,6 +1637,12 @@ export default function Library({
         </Button>
       </header>
 
+      {reports.length > 0 ? (
+        <div className="px-5 pt-3">
+          <ReportBanner reports={reports} onDismiss={dismissReports} />
+        </div>
+      ) : null}
+
       <WorkspaceTabs
         tabs={tabStrip}
         active={activeTab}
@@ -1668,7 +1694,7 @@ export default function Library({
                 e.preventDefault();
                 setMenu({ x: e.clientX, y: e.clientY, video: v });
               }}
-              onNotify={(message, kind) => pushToast({ kind, message })}
+              onNotify={(message, kind) => pushNotice({ kind, message })}
             />
           ) : activeTab !== "library" ? (
             activeVideoTab ? (
@@ -1692,7 +1718,7 @@ export default function Library({
             <ActorIndexView
               onOpenActor={openActor}
               onMerged={handleActorsMerged}
-              onNotify={(message, kind) => pushToast({ kind, message })}
+              onNotify={(message, kind) => pushNotice({ kind, message })}
             />
           ) : filter.kind === "duplicates" ? (
             <DuplicateView
@@ -1702,11 +1728,11 @@ export default function Library({
                 setMenu({ x: e.clientX, y: e.clientY, video: v });
               }}
               onResolved={handleDuplicatesResolved}
-              onNotify={(message, kind) => pushToast({ kind, message })}
+              onNotify={(message, kind) => pushNotice({ kind, message })}
             />
           ) : filter.kind === "trash" ? (
             <TrashView
-              onNotify={pushToast}
+              onNotify={pushNotice}
               onOpenSettings={onOpenSettings}
             />
           ) : (
@@ -1721,7 +1747,7 @@ export default function Library({
                   </h2>
                   <span className="text-xs text-[var(--muted)]">{viewCountText}</span>
                   <div className="ml-auto flex flex-wrap items-center gap-2">
-                    <FileScanButton onNotify={pushToast} />
+                    <FileScanButton onReport={pushReport} />
                     {filter.kind === "group" && (
                       <SearchBar
                         value={groupKeyword}
