@@ -4,7 +4,20 @@ import type { JavDuplicateGroup, Video } from "../types";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import ContentDuplicatePanel from "./ContentDuplicateView";
+import {
+  AspectRatio,
+  Badge,
+  CheckboxInput,
+  ClickableCard,
+  EmptyState,
+  List,
+  ListItem,
+  SegmentedControl,
+  SegmentedControlItem,
+  Spinner,
+} from "../ui/astryx";
 import { Button } from "../ui/button";
+import { Icon } from "../ui/icon";
 import {
   Dialog,
   DialogContent,
@@ -43,52 +56,18 @@ export default function DuplicateView(props: DuplicatePanelProps) {
   const [tab, setTab] = useState<"jav" | "content">("jav");
   return (
     <div className="pt-4">
-      <div className="mb-4 flex items-center gap-1 border-b border-[var(--border)]">
-        <TabButton
-          active={tab === "jav"}
-          hint="同一番号被收藏了多个版本（不同清晰度、不同压制组）"
-          onClick={() => setTab("jav")}
+      <div className="mb-4 border-b border-[var(--border)] pb-2">
+        <SegmentedControl
+          label="查重方式"
+          onChange={(value) => setTab(value as "jav" | "content")}
+          value={tab}
         >
-          同番号多版本
-        </TabButton>
-        <TabButton
-          active={tab === "content"}
-          hint="同一份文件被收藏了两份（改名、换目录、跨盘备份）"
-          onClick={() => setTab("content")}
-        >
-          内容重复
-        </TabButton>
+          <SegmentedControlItem label="同番号多版本" value="jav" />
+          <SegmentedControlItem label="内容重复" value="content" />
+        </SegmentedControl>
       </div>
       {tab === "jav" ? <JavDuplicatePanel {...props} /> : <ContentDuplicatePanel {...props} />}
     </div>
-  );
-}
-
-/** One entry in the panel's tab strip. */
-function TabButton({
-  active,
-  hint,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  hint: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      title={hint}
-      onClick={onClick}
-      className={`-mb-px border-b-2 px-3 py-1.5 text-sm ${
-        active
-          ? "border-[var(--accent)] font-semibold text-[var(--text)]"
-          : "border-transparent text-[var(--muted)] hover:text-[var(--text)]"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -152,15 +131,12 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
             ? ` · 另有 ${groups.length - activeCount} 部已忽略`
             : ""}
         </span>
-        <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--muted)]">
-          <input
-            type="checkbox"
-            className="accent-[var(--accent)]"
-            checked={includeIgnored}
-            onChange={(e) => setIncludeIgnored(e.target.checked)}
-          />
-          显示已忽略
-        </label>
+        <CheckboxInput
+          label="显示已忽略"
+          onChange={setIncludeIgnored}
+          size="sm"
+          value={includeIgnored}
+        />
         <div className="ml-auto w-[240px] max-w-full">
           <Input
             value={keyword}
@@ -173,23 +149,22 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
       </div>
 
       {error ? (
-        <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 text-center text-[var(--danger)]">
-          <div>加载查重结果失败</div>
-          <div className="max-w-[680px] break-words text-xs">{error}</div>
-          <Button size="sm" onClick={reload}>重试</Button>
-        </div>
+        <EmptyState
+          actions={<Button onClick={reload} size="sm" variant="primary">重试</Button>}
+          description={error}
+          title="加载查重结果失败"
+        />
       ) : loading ? (
-        <div className="flex min-h-[320px] items-center justify-center text-[var(--muted)]">加载中…</div>
+        <div className="flex min-h-[320px] items-center justify-center">
+          <Spinner label="加载中…" size="lg" />
+        </div>
       ) : groups.length === 0 ? (
-        <div className="flex min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
-          <div className="mb-1.5 text-xl text-[var(--text)]">没有重复作品</div>
-          <div>同一番号被收藏多个版本时会显示在这里；带 -1 / -2 上下集标记的文件视为不同作品</div>
-        </div>
+        <EmptyState
+          description="同一番号被收藏多个版本时会显示在这里；带 -1 / -2 上下集标记的文件视为不同作品"
+          title="没有重复作品"
+        />
       ) : filtered.length === 0 ? (
-        <div className="flex min-h-[320px] flex-col items-center justify-center text-center text-[var(--muted)]">
-          <div className="mb-1.5 text-xl text-[var(--text)]">无结果</div>
-          <div>没有匹配“{keyword.trim()}”的重复作品</div>
-        </div>
+        <EmptyState description={`没有匹配“${keyword.trim()}”的重复作品`} title="无结果" />
       ) : (
         <div className="flex flex-col gap-4 pb-8">
           {filtered.map((group) => (
@@ -199,20 +174,15 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
             >
               <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2">
                 <span className="font-semibold">{group.code}</span>
-                <span className="rounded-full bg-[var(--panel-2)] px-2 py-0.5 text-[10px] text-[var(--muted)]">
-                  {group.tier === "cloud" ? "网盘重复" : "本地重复"}
-                </span>
+                <Badge
+                  label={group.tier === "cloud" ? "网盘重复" : "本地重复"}
+                  variant="neutral"
+                />
                 {group.part && (
                   <span className="text-xs text-[var(--muted)]">第 {group.part} 集</span>
                 )}
-                <span className="rounded-[10px] bg-[var(--border)] px-2 py-px text-xs text-[var(--muted)]">
-                  {group.videos.length} 个版本
-                </span>
-                {group.ignored && (
-                  <span className="border border-[var(--border)] px-2 py-px text-xs text-[var(--muted)]">
-                    已忽略
-                  </span>
-                )}
+                <Badge label={`${group.videos.length} 个版本`} variant="neutral" />
+                {group.ignored ? <Badge label="已忽略" variant="neutral" /> : null}
                 <Button
                   size="sm"
                   className="ml-auto"
@@ -274,61 +244,52 @@ function VersionCard({
     .filter(Boolean)
     .join(" · ");
   return (
-    <div
-      className="w-[220px] max-w-full overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)]"
+    <ClickableCard
+      className="overflow-hidden"
+      label={videoDisplayName(video)}
+      maxWidth="100%"
+      onClick={onOpen}
       onContextMenu={onContextMenu}
+      padding={0}
+      width={220}
     >
-      <button
-        type="button"
-        className="block w-full text-left transition hover:border-[var(--accent)]"
-        onClick={onOpen}
-        title={video.path}
-      >
-        <div className="relative aspect-video bg-[#111114]">
+      <AspectRatio ratio={16 / 9}>
+        <div className="relative size-full bg-[#111114]">
           {!missing && video.thumbnailPath ? (
-            <img className="block h-full w-full object-contain" src={videoCoverURL(video)} alt="" draggable={false} />
+            <img className="block size-full object-contain" draggable={false} src={videoCoverURL(video)} alt="" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-[26px] opacity-50">
-              {missing ? "⚠" : "▣"}
+            <div className="flex size-full items-center justify-center opacity-50">
+              <Icon className="size-6" name="alert" />
             </div>
           )}
-          {missing && (
-            <span className="absolute left-1.5 top-1.5 rounded bg-[rgba(229,83,75,0.9)] px-2 py-0.5 text-[11px] text-white">
-              ⚠ 文件缺失
-            </span>
-          )}
-          {offline && (
-            <span
-              className="absolute bottom-1.5 right-1.5 rounded bg-[rgba(229,83,75,0.9)] px-2 py-0.5 text-[11px] text-white"
-              title={`${video.volumeRoot || "磁盘"} 未接入：${video.path}`}
-            >
-              ⚠ 磁盘未接入
-            </span>
-          )}
+          {missing ? <Badge className="absolute left-1.5 top-1.5" label="文件缺失" variant="error" /> : null}
+          {offline ? (
+            <Badge className="absolute bottom-1.5 right-1.5" label="磁盘未接入" variant="error" />
+          ) : null}
         </div>
-        <div className="px-2.5 pt-2">
-          <div className="truncate text-sm font-medium" title={videoDisplayName(video)}>
-            {videoDisplayName(video)}
-          </div>
-          <div className="truncate text-xs text-[var(--muted)]" title={video.fileName}>
-            {video.fileName}
-          </div>
-          {meta && <div className="mt-0.5 text-xs text-[var(--muted)]">{meta}</div>}
+      </AspectRatio>
+      <div className="px-2.5 pt-2">
+        <div className="truncate text-sm font-medium" title={videoDisplayName(video)}>
+          {videoDisplayName(video)}
         </div>
-      </button>
+        <div className="truncate text-xs text-[var(--muted)]" title={video.fileName}>
+          {video.fileName}
+        </div>
+        {meta && <div className="mt-0.5 text-xs text-[var(--muted)]">{meta}</div>}
+      </div>
       <div className="px-2.5 pb-2.5 pt-2">
         <Button
-          size="sm"
-          variant="primary"
           className="w-full"
           disabled={busy}
-          title="保留这个版本，并把同一作品的其他版本移入回收站（不会删除文件）"
           onClick={onKeep}
+          size="sm"
+          title="保留这个版本，并把同一作品的其他版本移入回收站（不会删除文件）"
+          variant="primary"
         >
           保留此版本
         </Button>
       </div>
-    </div>
+    </ClickableCard>
   );
 }
 
@@ -353,11 +314,11 @@ function KeepVersionDialog({
             将保留「{keep.fileName}」，并把同一作品的其他 {others.length} 个版本移入回收站：
           </DialogDescription>
         </DialogHeader>
-        <ul className="max-h-[220px] overflow-y-auto text-xs text-[var(--muted)]">
+        <List className="max-h-[220px] overflow-y-auto">
           {others.map((v) => (
-            <li key={v.id} className="truncate" title={v.path}>· {v.fileName}</li>
+            <ListItem key={v.id} label={<span title={v.path}>{v.fileName}</span>} />
           ))}
-        </ul>
+        </List>
         <div className="text-xs text-[var(--muted)]">原始视频文件不会被删除，移入回收站后仍可恢复。</div>
         <DialogFooter>
           <Button onClick={onCancel}>取消</Button>
