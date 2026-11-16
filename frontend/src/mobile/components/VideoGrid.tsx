@@ -4,14 +4,11 @@ import {
   Badge,
   ClickableCard,
   Grid,
-  List,
-  ListItem,
   MoreMenu,
   compactBadgeClass,
 } from "../../ui/astryx";
 import { Icon } from "../../ui/icon";
 import { useVirtualRows } from "../../hooks/useVirtualRows";
-import { cn } from "../../lib/utils";
 import { coverURL } from "../../services/web";
 import { videoMeta, videoName } from "../videoDisplay";
 import { videoMenuItems, type VideoMenuActions } from "../videoMenu";
@@ -187,7 +184,7 @@ export function VideoList({
       className="relative"
       style={windowed ? { height: totalHeight } : undefined}
     >
-      <List
+      <div
         ref={(el) => { virtual.windowRef.current = el; }}
         className="flex flex-col gap-2"
         style={windowed ? { position: "absolute", left: 0, right: 0, top: offsetTop } : undefined}
@@ -195,26 +192,35 @@ export function VideoList({
         {videos.slice(startIndex, endIndex).map((v) => {
           const meta = v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v);
           return (
-            <ListItem
-              className={cn(
-                "rounded-[var(--radius)] border border-white/[0.07] bg-[var(--card)]/55 p-2",
-              )}
-              description={
-                <span className="flex h-4 min-w-0 items-center gap-1 text-[11px] text-[var(--muted)]">
-                  <span className="truncate">{meta}</span>
-                  {v.mosaicRestored ? <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" /> : null}
-                  {v.backedUp ? <Badge className={compactBadgeClass} label="已备份" variant="success" /> : null}
+            <ClickableCard
+              className="rounded-[var(--radius)] border border-white/[0.07] bg-[var(--card)]/55"
+              key={v.id}
+              label={videoName(v)}
+              onClick={() => onOpen(v)}
+              padding={0}
+              variant="transparent"
+            >
+              <div className="flex min-w-0 items-center gap-2 p-2">
+                <span className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-[7px] bg-[#101013]">
+                  <Thumb v={v} />
+                  <StatusBadges v={v} />
                 </span>
-              }
-              endContent={
-                <span className="flex shrink-0 items-center gap-1">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm font-medium">{videoName(v)}</span>
+                  <span className="mt-1 flex h-4 min-w-0 items-center gap-1 text-[11px] text-[var(--muted)]">
+                    <span className="truncate">{meta}</span>
+                    {v.mosaicRestored ? <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" /> : null}
+                    {v.backedUp ? <Badge className={compactBadgeClass} label="已备份" variant="success" /> : null}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
                   {v.likeCount > 0 ? (
                     <span className="inline-flex items-center gap-0.5 text-[11px] text-[var(--muted)] tabular-nums">
                       <Icon className="size-2.5" name="heart" />
                       {v.likeCount}
                     </span>
                   ) : null}
-                  <span
+                  <div
                     className="inline-flex shrink-0"
                     onClick={(event) => event.stopPropagation()}
                   >
@@ -227,22 +233,13 @@ export function VideoList({
                       presentation="bottom-sheet"
                       size="sm"
                     />
-                  </span>
-                </span>
-              }
-              key={v.id}
-              label={videoName(v)}
-              onClick={() => onOpen(v)}
-              startContent={
-                <span className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-[7px] bg-[#101013]">
-                  <Thumb v={v} />
-                  <StatusBadges v={v} />
-                </span>
-              }
-            />
+                  </div>
+                </div>
+              </div>
+            </ClickableCard>
           );
         })}
-      </List>
+      </div>
     </div>
   );
 }

@@ -9,9 +9,8 @@ import {
   AspectRatio,
   Badge,
   CheckboxInput,
+  ClickableCard,
   IconButton,
-  List,
-  ListItem,
   Spinner,
   compactBadgeClass,
 } from "../ui/astryx";
@@ -24,8 +23,10 @@ import { Icon } from "../ui/icon";
  * interactions — click opens, double-click plays, right-click opens the
  * context menu, the checkbox toggles multi-select, and rows are draggable.
  *
- * Astryx's ListItem supplies the row's hidden interactive surface and nested
- * control handling; the virtualizer only decides which rows are mounted.
+ * The row is a ClickableCard rather than a ListItem: ClickableCard's hidden
+ * full-surface control lets the row stay click-anywhere while the checkbox and
+ * like button remain independent nested controls. The virtualizer only decides
+ * which rows are mounted.
  */
 export default function VideoList({
   videos,
@@ -74,7 +75,7 @@ export default function VideoList({
       className="relative"
       style={windowed ? { height: totalHeight } : undefined}
     >
-      <List
+      <div
         ref={(el) => { virtual.windowRef.current = el; }}
         className="flex flex-col gap-1.5"
         style={windowed ? { position: "absolute", top: offsetTop, left: 0, right: 0 } : undefined}
@@ -94,70 +95,28 @@ export default function VideoList({
             .join(" · ");
 
           return (
-            <ListItem
-              align="center"
+            <ClickableCard
               className={cn(
-                "group relative border border-[var(--border)] bg-[var(--card)] transition hover:border-[var(--accent)]",
+                "group relative rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] transition hover:border-[var(--accent)]",
                 missing && "opacity-75",
                 isSelected &&
                   "border-[var(--accent)] shadow-[0_0_0_1px_var(--accent),0_2px_10px_rgba(124,92,255,0.2)]",
               )}
               data-video-id={v.id}
               draggable
-              endContent={
-                <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-[var(--muted)]">
-                  {missing ? (
-                    "找不到文件"
-                  ) : (
-                    <>
-                      {meta}
-                      <IconButton
-                        className="h-5 w-5 p-0 text-[var(--muted)] hover:text-[var(--accent)]"
-                        icon={<Icon className="size-3" name="heart" />}
-                        label={`点赞（${v.likeCount || 0}）`}
-                        tooltip="点赞（可多次点赞）"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onLike(v.id);
-                        }}
-                        size="sm"
-                        variant="ghost"
-                      />
-                      <span className="tabular-nums">{v.likeCount || 0}</span>
-                    </>
-                  )}
-                </span>
-              }
-              isSelected={isSelected}
               key={v.id}
-              label={
-                <span
-                  className="flex min-w-0 items-center gap-2"
-                  title={remote ? `${v.sourceName} · ${v.remotePath}` : v.path}
-                >
-                  <span className="truncate font-medium" style={{ fontSize: `${titleSize.toFixed(1)}px` }}>
-                    {videoDisplayName(v)}
-                  </span>
-                  {v.mosaicRestored ? (
-                    <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" />
-                  ) : null}
-                  {v.backedUp ? (
-                    <Badge className={compactBadgeClass} label="已备份" variant="success" />
-                  ) : null}
-                  {remote ? (
-                    <Badge
-                      className={compactBadgeClass}
-                      label={sourceOffline ? "网盘离线" : (v.sourceName || "网盘")}
-                      variant={sourceOffline ? "warning" : "neutral"}
-                    />
-                  ) : null}
-                </span>
-              }
+              label={videoDisplayName(v)}
               onClick={() => onOpen(v)}
               onContextMenu={(event) => onContextMenu(event, v)}
               onDoubleClick={() => onPlay(v)}
               onDragStart={(event) => onDragStart(event, v)}
-              startContent={
+              padding={0}
+              variant="transparent"
+            >
+              <div
+                className="flex min-w-0 items-center px-3"
+                style={{ paddingTop: rowPad, paddingBottom: rowPad, columnGap: rowGap }}
+              >
                 <span
                   className="flex shrink-0 items-center gap-2"
                   onDragStart={(event) => event.stopPropagation()}
@@ -210,12 +169,56 @@ export default function VideoList({
                     </AspectRatio>
                   </span>
                 </span>
-              }
-              style={{ paddingTop: rowPad, paddingBottom: rowPad, columnGap: rowGap }}
-            />
+
+                <span
+                  className="flex min-w-0 flex-1 items-center gap-2"
+                  title={remote ? `${v.sourceName} · ${v.remotePath}` : v.path}
+                >
+                  <span className="truncate font-medium" style={{ fontSize: `${titleSize.toFixed(1)}px` }}>
+                    {videoDisplayName(v)}
+                  </span>
+                  {v.mosaicRestored ? (
+                    <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" />
+                  ) : null}
+                  {v.backedUp ? (
+                    <Badge className={compactBadgeClass} label="已备份" variant="success" />
+                  ) : null}
+                  {remote ? (
+                    <Badge
+                      className={compactBadgeClass}
+                      label={sourceOffline ? "网盘离线" : (v.sourceName || "网盘")}
+                      variant={sourceOffline ? "warning" : "neutral"}
+                    />
+                  ) : null}
+                </span>
+
+                <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-[var(--muted)]">
+                  {missing ? (
+                    "找不到文件"
+                  ) : (
+                    <>
+                      {meta}
+                      <IconButton
+                        className="h-5 w-5 p-0 text-[var(--muted)] hover:text-[var(--accent)]"
+                        icon={<Icon className="size-3" name="heart" />}
+                        label={`点赞（${v.likeCount || 0}）`}
+                        tooltip="点赞（可多次点赞）"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onLike(v.id);
+                        }}
+                        size="sm"
+                        variant="ghost"
+                      />
+                      <span className="tabular-nums">{v.likeCount || 0}</span>
+                    </>
+                  )}
+                </span>
+              </div>
+            </ClickableCard>
           );
         })}
-      </List>
+      </div>
     </div>
   );
 }
