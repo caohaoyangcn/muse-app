@@ -66,14 +66,18 @@ export function ActorFilmsView({
             ) : null}
           </div>
         </div>
-        <Input
-          aria-label="筛选影片"
-          className="w-[9.5rem] shrink-0"
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="筛选影片"
-          type="search"
-          value={filter}
-        />
+        {/* The field itself is Astryx's 100%-wide control, so the width belongs
+            on a wrapper: sizing the control would let the field claim the whole
+            row and push the avatar underneath it. */}
+        <div className="w-[9.5rem] shrink-0">
+          <Input
+            aria-label="筛选影片"
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="筛选影片"
+            type="search"
+            value={filter}
+          />
+        </div>
       </div>
       <div className="scroll-area min-h-0 flex-1 px-3 pb-4 pt-2" data-scroll-key="main">
         {loading ? (
