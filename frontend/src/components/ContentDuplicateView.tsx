@@ -3,7 +3,20 @@ import { EventsOn } from "../../wailsjs/runtime";
 import type { ContentDuplicateGroup, ContentDuplicateMember, ContentScanStatus, Video } from "../types";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
+import {
+  AspectRatio,
+  Badge,
+  Banner,
+  CheckboxInput,
+  ClickableCard,
+  EmptyState,
+  List,
+  ListItem,
+  ProgressBar,
+  Spinner,
+} from "../ui/astryx";
 import { Button } from "../ui/button";
+import { Icon } from "../ui/icon";
 import {
   Dialog,
   DialogContent,
@@ -114,15 +127,12 @@ export default function ContentDuplicatePanel({
             ? ` · 另有 ${groups.length - activeCount} 组已忽略`
             : ""}
         </span>
-        <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[var(--muted)]">
-          <input
-            type="checkbox"
-            className="accent-[var(--accent)]"
-            checked={includeIgnored}
-            onChange={(e) => setIncludeIgnored(e.target.checked)}
-          />
-          显示已忽略
-        </label>
+        <CheckboxInput
+          label="显示已忽略"
+          onChange={setIncludeIgnored}
+          size="sm"
+          value={includeIgnored}
+        />
         <div className="ml-auto w-[240px] max-w-full">
           <Input
             value={keyword}
@@ -137,24 +147,22 @@ export default function ContentDuplicatePanel({
       <ScanBar status={scan} onScan={() => void startScan()} />
 
       {error ? (
-        <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 text-center text-[var(--danger)]">
-          <div>加载内容重复结果失败</div>
-          <div className="max-w-[680px] break-words text-xs">{error}</div>
-          <Button size="sm" onClick={reload}>重试</Button>
-        </div>
+        <EmptyState
+          actions={<Button onClick={reload} size="sm" variant="primary">重试</Button>}
+          description={error}
+          title="加载内容重复结果失败"
+        />
       ) : loading ? (
-        <div className="flex min-h-[280px] items-center justify-center text-[var(--muted)]">加载中…</div>
+        <div className="flex min-h-[280px] items-center justify-center">
+          <Spinner label="加载中…" size="lg" />
+        </div>
       ) : groups.length === 0 ? (
-        <div className="flex min-h-[280px] flex-col items-center justify-center text-center text-[var(--muted)]">
-          <div className="mb-1.5 text-xl text-[var(--text)]">没有内容重复</div>
-          <div>只有内容完全相同的两个文件才会出现在这里；同一作品的不同压制不会被判为重复</div>
-          <div className="mt-1">若尚未扫描过，点上方「重新扫描」建立内容指纹；它也会为没有指纹的收藏补算，改名后的移动重连依赖这份身份</div>
-        </div>
+        <EmptyState
+          description="只有内容完全相同的两个文件才会出现在这里；同一作品的不同压制不会被判为重复。若尚未扫描过，点上方「重新扫描」建立内容指纹；它也会为没有指纹的收藏补算。"
+          title="没有内容重复"
+        />
       ) : filtered.length === 0 ? (
-        <div className="flex min-h-[280px] flex-col items-center justify-center text-center text-[var(--muted)]">
-          <div className="mb-1.5 text-xl text-[var(--text)]">无结果</div>
-          <div>没有匹配“{keyword.trim()}”的重复内容</div>
-        </div>
+        <EmptyState description={`没有匹配“${keyword.trim()}”的重复内容`} title="无结果" />
       ) : (
         <div className="flex flex-col gap-4 pb-8">
           {filtered.map((group) => (
@@ -164,31 +172,18 @@ export default function ContentDuplicatePanel({
             >
               <header className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2">
                 <span className="font-semibold">{group.members.length} 份相同内容</span>
-                <span
-                  className="rounded-[10px] bg-[var(--border)] px-2 py-px font-mono text-xs text-[var(--muted)]"
-                  title={`内容指纹 ${group.hash}`}
-                >
-                  {group.hash.slice(0, 8)}
-                </span>
+                <Badge
+                  className="font-mono"
+                  label={group.hash.slice(0, 8)}
+                  variant="neutral"
+                />
                 <span className="text-xs text-[var(--muted)]">
                   占用 {formatFileSize(group.totalBytes)} · 保留一份可省{" "}
                   {formatFileSize(group.reclaimableBytes)}
                 </span>
-                {group.ignored && (
-                  <span className="border border-[var(--border)] px-2 py-px text-xs text-[var(--muted)]">
-                    已忽略
-                  </span>
-                )}
-                {group.confirmed && (
-                  <span className="border border-[var(--border)] px-2 py-px text-xs text-[var(--muted)]">
-                    已完整校验
-                  </span>
-                )}
-                {group.refuted && (
-                  <span className="border border-[var(--danger)] px-2 py-px text-xs text-[var(--danger)]">
-                    完整校验不一致
-                  </span>
-                )}
+                {group.ignored ? <Badge label="已忽略" variant="neutral" /> : null}
+                {group.confirmed ? <Badge label="已完整校验" variant="success" /> : null}
+                {group.refuted ? <Badge label="完整校验不一致" variant="error" /> : null}
                 <GroupActions
                   group={group}
                   busy={busy}
@@ -199,21 +194,15 @@ export default function ContentDuplicatePanel({
                   onKeepAll={() => void keepAll(group)}
                 />
               </header>
-              {group.members.some((member) => member.volumeOffline) && (
-                <div className="border-b border-[var(--border)] px-3 py-2 text-xs text-[var(--muted)]">
-                  ⚠ 有拷贝所在的磁盘未接入；插回后再整理，避免把还能找回的收藏移入回收站。
-                </div>
-              )}
-              {group.needsReverify && (
-                <div className="border-b border-[var(--border)] px-3 py-2 text-xs text-[var(--danger)]">
-                  ⚠ 有成员的文件在应用之外发生了变化，其指纹已不能代表当前内容。重新校验完成前不能据此移除文件。
-                </div>
-              )}
-              {group.refuted && (
-                <div className="border-b border-[var(--border)] px-3 py-2 text-xs text-[var(--danger)]">
-                  ⚠ 完整校验表明这些文件的内容并不相同（首尾与大小恰好一致）。请勿据此删除任何文件；可先「重新扫描」更新它们的指纹。
-                </div>
-              )}
+              {group.members.some((member) => member.volumeOffline) ? (
+                <Banner status="warning" title="有拷贝所在的磁盘未接入；插回后再整理，避免把还能找回的收藏移入回收站。" />
+              ) : null}
+              {group.needsReverify ? (
+                <Banner status="error" title="有成员的文件在应用之外发生了变化，其指纹已不能代表当前内容。重新校验完成前不能据此移除文件。" />
+              ) : null}
+              {group.refuted ? (
+                <Banner status="error" title="完整校验表明这些文件的内容并不相同（首尾与大小恰好一致）。请勿据此删除任何文件；可先「重新扫描」更新它们的指纹。" />
+              ) : null}
               <div className="flex flex-wrap gap-3 p-3">
                 {group.members.map((member) => (
                   <MemberCard
@@ -316,14 +305,15 @@ function ScanBar({ status, onScan }: { status: ContentScanStatus | null; onScan:
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)] px-3 py-2 text-xs text-[var(--muted)]">
       <span>{scanStatusText(status)}</span>
-      {progress && progress.total > 0 && (
-        <span className="h-1 w-[160px] overflow-hidden rounded bg-[var(--border)]">
-          <span
-            className="block h-full bg-[var(--accent)]"
-            style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
-          />
-        </span>
-      )}
+      {progress && progress.total > 0 ? (
+        <ProgressBar
+          className="w-[160px]"
+          isLabelHidden
+          label="内容指纹扫描进度"
+          max={progress.total}
+          value={progress.done}
+        />
+      ) : null}
       <Button size="sm" className="ml-auto" disabled={running} onClick={onScan}>
         重新扫描
       </Button>
@@ -350,71 +340,58 @@ function MemberCard({
     .filter(Boolean)
     .join(" · ");
   return (
-    <div
-      className="w-[220px] max-w-full overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)]"
+    <ClickableCard
+      className="overflow-hidden"
+      label={videoDisplayName(video)}
+      maxWidth="100%"
+      onClick={onOpen}
       onContextMenu={onContextMenu}
+      padding={0}
+      width={220}
     >
-      <button
-        type="button"
-        className="block w-full text-left transition hover:border-[var(--accent)]"
-        onClick={onOpen}
-        title={video.path}
-      >
-        <div className="relative aspect-video bg-[#111114]">
+      <AspectRatio ratio={16 / 9}>
+        <div className="relative size-full bg-[#111114]">
           {!member.missing && video.thumbnailPath ? (
-            <img
-              className="block h-full w-full object-contain"
-              src={videoCoverURL(video)}
-              alt=""
-              draggable={false}
-            />
+            <img className="block size-full object-contain" draggable={false} src={videoCoverURL(video)} alt="" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-[26px] opacity-50">
-              {member.missing ? "⚠" : "▣"}
+            <div className="flex size-full items-center justify-center opacity-50">
+              <Icon className="size-6" name="alert" />
             </div>
           )}
-          {member.missing && (
-            <span className="absolute left-1.5 top-1.5 rounded bg-[rgba(229,83,75,0.9)] px-2 py-0.5 text-[11px] text-white">
-              ⚠ 文件缺失
-            </span>
-          )}
-          {member.volumeOffline && (
-            <span className="absolute left-1.5 top-1.5 rounded bg-[rgba(229,83,75,0.9)] px-2 py-0.5 text-[11px] text-white">
-              ⚠ 磁盘未接入
-            </span>
-          )}
-          {member.needsReverify && !member.missing && (
-            <span className="absolute left-1.5 top-1.5 rounded bg-[rgba(229,158,75,0.92)] px-2 py-0.5 text-[11px] text-white">
-              内容已变化
-            </span>
-          )}
+          {member.missing ? <Badge className="absolute left-1.5 top-1.5" label="文件缺失" variant="error" /> : null}
+          {member.volumeOffline ? (
+            <Badge className="absolute left-1.5 top-1.5" label="磁盘未接入" variant="error" />
+          ) : null}
+          {member.needsReverify && !member.missing ? (
+            <Badge className="absolute left-1.5 top-1.5" label="内容已变化" variant="warning" />
+          ) : null}
         </div>
-        <div className="px-2.5 pt-2">
-          <div className="truncate text-sm font-medium" title={videoDisplayName(video)}>
-            {videoDisplayName(video)}
-          </div>
-          <div className="truncate text-xs text-[var(--muted)]" title={video.fileName}>
-            {video.fileName}
-          </div>
-          {meta && <div className="mt-0.5 text-xs text-[var(--muted)]">{meta}</div>}
-          <div className="truncate text-xs text-[var(--muted)]" title={video.path}>
-            {video.path}
-          </div>
+      </AspectRatio>
+      <div className="px-2.5 pt-2">
+        <div className="truncate text-sm font-medium" title={videoDisplayName(video)}>
+          {videoDisplayName(video)}
         </div>
-      </button>
+        <div className="truncate text-xs text-[var(--muted)]" title={video.fileName}>
+          {video.fileName}
+        </div>
+        {meta && <div className="mt-0.5 text-xs text-[var(--muted)]">{meta}</div>}
+        <div className="truncate text-xs text-[var(--muted)]" title={video.path}>
+          {video.path}
+        </div>
+      </div>
       <div className="px-2.5 pb-2.5 pt-2">
         <Button
-          size="sm"
-          variant="primary"
           className="w-full"
           disabled={busy}
-          title="保留这个拷贝，并把内容相同的其他拷贝移入回收站（不会删除文件）"
           onClick={onKeep}
+          size="sm"
+          title="保留这个拷贝，并把内容相同的其他拷贝移入回收站（不会删除文件）"
+          variant="primary"
         >
           保留此份
         </Button>
       </div>
-    </div>
+    </ClickableCard>
   );
 }
 
@@ -439,11 +416,11 @@ function KeepCopyDialog({
             将保留「{keep.fileName}」，并把内容相同的其他 {others.length} 个拷贝移入回收站：
           </DialogDescription>
         </DialogHeader>
-        <ul className="max-h-[220px] overflow-y-auto text-xs text-[var(--muted)]">
+        <List className="max-h-[220px] overflow-y-auto">
           {others.map((v) => (
-            <li key={v.id} className="truncate" title={v.path}>· {v.path}</li>
+            <ListItem key={v.id} label={<span title={v.path}>{v.path}</span>} />
           ))}
-        </ul>
+        </List>
         <div className="text-xs text-[var(--muted)]">
           原始视频文件不会被删除，移入回收站后仍可恢复。要真正释放磁盘空间，请在「打开所在文件夹」后用资源管理器删除多余的那份文件。
         </div>
