@@ -67,6 +67,7 @@ function NavRow({
       aria-current={active ? "page" : undefined}
       className={rowClass(active)}
       data-tour={dataTour}
+      icon={<Icon name={icon} className={active ? "text-[var(--accent)]" : undefined} />}
       onClick={onClick}
       onDragOver={onDragOver}
       onDrop={onDrop}
@@ -74,7 +75,6 @@ function NavRow({
       variant="ghost"
     >
       {active && <ActiveBar />}
-      <Icon name={icon} className={active ? "text-[var(--accent)]" : undefined} />
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
     </Button>
   );
