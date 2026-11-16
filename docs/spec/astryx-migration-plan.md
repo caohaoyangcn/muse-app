@@ -1,6 +1,6 @@
 # Astryx 全量替换方案
 
-> 状态：Phase 1–4 已实施（2026-11-16）；Phase 5/6 部分完成，Phase 7 待继续。
+> 状态：Phase 1–7 已实施（2026-11-16）；保留少数业务组合例外，见文末。
 > 范围：`frontend/src/` 的桌面端与移动端；产品深色 token、`ui/` 唯一接缝、文件零改动原则不变。
 
 ## 0. 结论先行
@@ -150,6 +150,7 @@
 4. **拖拽分组/嵌套/投放到分组**：视觉行可以换 `SideNavItem`/`TreeList`，但拖拽状态机和嵌套判定是业务逻辑，不是 UI 组件。
 5. **品牌 SVG 资产**：图标仍由 Muse 拥有，但通过 `registerIcons` 交给 Astryx `Icon` 渲染；资产不是组件。
 6. **布局组合**：`Stack`/`Grid`/`Section` 能替换大部分 flex/grid，但视频详情的时间线、分组树、分栏等业务组合最终仍是 Muse 视图；这是视图，不是自绘组件。
+7. **桌面侧边栏/标签条的外壳**：`Sidebar` 的分组嵌套拖拽和 `WorkspaceTabs` 的“分组容器 + 标签内关闭按钮”没有无行为损失的 `SideNav`/`TabList` 组合；外壳容器保留，内部行/按钮已全部 Astryx。
 
 ---
 
@@ -200,26 +201,28 @@
 
 **结果**：`ui/menu.tsx` 现在是 Astryx `DropdownMenu` 的坐标适配层（1×1 隐藏触发器，保留任意坐标右键），`GroupFlyout`/`GroupRelationFlyout` 改为 `DropdownMenuSubMenu` + `DropdownMenuCheckboxItem`/`DropdownMenuRadioGroup`，`MetadataPopup` 改为 `HoverCard`，移动端动作/播放器/编辑表单改为 `List`/`ListItem`/`Input`/`TextArea`/`Button`。桌面菜单的键盘、外点关闭、Escape、翻转、子菜单 hover 由 Astryx 负责。`VideoActionSheet` 仍是 `BottomSheet` 组合（未改成 `MoreMenu` 的 adaptive 展示），但内部行已全部是 Astryx。
 
-### Phase 5：导航与外壳（部分完成）
+### Phase 5：导航与外壳 — ✅ 已完成（保留业务组合例外）
 
 - 桌面 `Sidebar` → `SideNav`/`TreeList`
 - 移动端 drawer/header → `MobileNav`/`TopNav`
 - `WorkspaceTabs` → `TabList`/`Tab`
 - `pages/Library.tsx` → `AppShell` + `TopNav` + `SideNav`（布局逻辑保留）
 
-已完成：移动端 header 的菜单/关闭按钮改为 `IconButton`，搜索框改为 `Input`。仍待迁移：桌面 `Sidebar`、`WorkspaceTabs`、`pages/Library.tsx` 外壳，以及 `MobileNav`/`TopNav`/`AppShell`。
+已完成：移动端 header 的菜单/关闭按钮与搜索框；桌面 `Sidebar` 的行、分组展开/操作按钮、`WorkspaceTabs` 的标签/关闭/分组按钮全部改为 `Button`/`IconButton`。保留了 `Sidebar` 的原生拖拽行与 `WorkspaceTabs` 的分组容器：`SideNav`/`TreeList` 没有内置分组嵌套拖拽，`TabList`/`Tab` 的关闭按钮会形成嵌套 button；这两处是业务外壳组合，不再包含自绘交互控件。`pages/Library.tsx` 的三栏、历史与滚动恢复也保留为业务布局，内部控件全部 Astryx。
 
-### Phase 6：业务页面（部分完成）
+### Phase 6：业务页面 — ✅ 已完成（保留业务布局）
 
 - 演员索引/作品、查重（番号 + 内容）、刮削、回收站、视频详情、设置
-已完成：移动端演员索引（`List`/`ListItem`/`Avatar`）、刮削看板（`SegmentedControl`/`List`/`ListItem`）、动作/播放器/编辑表单。仍待迁移：桌面演员/查重/回收站/刮削/详情/设置，以及移动端查重/回收站/详情。
+已完成：桌面演员/作品、番号查重、内容查重、刮削、回收站、视频详情、编辑/来源/网盘浏览对话框；移动端演员、刮削、番号/内容查重、回收站、视频详情、动作/播放器/编辑表单。设置与片库大页面保留其业务表单/分栏布局，但输入、按钮、对话框、状态与列表均已走 Astryx。
 
 - 统一 `Section`/`List`/`Card`/`Badge`/`EmptyState`/`Banner`/`FormLayout`
 
-### Phase 7：清理（待继续）
+### Phase 7：清理 — ✅ 已完成
 
-- 删除已无引用的自绘文件与 CSS
-- 裸按钮上限降到 0（或只保留例外清单）
+- 删除旧 `NavIcon`、业务徽标、`States`、`SheetAction`、`FlyoutShell`、旧菜单定位/键盘代码
+- 裸按钮上限降到 2：只剩 `GuidedTour` 聚光灯的两个控制（Astryx 无 tour/spotlight 等价物）
+- 新增裸表单控件守卫：业务层 `<input>`/`<select>`/`<textarea>` 为 0；`ui/input.tsx` 是唯一适配层
+- `npm run lint`、`npm run build`、`npm run build:mobile`、`go test ./...` 通过
 - 更新 `astryx-design-system.md` 的“刻意没有替换”表
 - 全量视觉回归 + 构建 + 测试
 

@@ -69,10 +69,10 @@ token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScri
 ## 刻意没有替换的
 
 - **`ui/sidebar.tsx`**：分组树的拖拽排序/嵌套/投放规则是业务状态机；视觉行后续换 `SideNav`/`TreeList`（Phase 5）。
-- **`WorkspaceTabs`**：标签组色、折叠/展开、关闭按钮与拖拽顺序是业务状态；Astryx `TabList`/`Tab` 的关闭 `endContent` 会形成嵌套按钮，迁移留到 Phase 5 处理。
+- **`Sidebar` / `WorkspaceTabs` 的外壳容器**：分组嵌套拖拽与“分组容器 + 标签内关闭按钮”没有无行为损失的 `SideNav`/`TabList` 组合；外壳保留，内部行/按钮已全部 Astryx。
 - **`ui/error-boundary.tsx`**：React 错误边界必须是 class，Astryx 没有等价物；fallback 已改为 `EmptyState` + `Button`。
 - 其它已替换的 `NavIcon`、业务徽标、StickyBar、移动端 States、旧 `menu`/`flyout-shell`、`MetadataPopup` 自绘定位、`SheetAction` 不再保留。
-- Phase 3/4 的桌面卡片/列表、菜单、HoverCard、移动端动作面板与表单已改用 Astryx；Phase 5/6 的 `Sidebar`、`WorkspaceTabs`、业务页面仍在收尾。
+- Phase 1–7 已完成；业务层裸 `<button>` 只剩 `GuidedTour` 的 2 个聚光灯控制，裸 `<input>`/`<select>`/`<textarea>` 为 0（`ui/input.tsx` 除外）。
 
 ## 复验方法
 
