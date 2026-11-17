@@ -9,6 +9,12 @@
 @import "../theme.css";
 @import "tailwindcss/utilities.css" layer(utilities);
 
+/* Test files are prose, not UI: the scanner cannot tell "easy to invert" from a
+ * class list and would emit utilities for those words. Keep them out. */
+@source not "../**/*.test.ts";
+@source not "../**/*.test.tsx";
+@source not "../test/**";
+
 /* Touch-only shell values. Product tokens (colours, radius) come from
    ../theme.css, shared with the desktop app so the two clients stay visually
    one product. */

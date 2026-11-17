@@ -12,6 +12,14 @@
 @import "./theme.css";
 @import "tailwindcss/utilities.css" layer(utilities);
 
+/* Tests describe the UI in prose ("they are easy to invert by accident") and the
+ * scanner cannot tell a sentence from a class list, so it would emit utilities
+ * for those words: `.invert` once appeared in the shipped CSS that way. Test
+ * files are not UI; keep them out of the scan. */
+@source not "./**/*.test.ts";
+@source not "./**/*.test.tsx";
+@source not "./test/**";
+
 /* Desktop-only shell values. Product tokens (colours, radius) live in theme.css
    so the Wails app and the LAN web client cannot drift apart. */
 :root {
