@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { JavDetail, JavTask, Video } from "../types";
-import { client, scrapeVideoJav, setVideoJavOverride } from "../services/desktop";
+import { client, scrapeVideoJav, setVideoJavOverride, translateVideoTitle } from "../services/desktop";
 import { useLiveQuery } from "../hooks/useLiveQuery";
 import {
   formatBitrate,
@@ -86,6 +86,7 @@ export default function VideoDetailPanel({
   const [actionError, setActionError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [scraping, setScraping] = useState(false);
+  const [translating, setTranslating] = useState(false);
   const [coverPreviewOpen, setCoverPreviewOpen] = useState(false);
   // True once the user has touched the 番号/模式 form: a background scrape of
   // some other video must not overwrite what they are typing.
@@ -124,6 +125,17 @@ export default function VideoDetailPanel({
   // replace the whole window with a stack trace.
   const actors = detail?.actors ?? [];
   const tags = detail?.tags ?? [];
+  const titleZh = detail?.titleZh?.trim() ?? "";
+  const titleZhStatus = detail?.titleZhStatus ?? "";
+  const titleZhPending = titleZhStatus === "pending";
+  const titleZhFailed = titleZhStatus === "failed";
+  const titleZhLabel = titleZh
+    ? titleZh
+    : titleZhPending
+      ? "翻译中…"
+      : titleZhFailed
+        ? "翻译失败"
+        : "尚未翻译";
   const remote = video.sourceId > 0;
   const sourceOffline = remote && video.sourceOffline === true;
   const metadataRows = useMemo<[string, string][]>(() => {
@@ -168,6 +180,21 @@ export default function VideoDetailPanel({
       setActionError(String(e));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const translateTitle = async () => {
+    setTranslating(true);
+    setActionError(null);
+    try {
+      // Queue only: the translation runs in the background and the panel
+      // follows it through the scrape update event.
+      await translateVideoTitle(video.id);
+      jav.reload();
+    } catch (e) {
+      setActionError(String(e));
+    } finally {
+      setTranslating(false);
     }
   };
 
@@ -268,6 +295,7 @@ export default function VideoDetailPanel({
                   {([
                     ["番号", valueOrUnknown(detail.code)],
                     ["标题", valueOrUnknown(detail.title)],
+                    ["中文译名", titleZhLabel],
                     ["制作商", valueOrUnknown(detail.studio)],
                     ["系列", valueOrUnknown(detail.series)],
                     ["发行日期", formatReleaseDate(detail.releaseUnix)],
@@ -281,6 +309,24 @@ export default function VideoDetailPanel({
                 </MetadataList>
               ) : (
                 <p className="text-sm text-[var(--muted)]">尚未建立刮削记录。</p>
+              )}
+              {detail?.title?.trim() && (
+                <div className="mt-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => void translateTitle()}
+                      disabled={translating || titleZhPending}
+                      title="使用「设置 → 片名翻译」中配置的 LLM 翻译片名"
+                    >
+                      {translating ? "提交中…" : titleZh ? "重新翻译" : "翻译片名"}
+                    </Button>
+                    <span className="text-xs text-[var(--muted)]">由 LLM 生成，需先在「设置 → 片名翻译」配置</span>
+                  </div>
+                  {titleZhFailed && detail.titleZhError && (
+                    <p className="mt-2 text-xs text-[var(--danger)]">{detail.titleZhError}</p>
+                  )}
+                </div>
               )}
             </div>
           </div>

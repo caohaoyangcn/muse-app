@@ -48,6 +48,11 @@ function javRows(d: JavDetail): [string, string][] {
   return [
     ["番号", d.code || "未提供"],
     ["标题", d.title || "未提供"],
+    [
+      "中文译名",
+      d.titleZh?.trim() ||
+        (d.titleZhStatus === "pending" ? "翻译中…" : d.titleZhStatus === "failed" ? "翻译失败" : "尚未翻译"),
+    ],
     ["制作商", d.studio || "未提供"],
     ["系列", d.series || "未提供"],
     ["发行日期", formatReleaseDate(d.releaseUnix)],
