@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { client, checkJavCodes, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
+import { client, checkJavCodes, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getLLMSettings, setLLMSettings, clearLLMAPIKey, translateMissingTitles, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
 import type {
   CloudConnection,
   CloudConnectionInput,
@@ -16,7 +16,7 @@ import { Input } from "../ui/input";
 import { cn } from "../lib/utils";
 import { ArrowRight, Cloud, Keyboard } from "lucide-react";
 
-type SectionKey = "guide" | "server" | "watch" | "trash" | "cloud" | "proxy" | "javbus" | "fc2" | "extension";
+type SectionKey = "guide" | "server" | "watch" | "trash" | "cloud" | "proxy" | "javbus" | "fc2" | "llm" | "extension";
 
 const DEFAULT_PORT = 8899;
 const DEFAULT_TRASH_RETENTION_DAYS = 14;
@@ -32,6 +32,7 @@ const NAV: { key: SectionKey; label: string }[] = [
   { key: "proxy", label: "网络代理" },
   { key: "javbus", label: "JavBus" },
   { key: "fc2", label: "FC2CMADB" },
+  { key: "llm", label: "片名翻译" },
   { key: "extension", label: "浏览器扩展" },
 ];
 
@@ -100,6 +101,7 @@ export default function Settings({
           {active === "proxy" && <ProxySection />}
           {active === "javbus" && <JavBusSection />}
           {active === "fc2" && <FC2Section />}
+          {active === "llm" && <LLMSection />}
           {active === "extension" && <ExtensionSection />}
         </main>
       </div>
@@ -959,6 +961,236 @@ function FC2Section() {
           </div>
           {saved && !error && <p className="mt-2.5 text-[13px] text-[#7ad9a2]">操作成功 ✓</p>}
           {error && <p className="mt-2.5 text-[13px] text-[var(--danger)]">{error}</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * 片名翻译: an OpenAI-compatible chat endpoint translates the scraped title into
+ * Simplified Chinese. The key is stored with the same DPAPI protection as the
+ * scraping cookies and is never echoed back, so the form only learns whether
+ * one exists. Translation runs on its own queue after a scrape succeeds — a
+ * provider failure never fails the scrape itself.
+ */
+function LLMSection() {
+  const [enabled, setEnabled] = useState(true);
+  const [baseURL, setBaseURL] = useState("");
+  const [model, setModel] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [hasKey, setHasKey] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [batching, setBatching] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const settings = await getLLMSettings();
+      setEnabled(settings.enabled);
+      setBaseURL(settings.baseUrl);
+      setModel(settings.model);
+      setHasKey(settings.hasApiKey);
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await setLLMSettings({
+        enabled,
+        baseUrl: baseURL.trim(),
+        model: model.trim(),
+        apiKey: apiKey.trim(),
+      });
+      setApiKey("");
+      setShowKey(false);
+      setSaved(true);
+      // Re-read so the defaults the backend filled in are what the form shows.
+      await load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearKey = async () => {
+    setClearing(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await clearLLMAPIKey();
+      setApiKey("");
+      setShowKey(false);
+      setSaved(true);
+      await load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const translateAll = async () => {
+    setBatching(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const queued = await translateMissingTitles();
+      setSaved(true);
+      setError(
+        queued > 0
+          ? `已将 ${queued} 部影片加入翻译队列，完成后详情页会显示中文译名。`
+          : "没有需要翻译的片名。",
+      );
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBatching(false);
+    }
+  };
+
+  const busy = saving || clearing || batching;
+
+  return (
+    <section className="max-w-[640px]">
+      <h2 className="mb-1.5 text-base font-semibold">片名翻译</h2>
+      <p className="mb-5 max-w-[560px] leading-relaxed text-[var(--muted)]">
+        刮削成功后，使用 OpenAI 兼容接口把原标题翻译成简体中文，详情页会多显示一栏「中文译名」。
+        支持 DeepSeek、OpenAI、Ollama、LM Studio 等；翻译在后台排队执行，失败只影响译名，不会改变刮削结果。
+      </p>
+
+      {loading ? (
+        <div className="flex h-full min-h-[320px] items-center justify-center text-[var(--muted)]">加载中…</div>
+      ) : (
+        <div className="max-w-[560px]">
+          <div className="mb-3 flex items-center gap-2 text-[13px]">
+            <span className="text-[var(--muted)]">当前状态：</span>
+            <span className={hasKey && enabled ? "text-[#7ad9a2]" : "text-[var(--muted)]"}>
+              {hasKey ? (enabled ? "已配置" : "已暂停") : "未配置"}
+            </span>
+          </div>
+
+          <label className="mb-2 block font-medium" htmlFor="llm-base-url">接口地址</label>
+          <Input
+            id="llm-base-url"
+            value={baseURL}
+            onChange={(e) => {
+              setBaseURL(e.target.value);
+              setSaved(false);
+              setError(null);
+            }}
+            placeholder="https://api.deepseek.com/v1"
+            autoComplete="off"
+            spellCheck={false}
+            aria-describedby="llm-base-url-help"
+          />
+          <p id="llm-base-url-help" className="mt-1.5 text-[13px] leading-relaxed text-[var(--muted)]">
+            OpenAI 兼容接口的根地址。DeepSeek 用 <code>https://api.deepseek.com/v1</code>；OpenAI 用
+            <code>https://api.openai.com/v1</code>；本机 Ollama 用 <code>http://127.0.0.1:11434/v1</code>。
+          </p>
+
+          <label className="mb-2 mt-4 block font-medium" htmlFor="llm-model">模型</label>
+          <Input
+            id="llm-model"
+            value={model}
+            onChange={(e) => {
+              setModel(e.target.value);
+              setSaved(false);
+              setError(null);
+            }}
+            placeholder="deepseek-chat"
+            autoComplete="off"
+            spellCheck={false}
+          />
+
+          <label className="mb-2 mt-4 block font-medium" htmlFor="llm-api-key">API Key</label>
+          <div className="flex items-center gap-2.5">
+            <Input
+              id="llm-api-key"
+              className="min-w-0 flex-1"
+              type={showKey ? "text" : "password"}
+              value={apiKey}
+              onChange={(e) => {
+                setApiKey(e.target.value);
+                setSaved(false);
+                setError(null);
+              }}
+              placeholder={hasKey ? "已保存，留空则不修改" : "粘贴 API Key"}
+              autoComplete="off"
+              spellCheck={false}
+              aria-describedby="llm-api-key-help"
+            />
+            <Button
+              onClick={() => setShowKey((visible) => !visible)}
+              disabled={!apiKey}
+              aria-label={showKey ? "隐藏 API Key" : "显示 API Key"}
+              tooltip={showKey ? "隐藏 API Key" : "显示 API Key"}
+            >
+              {showKey ? "隐藏" : "显示"}
+            </Button>
+          </div>
+          <p id="llm-api-key-help" className="mt-2.5 text-[13px] leading-relaxed text-[var(--muted)]">
+            Key 只用于翻译请求，保存后以 Windows DPAPI 加密存放，页面不会回显，也不会写入日志。
+            Ollama 等本地服务可以随意填一个占位值。
+          </p>
+
+          <div className="mt-3">
+            <CheckboxInput
+              label="刮削成功后自动翻译片名"
+              description="关闭后保留已保存的 Key，但不再自动翻译；手动「翻译片名」仍可使用。"
+              onChange={(checked) => {
+                setEnabled(checked);
+                setSaved(false);
+              }}
+              value={enabled}
+            />
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2.5">
+            <Button variant="primary" onClick={() => void save()} disabled={busy}>
+              {saving ? "保存中…" : "保存设置"}
+            </Button>
+            <Button onClick={() => void clearKey()} disabled={busy || !hasKey}>
+              {clearing ? "清除中…" : "清除 API Key"}
+            </Button>
+          </div>
+
+          <div className="mt-6 border-t border-[var(--border)] pt-5">
+            <h3 className="text-sm font-semibold">批量翻译</h3>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--muted)]">
+              为所有已成功刮削、但还没有中文译名的影片排队翻译；之前翻译失败的也会重试。
+              任务在后台逐条执行，不会影响正在进行的刮削。
+            </p>
+            <div className="mt-3">
+              <Button onClick={() => void translateAll()} disabled={busy || !hasKey}>
+                {batching ? "入队中…" : "翻译缺少译名的片名"}
+              </Button>
+            </div>
+          </div>
+
+          {saved && !error && <p className="mt-2.5 text-[13px] text-[#7ad9a2]">操作成功 ✓</p>}
+          {error && (
+            <p className={cn("mt-2.5 text-[13px]", error.startsWith("已将 ") || error === "没有需要翻译的片名。" ? "text-[var(--muted)]" : "text-[var(--danger)]")}>
+              {error}
+            </p>
+          )}
         </div>
       )}
     </section>
