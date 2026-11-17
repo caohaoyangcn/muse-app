@@ -109,6 +109,40 @@ function px(value: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * Height of the first rendered item that actually occupies space.
+ *
+ * `firstElementChild` is not always the item itself: Astryx's Tooltip wraps its
+ * trigger in a `display:contents` span (with a `<template>` and a popover holder
+ * beside it), and a `display:contents` box reports a zero-height rect. Reading
+ * the first child directly therefore measured 0px for every card, which made the
+ * whole list look unmeasurable — windowing never engaged and the view sat on its
+ * starter rows, showing the first 24 videos with no way to scroll to the rest.
+ *
+ * Zero-height wrappers are descended through (they contribute no box, so their
+ * tallest child is what occupies the row); the first item with a real height
+ * wins.
+ */
+function firstLaidOutHeight(el: HTMLElement): number {
+  /** Tallest laid-out descendant — the visual height of a `display:contents` wrapper. */
+  const tallest = (node: Element, depth: number): number => {
+    const height = node.getBoundingClientRect().height;
+    if (height > 0 || depth >= 4) return height;
+    let best = 0;
+    for (const child of Array.from(node.children)) {
+      best = Math.max(best, tallest(child, depth + 1));
+    }
+    return best;
+  };
+
+  // Only the first few items: the answer is the first one that has a box.
+  for (const child of Array.from(el.children).slice(0, 8)) {
+    const height = tallest(child, 0);
+    if (height > 0) return height;
+  }
+  return 0;
+}
+
 function sameMetrics(a: Metrics, b: Metrics): boolean {
   return (
     a.columns === b.columns &&
@@ -177,13 +211,11 @@ export function useVirtualRows({
     const rowGap = px(style.rowGap);
     const columnGap = px(style.columnGap);
 
-    // The item height is uniform, so one rendered item measures them all.
+    // The item height is uniform, so one rendered item measures them all — but
+    // the item may sit inside a zero-height wrapper (see firstLaidOutHeight).
     let itemHeight = metricsRef.current.itemHeight;
-    const item = el.firstElementChild;
-    if (item) {
-      const height = item.getBoundingClientRect().height;
-      if (height > 0) itemHeight = height;
-    }
+    const measured = firstLaidOutHeight(el);
+    if (measured > 0) itemHeight = measured;
 
     let columns = 0;
     if (fixedColumns && fixedColumns > 0) {
@@ -211,9 +243,23 @@ export function useVirtualRows({
   // effect commits the real window in the same frame. Also re-run when the
   // item count changes — a search can shrink a long list to a short one, which
   // changes the row count and invalidates the current window.
+  //
+  // A list that measures nothing has no window and is stuck on its starter rows,
+  // which is exactly the failure a wrapper can cause, so retry a few frames
+  // before accepting that the items really have no height yet.
   const hasItems = count > 0;
   useLayoutEffect(() => {
-    fullSync();
+    let frame = 0;
+    let attempts = 0;
+    const sync = () => {
+      fullSync();
+      if (metricsRef.current.itemHeight === 0 && attempts < 3) {
+        attempts += 1;
+        frame = window.requestAnimationFrame(sync);
+      }
+    };
+    sync();
+    return () => window.cancelAnimationFrame(frame);
   }, [fullSync, measureKey, hasItems, count]);
 
   // Track the scroll container for the lifetime of the grid: recompute on
