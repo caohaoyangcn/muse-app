@@ -406,6 +406,13 @@ export default function Sidebar({
             title="查看刮削任务"
           />
           <NavRow
+            icon="history"
+            label="后台任务"
+            active={filter.kind === "tasks"}
+            onClick={() => onSelect({ kind: "tasks" })}
+            title="查看正在运行的后台任务与进度"
+          />
+          <NavRow
             icon="duplicate"
             label="查重"
             active={filter.kind === "duplicates"}

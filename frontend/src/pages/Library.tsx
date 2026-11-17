@@ -20,6 +20,7 @@ import SearchBar from "../components/SearchBar";
 import ServerBar from "../components/ServerBar";
 import Sidebar from "../components/Sidebar";
 import ScrapeTaskView, { type ScrapeTaskStatus } from "../components/ScrapeTaskView";
+import BackgroundTasksView from "../components/BackgroundTasksView";
 import SortBar from "../components/SortBar";
 import ViewControls from "../components/ViewControls";
 import TabContextMenu, { type TabMenuAction } from "../components/TabContextMenu";
@@ -235,6 +236,7 @@ export default function Library({
 
   const panelView =
     filter.kind === "scrapeTasks" ||
+    filter.kind === "tasks" ||
     filter.kind === "actors" ||
     filter.kind === "duplicates" ||
     filter.kind === "trash";
@@ -596,6 +598,15 @@ export default function Library({
 
   const selectScrapeStatus = useCallback((status: ScrapeTaskStatus) => {
     selectFilter({ kind: "scrapeTasks", status });
+  }, [selectFilter]);
+
+  // The 后台任务 rows drill into the view that owns that task's detail. Rows
+  // without a destination carry no 查看明细 button, so this only ever sees the
+  // three kinds below.
+  const openTaskDetail = useCallback((detail: string) => {
+    if (detail === "scrapeTasks") selectFilter({ kind: "scrapeTasks", status: "queued" });
+    else if (detail === "duplicates") selectFilter({ kind: "duplicates" });
+    else if (detail === "actors") selectFilter({ kind: "actors" });
   }, [selectFilter]);
 
   // The visible list is the loaded list re-sorted in place (the grid is fully
@@ -1116,8 +1127,8 @@ export default function Library({
       // The panel views (scrape board, actor index, 查重) show no video cards, so
       // card navigation and Ctrl+A must not act on the stale grid list behind
       // them.
-      const panelView = filter.kind === "scrapeTasks" || filter.kind === "actors" ||
-        filter.kind === "duplicates";
+      const panelView = filter.kind === "scrapeTasks" || filter.kind === "tasks" ||
+        filter.kind === "actors" || filter.kind === "duplicates";
       if (
         activeTab !== "library" || panelView || menu || groupMenu || groupDialog || deleteGroupTarget || suggestFiles ||
         removeTarget || editVideo || tabMenu
@@ -1568,6 +1579,9 @@ export default function Library({
   // inert field above it.
   const trashView = activeTab === "library" && filter.kind === "trash";
 
+  // 后台任务 is a status screen with no list to search either.
+  const taskView = activeTab === "library" && filter.kind === "tasks";
+
   // What <main> currently shows. The content error boundary uses it to recover
   // when the user navigates somewhere else, so a broken panel cannot trap them
   // on a dead screen.
@@ -1646,7 +1660,7 @@ export default function Library({
         </Button>
         <div className="flex-1" />
         <ServerBar />
-        {!actorView && !duplicateView && !trashView && (
+        {!actorView && !duplicateView && !trashView && !taskView && (
           <SearchBar
             value={keyword}
             onChange={setKeyword}
@@ -1746,6 +1760,8 @@ export default function Library({
                 onRevealPath={() => handleRevealPath(activeVideoTab)}
               />
             ) : null
+          ) : filter.kind === "tasks" ? (
+            <BackgroundTasksView onOpenDetail={openTaskDetail} />
           ) : filter.kind === "scrapeTasks" ? (
             <ScrapeTaskView
               status={filter.status}
