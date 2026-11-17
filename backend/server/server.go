@@ -200,6 +200,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/videos/{id}", s.handleGetVideo)
 	mux.HandleFunc("GET /api/videos/{id}/jav", s.handleVideoJav)
 	mux.HandleFunc("GET /api/videos/{id}/jav/task", s.handleVideoJavTask)
+	// 详情页底部的「类似影片」. Computed on read from the scrape results, so
+	// there is nothing to keep in sync; `limit` bounds the row.
+	mux.HandleFunc("GET /api/videos/{id}/similar", s.handleSimilarVideos)
 	mux.HandleFunc("GET /api/groups", s.handleListGroups)
 	mux.HandleFunc("GET /api/groups/{id}/videos", s.handleVideosInGroup)
 	mux.HandleFunc("GET /api/jav/tasks", s.handleJavTasks)
@@ -355,6 +358,30 @@ func (s *Server) handleVideoJavTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, task)
+}
+
+// handleSimilarVideos returns the 「类似影片」 row for a favorite. The row is
+// computed on read, so there is no state to invalidate; an unscraped or unknown
+// favorite yields an empty array (never null) so the phone shows the same empty
+// state the desktop does. A malformed `limit` falls back to the façade default
+// instead of failing the read.
+func (s *Server) handleSimilarVideos(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	limit := 0
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			limit = parsed
+		}
+	}
+	similar, err := s.lib.SimilarVideos(id, limit)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "相似影片不可用")
+		return
+	}
+	writeJSON(w, similar)
 }
 
 // handleJavTasks returns the scrape board: the latest task per favorite,

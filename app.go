@@ -528,6 +528,14 @@ func (a *App) VideosByActor(name string) ([]video.Video, error) {
 	return a.lib.VideosByActor(name)
 }
 
+// SimilarVideos returns the 「类似影片」 row for a favorite: up to limit
+// neighbors ranked by series, style tags, cast, label and release date, each
+// with the reasons behind it. A favorite with no scrape result yields an empty
+// row rather than an error.
+func (a *App) SimilarVideos(videoID int64, limit int) ([]api.SimilarVideo, error) {
+	return a.lib.SimilarVideos(videoID, limit)
+}
+
 // MergeActors merges two scraped stage names into one actor (演员合并).
 func (a *App) MergeActors(source, target string) error {
 	return a.lib.MergeActors(source, target)

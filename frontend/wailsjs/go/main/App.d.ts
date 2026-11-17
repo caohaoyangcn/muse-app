@@ -196,6 +196,8 @@ export function SetVideoJavOverride(arg1:number,arg2:string,arg3:string):Promise
 
 export function SetVideoScrapedCoverAllowed(arg1:number,arg2:boolean):Promise<video.Video>;
 
+export function SimilarVideos(arg1:number,arg2:number):Promise<Array<api.SimilarVideo>>;
+
 export function StartActorFill():Promise<number>;
 
 export function StartServer(arg1:number):Promise<server.StartInfo>;

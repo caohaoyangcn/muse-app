@@ -370,6 +370,10 @@ export function SetVideoScrapedCoverAllowed(arg1, arg2) {
   return window['go']['main']['App']['SetVideoScrapedCoverAllowed'](arg1, arg2);
 }
 
+export function SimilarVideos(arg1, arg2) {
+  return window['go']['main']['App']['SimilarVideos'](arg1, arg2);
+}
+
 export function StartActorFill() {
   return window['go']['main']['App']['StartActorFill']();
 }
