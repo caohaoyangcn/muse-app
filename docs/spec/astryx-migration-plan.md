@@ -12,7 +12,7 @@
 真正需要保留的例外只有四类：
 
 1. `ui/error-boundary.tsx`：React 错误边界是 class 逻辑，Astryx 没有等价物；只把 fallback 换成 `EmptyState`/`Button`。
-2. `frontend/src/hooks/useVirtualRows.ts`：长列表窗口化。Astryx 的 `useListWindow` 是 core 私有实现，没有公开导出；保留这个 hook，只把它渲染的卡片/行换成 Astryx。
+2. 长列表：本计划早期版本把 `frontend/src/hooks/useVirtualRows.ts` 窗口化列为例外；现在两端统一改为页替换（`frontend/src/hooks/usePagedList.ts` + `ui/pagination.tsx`），不再需要这个自绘 hook。
 3. `GuidedTour` 的聚光灯遮罩：Astryx 没有 tour/spotlight 组件，只有 `Overlay`/`Popover`。要么保留这一块自绘，要么接受去掉聚光灯、改成普通 popover 步骤。
 4. 拖拽语义（分组排序、嵌套、把视频拖进分组）：Astryx 的 `SideNavItem`/`TreeList` 没有内置这套业务 DnD；视觉行可以换，拖拽状态机和 drop 规则仍留在 Muse。
 
@@ -99,8 +99,8 @@
 |---|---|---|
 | 移动端海报卡 `VideoGrid` | `Grid` + `ClickableCard` + `AspectRatio` + `Badge` + `MoreMenu` | `ClickableCard` 的隐藏 button + 嵌套交互正好覆盖“整卡点开、卡内更多菜单”；`AspectRatio ratio={3/4} fit="cover"` 保证统一比例；`MoreMenu presentation="adaptive"` 在手机上出 bottom sheet、桌面出锚点菜单。 |
 | 桌面 `VideoCard` | `SelectableCard` + `AspectRatio` + `Badge` + `MoreMenu`/`HoverCard` | `SelectableCard` 自带 checkbox/radio 语义和选中环，替换手写左上角勾选框；嵌套菜单/点赞按钮可独立点击。 |
-| 桌面 `VideoGrid` | `Grid` 承载卡片；窗口化保留 | `useVirtualRows` 负责只挂载可见行，`Grid` 只负责列/间距；`columns={columns}` 或 `Grid` 的响应式 `columns={{minWidth, max}}`。 |
-| 桌面 `VideoList` / 移动端列表 | `List` + `ListItem` | 缩略图放 `startContent`，标题/元信息用 `label`/`description`，菜单放 `endContent`；仍由 `useVirtualRows` 决定渲染哪几行。 |
+| 桌面 `VideoGrid` | `Grid` 承载卡片；按页渲染 | `usePagedList` 决定当前页，`Grid` 只负责列/间距与固定轨道宽度；不再测量行高或占位。 |
+| 桌面 `VideoList` / 移动端列表 | `List` + `ListItem` | 缩略图放 `startContent`，标题/元信息用 `label`/`description`，菜单放 `endContent`；仍由 `usePagedList` 决定渲染哪一页（桌面 60 / 手机 24）。 |
 | 演员索引 | `List` + `ListItem` + `Avatar` | 头像/别名/计数分别放 `startContent`、`description`、`endContent`。 |
 | 回收站、查重、刮削任务 | `List` + `ListItem` + `Badge`/`ProgressBar`/`Card` | 行操作放 `endContent`；成组查重用 `Card`/`Section`。 |
 | `DropOverlay` | `Overlay` + `Center`/`Section` + `Text` | 只保留拖拽状态，不再手写全屏遮罩。 |
@@ -145,7 +145,7 @@
 这些不是“懒得换”，而是没有现成等价物：
 
 1. **`ErrorBoundary` class**：React 的错误边界只能 class；只替换 fallback 的 UI。
-2. **`useVirtualRows`**：Astryx `useListWindow` 未公开导出；保留 hook，卡片/行用 Astryx 组件。
+2. **长列表**：`useVirtualRows` 已删除，两端改为 `usePagedList` 的按页渲染；Astryx `useListWindow` 未公开导出不再是约束。
 3. **`GuidedTour` 聚光灯**：Astryx 没有 tour/spotlight；若要“零自绘”，只能去掉聚光灯改成普通 `Popover` 步骤，这是产品取舍。
 4. **拖拽分组/嵌套/投放到分组**：视觉行可以换 `SideNavItem`/`TreeList`，但拖拽状态机和嵌套判定是业务逻辑，不是 UI 组件。
 5. **品牌 SVG 资产**：图标仍由 Muse 拥有，但通过 `registerIcons` 交给 Astryx `Icon` 渲染；资产不是组件。
@@ -188,10 +188,10 @@
 ### Phase 3：桌面卡片与工具栏 — ✅ 已完成
 
 - `VideoCard` → `SelectableCard` + `AspectRatio` + `Badge` + `MoreMenu`
-- `VideoGrid`/`VideoList` → `Grid`/`List` + 保留窗口化
+- `VideoGrid`/`VideoList` → `Grid`/`List` + 按页渲染
 - `SortBar`/`ViewControls`/`DiskFilterBar`/`SearchBar` → 同 Phase 1 的 Astryx 控件
 
-**结果**：`VideoCard` 用 `ClickableCard` + `CheckboxInput`（保留“点卡片打开、勾选框多选”的原行为，比 `SelectableCard` 的“点卡片即选中”更贴合产品）；`VideoGrid` 用 `Grid` 承载固定宽度轨道；`VideoList` 用 `List`/`ListItem`；`SearchBar` 用 `Input` + `IconButton`。卡片尺寸滑块、窗口化、右键、双击、拖拽、多选均已保留。
+**结果**：`VideoCard` 用 `ClickableCard` + `CheckboxInput`（保留“点卡片打开、勾选框多选”的原行为，比 `SelectableCard` 的“点卡片即选中”更贴合产品）；`VideoGrid` 用 `Grid` 承载固定宽度轨道；`VideoList` 用 `List`/`ListItem`；`SearchBar` 用 `Input` + `IconButton`。卡片尺寸滑块、按页渲染、右键、双击、拖拽、多选均已保留。
 
 ### Phase 4：菜单与浮层（高风险）— ✅ 已完成
 

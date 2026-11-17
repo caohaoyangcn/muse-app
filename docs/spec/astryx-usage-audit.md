@@ -133,8 +133,8 @@ Settings 分类导航没有拖拽，可以先换 `SideNav`/`NavItem`；桌面侧
 
 **现状**
 
-- 桌面：`frontend/src/components/VideoGrid.tsx:58` 把 JS 算出的列数传给 `Grid`，并手写 `gridTemplateColumns`、`columnGap`、`rowGap`
-- 移动：`frontend/src/mobile/components/VideoGrid.tsx:131` 同样传数字列数
+- 桌面：`frontend/src/components/VideoGrid.tsx` 不再计算列数，改用 `repeat(auto-fill, min(${cardSize}px, 100%))` 的固定轨道；卡片宽度由尺寸滑块决定
+- 移动：`frontend/src/mobile/components/VideoGrid.tsx` 使用 `Grid` 的响应式 `columns={{minWidth, max}}`
 
 **文档建议**
 
@@ -143,11 +143,11 @@ Settings 分类导航没有拖拽，可以先换 `SideNav`/`NavItem`；桌面侧
 
 **为什么没改**
 
-虚拟滚动（`useVirtualRows`）按“当前列数 × 行高”计算窗口和 `offsetTop`。如果让 Grid 自己按容器宽度重排，React 渲染的列数可能和虚拟窗口的数学短暂不一致，出现空白行或跳动。
+桌面的尺寸滑块要求每张卡是**固定宽度**；`columns={{minWidth, max}}` 的轨道是 `minmax(..., 1fr)`，会把卡片拉伸到填满整行，滑块就失去意义。列表已改为按页渲染，不再有虚拟窗口与列数的对齐问题；固定轨道模板只是卡片尺寸的载体。
 
 **建议方案**
 
-保留数字列数，但把 `gridTemplateColumns` 收进 `Grid` 的 `xstyle`/CSS 变量，减少内联样式；如果将来 Astryx 暴露列数变化的回调，再切换到响应式 `{minWidth, max}`。
+保留固定宽度的轨道模板，但把 `gridTemplateColumns` 收进 `Grid` 的 `xstyle`/CSS 变量，减少内联样式；如果将来 Astryx 提供“固定卡宽 + 自动列数”的正式接口，再切换过去。
 
 ## 4. 其余组件的复核结果
 
