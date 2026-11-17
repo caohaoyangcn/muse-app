@@ -232,7 +232,7 @@ export function VideoDetailView({
               </div>
             ) : null}
 
-            <MetaSection title="刮削状态">
+            <MetaSection>
               <div className="text-sm">
                 {loading ? (
                   <span className="text-[var(--muted)]">加载中…</span>
@@ -251,7 +251,7 @@ export function VideoDetailView({
 
             {detail ? (
               <>
-                <MetaSection title="元数据">
+                <MetaSection>
                   <MetadataList label={{ position: "start", width: 64 }}>
                     {javRows(detail).map(([label, value]) => (
                       <MetadataListItem key={label} label={label}>{value}</MetadataListItem>
@@ -348,12 +348,14 @@ function DetailHeader({
   );
 }
 
-function MetaSection({ title, children }: { title: string; children: ReactNode }) {
+function MetaSection({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <Section className="mt-5" padding={0} variant="transparent">
-      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-        {title}
-      </div>
+      {title ? (
+        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+          {title}
+        </div>
+      ) : null}
       {children}
     </Section>
   );
