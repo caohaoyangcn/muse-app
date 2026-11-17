@@ -87,6 +87,11 @@ import {
   ClearJavBusCookie,
   GetJavBusCookieStatus,
   SetJavBusCookie,
+  ClearLLMAPIKey,
+  GetLLMSettings,
+  SetLLMSettings,
+  TranslateMissingTitles,
+  TranslateVideoTitle,
   ClearFC2Cookie,
   GetFC2CookieStatus,
   SetFC2Cookie,
@@ -107,6 +112,8 @@ import type {
   JavTaskOverview,
   JavBusCookieStatus,
   FC2CookieStatus,
+  LLMSettings,
+  LLMSettingsInput,
   CloudConnection,
   CloudConnectionInput,
   CloudEntry,
@@ -361,6 +368,24 @@ export const getFC2CookieStatus = (): Promise<FC2CookieStatus> => GetFC2CookieSt
 export const setFC2Cookie = (cookie: string): Promise<void> => SetFC2Cookie(cookie);
 
 export const clearFC2Cookie = (): Promise<void> => ClearFC2Cookie();
+
+// ---- 片名翻译 (LLM) ----
+
+/** 片名翻译配置；未保存过时返回默认接口地址与模型。 */
+export const getLLMSettings = (): Promise<LLMSettings> => GetLLMSettings();
+
+export const setLLMSettings = (input: LLMSettingsInput): Promise<void> =>
+  SetLLMSettings(input);
+
+/** 清除已保存的 API Key；之后的刮削不再自动翻译。 */
+export const clearLLMAPIKey = (): Promise<void> => ClearLLMAPIKey();
+
+/** 为一条收藏排队翻译片名（立即返回，结果通过刮削事件刷新）。 */
+export const translateVideoTitle = (videoId: number): Promise<void> =>
+  TranslateVideoTitle(videoId);
+
+/** 为所有已刮削但缺少中文译名的收藏排队翻译，返回新入队数量。 */
+export const translateMissingTitles = (): Promise<number> => TranslateMissingTitles();
 
 /**
  * 浏览器扩展查询用：某个番号（JavDB 页面渲染出来的片号）是否已在收藏库中。

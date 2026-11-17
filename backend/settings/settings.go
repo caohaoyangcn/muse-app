@@ -1,17 +1,19 @@
 // Package settings persists small key/value user preferences in the app
 // database (the "settings" table, added in schema v5): the LAN server port,
-// encrypted provider cookies, the scraping proxy address, and one-off first-run
-// flags. The store is generic so new preferences can reuse it without another
-// migration.
+// encrypted provider cookies, the scraping proxy address, the LLM
+// title-translation provider, and one-off first-run flags. The store is generic
+// so new preferences can reuse it without another migration.
 package settings
 
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"muse-app/backend/llm"
 	"muse-app/backend/netproxy"
 	"muse-app/backend/secret"
 	"muse-app/backend/windowstate"
@@ -33,11 +35,18 @@ const (
 	keyWindowPlacement = "window_placement"
 	keyTourSeen        = "tour_seen"
 	keyTrashRetention  = "trash_retention_days"
+	keyLLMBaseURL      = "llm_base_url"
+	keyLLMModel        = "llm_model"
+	keyLLMEnabled      = "llm_enabled"
+	keyLLMAPIKey       = "llm_api_key_dpapi"
 	// Cookie headers are normally much smaller than this. The limit prevents
 	// accidentally persisting an unbounded paste while allowing complete
 	// browser Cookie headers with auxiliary session values.
 	maxJavBusCookieLength = 16 * 1024
 	maxFC2CookieLength    = maxJavBusCookieLength
+	// An API key is a short bearer token; the limit only exists to stop a
+	// broken paste from reaching the encrypted settings blob.
+	maxLLMAPIKeyLength = 16 * 1024
 )
 
 // ErrSecretStorageUnsupported indicates that this build cannot persist
@@ -147,6 +156,132 @@ func (s *Store) SetScrapeProxy(raw string) error {
 		return nil
 	}
 	return s.set(keyScrapeProxy, u.String())
+}
+
+// LLMConfig returns the title-translation provider configuration. The endpoint
+// and model fall back to the llm package defaults; an absent enabled flag
+// counts as enabled, so entering an API key is enough to turn translation on.
+// A platform without secure secret storage reports "no key" instead of an
+// error, which keeps the rest of the settings form usable.
+func (s *Store) LLMConfig() (llm.Config, error) {
+	baseURL, err := s.get(keyLLMBaseURL)
+	if err != nil {
+		return llm.Config{}, err
+	}
+	model, err := s.get(keyLLMModel)
+	if err != nil {
+		return llm.Config{}, err
+	}
+	enabledRaw, err := s.get(keyLLMEnabled)
+	if err != nil {
+		return llm.Config{}, err
+	}
+	apiKey, err := s.getLLMAPIKey()
+	if err != nil {
+		return llm.Config{}, err
+	}
+	return llm.Normalize(llm.Config{
+		Enabled: enabledRaw != "0",
+		BaseURL: baseURL,
+		Model:   model,
+		APIKey:  apiKey,
+	})
+}
+
+// SetLLMConfig validates and persists the provider configuration. An empty
+// API key leaves the previously saved key untouched, so the settings form can
+// update the endpoint or model without the user re-entering the secret.
+func (s *Store) SetLLMConfig(cfg llm.Config) error {
+	normalized, err := llm.Normalize(cfg)
+	if err != nil {
+		return err
+	}
+	// Store the secret first: if secure storage is unavailable, no part of the
+	// form is saved and the user gets one clear error.
+	if normalized.APIKey != "" {
+		if err := s.SetLLMAPIKey(normalized.APIKey); err != nil {
+			return err
+		}
+	}
+	if err := s.set(keyLLMBaseURL, normalized.BaseURL); err != nil {
+		return err
+	}
+	if err := s.set(keyLLMModel, normalized.Model); err != nil {
+		return err
+	}
+	enabled := "1"
+	if !normalized.Enabled {
+		enabled = "0"
+	}
+	return s.set(keyLLMEnabled, enabled)
+}
+
+// SetLLMAPIKey securely persists the bearer token used by the translation
+// provider. There is intentionally no plaintext fallback.
+func (s *Store) SetLLMAPIKey(apiKey string) error {
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		return errors.New("API Key 不能为空")
+	}
+	if strings.ContainsAny(apiKey, "\r\n") {
+		return errors.New("API Key 不能包含换行")
+	}
+	if len(apiKey) > maxLLMAPIKeyLength {
+		return fmt.Errorf("API Key 过长（最多 %d 个字符）", maxLLMAPIKeyLength)
+	}
+	if err := secret.Available(); err != nil {
+		return fmt.Errorf("当前平台不支持安全保存 API Key：%w", err)
+	}
+	protected, err := secret.Protect(apiKey)
+	if err != nil {
+		return fmt.Errorf("protect LLM API key: %w", err)
+	}
+	return s.set(keyLLMAPIKey, protected)
+}
+
+// HasLLMAPIKey reports whether an API key is stored. A platform without
+// secure secret storage simply has none.
+func (s *Store) HasLLMAPIKey() (bool, error) {
+	if err := secret.Available(); err != nil {
+		if errors.Is(err, secret.ErrUnsupported) {
+			return false, nil
+		}
+		return false, err
+	}
+	raw, err := s.get(keyLLMAPIKey)
+	if err != nil {
+		return false, err
+	}
+	return raw != "", nil
+}
+
+// ClearLLMAPIKey removes the stored bearer token. Translation then reports
+// itself as unconfigured until a new key is saved.
+func (s *Store) ClearLLMAPIKey() error {
+	if err := secret.Available(); err != nil {
+		return fmt.Errorf("当前平台不支持安全保存 API Key：%w", err)
+	}
+	if _, err := s.db.Exec(`DELETE FROM settings WHERE key = ?`, keyLLMAPIKey); err != nil {
+		return fmt.Errorf("clear LLM API key: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) getLLMAPIKey() (string, error) {
+	if err := secret.Available(); err != nil {
+		if errors.Is(err, secret.ErrUnsupported) {
+			return "", nil
+		}
+		return "", err
+	}
+	raw, err := s.get(keyLLMAPIKey)
+	if err != nil {
+		return "", err
+	}
+	if raw == "" {
+		return "", nil
+	}
+	return secret.Unprotect(raw)
 }
 
 // WindowPlacement returns the desktop window geometry saved by the previous

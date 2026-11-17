@@ -1,6 +1,6 @@
 // Types re-export the Wails-generated models so the bindings stay the single
 // source of truth for backend shapes.
-import { api, cloud, group, jav, server, video, watch } from "../wailsjs/go/models";
+import { api, cloud, group, jav, main, server, video, watch } from "../wailsjs/go/models";
 
 export type Video = video.Video;
 export type AddVideoResult = video.AddVideoResult;
@@ -42,6 +42,12 @@ export type JavTaskOverview = jav.TaskOverview;
 export type JavBusCookieStatus = {
   configured: boolean;
 };
+
+/** 片名翻译（LLM）配置；API Key 只以 hasApiKey 表示是否已保存，不回传明文。 */
+export type LLMSettings = main.LLMSettings;
+
+/** 片名翻译配置表单；apiKey 留空表示保留已保存的 Key。 */
+export type LLMSettingsInput = main.LLMSettingsInput;
 
 export type FC2CookieStatus = {
   configured: boolean;

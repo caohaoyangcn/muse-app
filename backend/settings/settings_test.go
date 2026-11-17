@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"muse-app/backend/database"
+	"muse-app/backend/llm"
 	"muse-app/backend/windowstate"
 )
 
@@ -436,5 +437,150 @@ func TestTrashRetentionCorruptValueFallsBack(t *testing.T) {
 	}
 	if configured || days != 0 {
 		t.Errorf("corrupt retention = (%d, configured=%v), want unset", days, configured)
+	}
+}
+
+// TestLLMConfigDefaults verifies an untouched install reports the default
+// endpoint/model, translation enabled, and no key — so the settings form can
+// render without the user having configured anything.
+func TestLLMConfigDefaults(t *testing.T) {
+	s := newStore(t)
+	cfg, err := s.LLMConfig()
+	if err != nil {
+		t.Fatalf("llm config: %v", err)
+	}
+	if !cfg.Enabled {
+		t.Error("translation should default to enabled")
+	}
+	if cfg.BaseURL != llm.DefaultBaseURL || cfg.Model != llm.DefaultModel {
+		t.Fatalf("config = %+v, want default endpoint and model", cfg)
+	}
+	if cfg.APIKey != "" {
+		t.Errorf("API key = %q, want empty on a fresh install", cfg.APIKey)
+	}
+	if cfg.Usable() {
+		t.Error("a fresh config without a key must not be usable")
+	}
+}
+
+func TestLLMConfigRoundTrip(t *testing.T) {
+	s := newStore(t)
+	want := llm.Config{
+		Enabled: false,
+		BaseURL: "https://api.openai.com/v1",
+		Model:   "gpt-4o-mini",
+	}
+	if err := s.SetLLMConfig(want); err != nil {
+		t.Fatalf("set llm config: %v", err)
+	}
+	got, err := s.LLMConfig()
+	if err != nil {
+		t.Fatalf("read llm config: %v", err)
+	}
+	if got != want {
+		t.Fatalf("config = %+v, want %+v", got, want)
+	}
+
+	// Re-enabling without touching the endpoint must keep both values.
+	want.Enabled = true
+	if err := s.SetLLMConfig(want); err != nil {
+		t.Fatalf("re-enable llm config: %v", err)
+	}
+	got, err = s.LLMConfig()
+	if err != nil {
+		t.Fatalf("read enabled llm config: %v", err)
+	}
+	if got != want {
+		t.Fatalf("config after re-enable = %+v, want %+v", got, want)
+	}
+}
+
+func TestLLMConfigRejectsInvalidEndpoint(t *testing.T) {
+	s := newStore(t)
+	if err := s.SetLLMConfig(llm.Config{BaseURL: "not a url"}); err == nil {
+		t.Fatal("expected an invalid endpoint to be rejected")
+	}
+}
+
+func TestLLMAPIKeyStorage(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("DPAPI storage test requires Windows")
+	}
+	s := newStore(t)
+	if err := s.SetLLMAPIKey("sk-secret-value"); err != nil {
+		t.Fatalf("set api key: %v", err)
+	}
+	has, err := s.HasLLMAPIKey()
+	if err != nil {
+		t.Fatalf("has api key: %v", err)
+	}
+	if !has {
+		t.Fatal("HasLLMAPIKey = false, want true")
+	}
+	cfg, err := s.LLMConfig()
+	if err != nil {
+		t.Fatalf("llm config: %v", err)
+	}
+	if cfg.APIKey != "sk-secret-value" || !cfg.Usable() {
+		t.Fatalf("config = %+v, want the stored usable key", cfg)
+	}
+
+	var stored string
+	if err := s.db.QueryRow(`SELECT value FROM settings WHERE key = ?`, keyLLMAPIKey).Scan(&stored); err != nil {
+		t.Fatalf("read stored key: %v", err)
+	}
+	if stored == "" || strings.Contains(stored, "sk-secret-value") {
+		t.Fatalf("stored key = %q, want protected ciphertext only", stored)
+	}
+
+	// Saving an endpoint without a key must keep the key.
+	if err := s.SetLLMConfig(llm.Config{Enabled: true, BaseURL: "https://api.openai.com/v1", Model: "gpt-4o-mini"}); err != nil {
+		t.Fatalf("set config without key: %v", err)
+	}
+	cfg, err = s.LLMConfig()
+	if err != nil {
+		t.Fatalf("llm config after endpoint change: %v", err)
+	}
+	if cfg.APIKey != "sk-secret-value" {
+		t.Fatalf("API key = %q, want the previous key", cfg.APIKey)
+	}
+
+	if err := s.ClearLLMAPIKey(); err != nil {
+		t.Fatalf("clear api key: %v", err)
+	}
+	has, err = s.HasLLMAPIKey()
+	if err != nil {
+		t.Fatalf("has api key after clear: %v", err)
+	}
+	if has {
+		t.Fatal("HasLLMAPIKey after clear = true, want false")
+	}
+}
+
+func TestLLMAPIKeyUnsupportedOnNonWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unsupported-platform test requires non-Windows")
+	}
+	s := newStore(t)
+	if err := s.SetLLMAPIKey("sk-secret-value"); err == nil {
+		t.Fatal("expected setting a key to fail without secure storage")
+	}
+	if err := s.ClearLLMAPIKey(); err == nil {
+		t.Fatal("expected clearing a key to fail without secure storage")
+	}
+	has, err := s.HasLLMAPIKey()
+	if err != nil {
+		t.Fatalf("has api key: %v", err)
+	}
+	if has {
+		t.Fatal("HasLLMAPIKey = true without secure storage")
+	}
+	// The rest of the configuration stays readable, so the form still works.
+	cfg, err := s.LLMConfig()
+	if err != nil {
+		t.Fatalf("llm config: %v", err)
+	}
+	if cfg.APIKey != "" || cfg.Usable() {
+		t.Fatalf("config = %+v, want no key and not usable", cfg)
 	}
 }

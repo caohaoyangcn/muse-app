@@ -58,6 +58,10 @@ export function ClearJavBusCookie() {
   return window['go']['main']['App']['ClearJavBusCookie']();
 }
 
+export function ClearLLMAPIKey() {
+  return window['go']['main']['App']['ClearLLMAPIKey']();
+}
+
 export function ClearVideoLikes(arg1) {
   return window['go']['main']['App']['ClearVideoLikes'](arg1);
 }
@@ -124,6 +128,10 @@ export function GetFC2CookieStatus() {
 
 export function GetJavBusCookieStatus() {
   return window['go']['main']['App']['GetJavBusCookieStatus']();
+}
+
+export function GetLLMSettings() {
+  return window['go']['main']['App']['GetLLMSettings']();
 }
 
 export function GetScrapeProxy() {
@@ -302,6 +310,10 @@ export function SetJavBusCookie(arg1) {
   return window['go']['main']['App']['SetJavBusCookie'](arg1);
 }
 
+export function SetLLMSettings(arg1) {
+  return window['go']['main']['App']['SetLLMSettings'](arg1);
+}
+
 export function SetLibrary(arg1) {
   return window['go']['main']['App']['SetLibrary'](arg1);
 }
@@ -368,6 +380,14 @@ export function SuggestGroupsForVideos(arg1) {
 
 export function TestCloudConnection(arg1) {
   return window['go']['main']['App']['TestCloudConnection'](arg1);
+}
+
+export function TranslateMissingTitles() {
+  return window['go']['main']['App']['TranslateMissingTitles']();
+}
+
+export function TranslateVideoTitle(arg1) {
+  return window['go']['main']['App']['TranslateVideoTitle'](arg1);
 }
 
 export function UnmergeActor(arg1) {

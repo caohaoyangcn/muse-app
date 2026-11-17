@@ -8,7 +8,7 @@ import (
 // currentSchemaVersion is the highest applied schema version. It is tracked in
 // PRAGMA user_version. Bump it whenever a migration adds a column/table that
 // requires (or could benefit from) re-extracting data for pre-existing rows.
-const currentSchemaVersion = 26
+const currentSchemaVersion = 27
 
 // MigrationResult reports what happened during Migrate so callers can trigger
 // one-off backfills (e.g. re-probing ffprobe for videos created before a new
@@ -415,6 +415,31 @@ func Migrate(db *sql.DB) (MigrationResult, error) {
 			return res, fmt.Errorf("migrate database v26 indexes: %w", err)
 		}
 		version = 26
+	}
+
+	if version < 27 {
+		// v27 stores the LLM's Simplified-Chinese translation of the scraped
+		// title next to the original (中文译名). title_zh is the translation;
+		// title_zh_error records why the last attempt failed ('' means never
+		// attempted or succeeded). Additive, no backfill: existing scrapes
+		// simply have no translation until the user runs 翻译缺少译名的片名, or a
+		// future scrape of the same work fills it in.
+		//
+		// The leading v13 schema keeps the step self-sufficient: it is a no-op
+		// on a normal v26 library but recreates video_jav for a database stamped
+		// past v13 without the table (a repaired install, the migration tests).
+		if _, err := db.Exec(schemaV13); err != nil {
+			return res, fmt.Errorf("migrate database v27 base table: %w", err)
+		}
+		for _, col := range []struct{ name, alter string }{
+			{"title_zh", `ALTER TABLE video_jav ADD COLUMN title_zh TEXT NOT NULL DEFAULT ''`},
+			{"title_zh_error", `ALTER TABLE video_jav ADD COLUMN title_zh_error TEXT NOT NULL DEFAULT ''`},
+		} {
+			if err := addColumnIfMissing(db, "video_jav", col.name, col.alter); err != nil {
+				return res, fmt.Errorf("migrate database v27 %s: %w", col.name, err)
+			}
+		}
+		version = 27
 	}
 
 	res.SchemaVersion = version

@@ -891,3 +891,65 @@ func TestV26AddsCloudArchiveSchema(t *testing.T) {
 		t.Errorf("idx_videos_delete_reason = %d, err=%v", idx, err)
 	}
 }
+
+// TestV27AddsTitleTranslationSchema verifies the 中文译名 columns: an existing
+// v26 library upgrades additively, existing scrape results keep their data and
+// start with an empty translation, and a translated row survives a re-migrate.
+func TestV27AddsTitleTranslationSchema(t *testing.T) {
+	db := openMigrated(t)
+	if _, err := Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	// Rewind to v26, which is what the previous release looks like.
+	for _, stmt := range []string{
+		`ALTER TABLE video_jav DROP COLUMN title_zh_error`,
+		`ALTER TABLE video_jav DROP COLUMN title_zh`,
+		`PRAGMA user_version = 26`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("rewind to v26 (%s): %v", stmt, err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status) VALUES ('C:\v\a.mp4','a.mp4',1,1,1,'available')`); err != nil {
+		t.Fatalf("insert video: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO video_jav (video_id, code, title, created_at, updated_at) VALUES (1,'IPX-633','元タイトル',1,1)`); err != nil {
+		t.Fatalf("insert scrape result: %v", err)
+	}
+
+	res, err := Migrate(db)
+	if err != nil {
+		t.Fatalf("migrate v26 -> v27: %v", err)
+	}
+	if res.SchemaVersion != currentSchemaVersion {
+		t.Errorf("schema version = %d, want %d", res.SchemaVersion, currentSchemaVersion)
+	}
+	if !hasColumn(db, "video_jav", "title_zh") || !hasColumn(db, "video_jav", "title_zh_error") {
+		t.Fatal("title translation columns missing")
+	}
+	var title, titleZh, titleZhError string
+	if err := db.QueryRow(`SELECT title, title_zh, title_zh_error FROM video_jav WHERE video_id=1`).Scan(&title, &titleZh, &titleZhError); err != nil {
+		t.Fatalf("read existing scrape result: %v", err)
+	}
+	if title != "元タイトル" {
+		t.Errorf("title = %q, want the existing scrape result preserved", title)
+	}
+	if titleZh != "" || titleZhError != "" {
+		t.Errorf("translation columns = (%q, %q), want empty defaults", titleZh, titleZhError)
+	}
+
+	// A saved translation and its failure message round-trip, and a second
+	// migrate is a no-op.
+	if _, err := db.Exec(`UPDATE video_jav SET title_zh='原题中文名', title_zh_error='' WHERE video_id=1`); err != nil {
+		t.Fatalf("save translation: %v", err)
+	}
+	if _, err := Migrate(db); err != nil {
+		t.Fatalf("re-migrate: %v", err)
+	}
+	if err := db.QueryRow(`SELECT title_zh FROM video_jav WHERE video_id=1`).Scan(&titleZh); err != nil {
+		t.Fatalf("read translation: %v", err)
+	}
+	if titleZh != "原题中文名" {
+		t.Errorf("translation = %q, want it preserved across re-migrate", titleZh)
+	}
+}

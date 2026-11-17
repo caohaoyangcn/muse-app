@@ -26,6 +26,7 @@ import (
 	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/jav/providers"
+	"muse-app/backend/llm"
 	"muse-app/backend/netproxy"
 	"muse-app/backend/platform"
 	"muse-app/backend/server"
@@ -267,6 +268,12 @@ func main() {
 	// the only provider that publishes profiles, so it is the resolver even when
 	// javbus supplied the metadata.
 	javSvc.SetActorResolver(avmooProvider)
+	// 中文译名: one OpenAI-compatible client translates a scraped title after the
+	// task has already succeeded. It re-reads the settings on every call, so
+	// editing the provider takes effect without a restart, and it shares the
+	// scraping proxy route so an LLM behind the same proxy works too.
+	llmClient := llm.NewClient(settingsStore.LLMConfig, &http.Client{Transport: proxyCfg.Transport()})
+	javSvc.SetTitleTranslator(llmClient)
 	lib.SetJavService(javSvc)
 	javSvc.Start()
 	// After ffprobe confirms a 4K resolution, the background processor asks the

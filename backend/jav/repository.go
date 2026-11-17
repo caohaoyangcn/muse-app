@@ -25,6 +25,14 @@ type Repository interface {
 	SaveSuccess(videoID int64, metadata Metadata, codeSource string, fetchedAt int64) error
 	SetCover(videoID int64, status string) error
 	SetOverride(videoID int64, mode, code string) error
+	// SetTitleTranslation stores one translation attempt: the Chinese title on
+	// success, or the failure message while titleZh stays empty.
+	SetTitleTranslation(videoID int64, titleZh, lastError string) error
+	// ListTitleTranslationCandidates returns the successfully scraped,
+	// non-trashed favorites that still have no Chinese title. It is the work
+	// list for the bulk 翻译缺少译名的片名 action; the in-memory queue removes
+	// duplicates, so an in-flight translation may appear here.
+	ListTitleTranslationCandidates() ([]int64, error)
 	ListActorFilmRefs() ([]ActorFilmRef, error)
 	ListActorMerges() ([]ActorMerge, error)
 	UpsertActorMerge(alias, canonical string) error
@@ -189,10 +197,11 @@ func (r *SQLiteRepository) Get(videoID int64) (*Detail, error) {
 	var d Detail
 	var release, duration, uncensored, fetched sql.NullInt64
 	var actors, tags string
+	var titleZhError sql.NullString
 	var taskStatus, taskErrorCode, taskLastError sql.NullString
 	var attempts sql.NullInt64
 	var nextRetry, errorAt sql.NullInt64
-	err := r.db.QueryRow(`SELECT v.video_id, v.code, v.title, v.studio, v.series, v.release_unix, v.duration_min, v.is_uncensored, v.actors_json, v.tags_json, v.cover_url, v.cover_status, v.provider, v.code_source, v.override_mode, COALESCE(t.status, v.scrape_status), COALESCE(t.attempts, v.attempts), COALESCE(t.last_error, v.last_error), COALESCE(t.next_retry_at, v.next_retry_at), v.fetched_at, t.error_code, t.error_at FROM video_jav v LEFT JOIN jav_scrape_tasks t ON t.video_id=v.video_id WHERE v.video_id=?`, videoID).Scan(&d.VideoID, &d.Code, &d.Title, &d.Studio, &d.Series, &release, &duration, &uncensored, &actors, &tags, &d.CoverURL, &d.CoverStatus, &d.Provider, &d.CodeSource, &d.OverrideMode, &taskStatus, &attempts, &taskLastError, &nextRetry, &fetched, &taskErrorCode, &errorAt)
+	err := r.db.QueryRow(`SELECT v.video_id, v.code, v.title, v.title_zh, v.title_zh_error, v.studio, v.series, v.release_unix, v.duration_min, v.is_uncensored, v.actors_json, v.tags_json, v.cover_url, v.cover_status, v.provider, v.code_source, v.override_mode, COALESCE(t.status, v.scrape_status), COALESCE(t.attempts, v.attempts), COALESCE(t.last_error, v.last_error), COALESCE(t.next_retry_at, v.next_retry_at), v.fetched_at, t.error_code, t.error_at FROM video_jav v LEFT JOIN jav_scrape_tasks t ON t.video_id=v.video_id WHERE v.video_id=?`, videoID).Scan(&d.VideoID, &d.Code, &d.Title, &d.TitleZh, &titleZhError, &d.Studio, &d.Series, &release, &duration, &uncensored, &actors, &tags, &d.CoverURL, &d.CoverStatus, &d.Provider, &d.CodeSource, &d.OverrideMode, &taskStatus, &attempts, &taskLastError, &nextRetry, &fetched, &taskErrorCode, &errorAt)
 	if err == sql.ErrNoRows {
 		return nil, sql.ErrNoRows
 	}
@@ -220,6 +229,8 @@ func (r *SQLiteRepository) Get(videoID int64) (*Detail, error) {
 		d.ErrorAt = &errorAt.Int64
 	}
 	d.ScrapeStatus, d.Attempts, d.LastError, d.ErrorCode = taskStatus.String, int(attempts.Int64), taskLastError.String, taskErrorCode.String
+	d.TitleZhError = titleZhError.String
+	d.TitleZhStatus = titleZhStatus(d.TitleZh, d.TitleZhError)
 	_ = json.Unmarshal([]byte(actors), &d.Actors)
 	_ = json.Unmarshal([]byte(tags), &d.Tags)
 	// The desktop and web UIs read len(detail.actors) / len(detail.tags) while
@@ -314,7 +325,9 @@ func (r *SQLiteRepository) RecoverPending(now int64) ([]Task, error) {
 func (r *SQLiteRepository) SaveSuccess(videoID int64, m Metadata, codeSource string, fetchedAt int64) error {
 	actors, _ := json.Marshal(stringList(m.Actors))
 	tags, _ := json.Marshal(stringList(m.Tags))
-	_, err := r.db.Exec(`UPDATE video_jav SET code=?, title=?, studio=?, series=?, release_unix=?, duration_min=?, is_uncensored=?, actors_json=?, tags_json=?, cover_url=?, provider=?, code_source=?, fetched_at=?, updated_at=? WHERE video_id=?`, m.Code, m.Title, m.Studio, m.Series, m.ReleaseUnix, m.DurationMin, boolInt(m.IsUncensored), actors, tags, m.CoverURL, m.Provider, codeSource, fetchedAt, fetchedAt, videoID)
+	// A re-scrape replaces the title, so the old translation no longer describes
+	// the record: clear it and let the service queue a fresh translation.
+	_, err := r.db.Exec(`UPDATE video_jav SET code=?, title=?, title_zh='', title_zh_error='', studio=?, series=?, release_unix=?, duration_min=?, is_uncensored=?, actors_json=?, tags_json=?, cover_url=?, provider=?, code_source=?, fetched_at=?, updated_at=? WHERE video_id=?`, m.Code, m.Title, m.Studio, m.Series, m.ReleaseUnix, m.DurationMin, boolInt(m.IsUncensored), actors, tags, m.CoverURL, m.Provider, codeSource, fetchedAt, fetchedAt, videoID)
 	if err != nil {
 		return fmt.Errorf("save jav metadata: %w", err)
 	}
@@ -328,6 +341,70 @@ func stringList(values []string) []string {
 		return []string{}
 	}
 	return values
+}
+
+// titleZhStatus turns the stored translation columns into the status the UI
+// reads. A success always wins over a stale error, so a row that once failed
+// and later succeeded reports "succeeded".
+func titleZhStatus(titleZh, lastError string) string {
+	switch {
+	case strings.TrimSpace(titleZh) != "":
+		return TitleZhSucceeded
+	case strings.TrimSpace(lastError) != "":
+		return TitleZhFailed
+	default:
+		return TitleZhNone
+	}
+}
+
+// maxTitleZhErrorLength bounds a provider failure message. The detail panel
+// shows it, and a verbose stack trace would not help there.
+const maxTitleZhErrorLength = 500
+
+// SetTitleTranslation stores one translation attempt. Saving a success clears
+// the previous failure and vice versa, so the two columns cannot disagree.
+func (r *SQLiteRepository) SetTitleTranslation(videoID int64, titleZh, lastError string) error {
+	titleZh = strings.TrimSpace(titleZh)
+	lastError = strings.TrimSpace(lastError)
+	if len(lastError) > maxTitleZhErrorLength {
+		lastError = lastError[:maxTitleZhErrorLength]
+	}
+	if _, err := r.db.Exec(
+		`UPDATE video_jav SET title_zh=?, title_zh_error=?, updated_at=? WHERE video_id=?`,
+		titleZh, lastError, time.Now().UnixMilli(), videoID,
+	); err != nil {
+		return fmt.Errorf("save jav title translation: %w", err)
+	}
+	return nil
+}
+
+// ListTitleTranslationCandidates returns every scraped, non-trashed favorite
+// without a Chinese title. Failed attempts are included on purpose: the bulk
+// action is the user's retry after fixing a provider configuration.
+func (r *SQLiteRepository) ListTitleTranslationCandidates() ([]int64, error) {
+	rows, err := r.db.Query(`
+		SELECT j.video_id
+		FROM video_jav j
+		JOIN videos v ON v.id = j.video_id AND v.deleted_at IS NULL
+		LEFT JOIN jav_scrape_tasks t ON t.video_id = j.video_id
+		WHERE COALESCE(t.status, j.scrape_status) = 'succeeded'
+		  AND TRIM(j.title) <> ''
+		  AND TRIM(j.title_zh) = ''
+		ORDER BY j.video_id`)
+	if err != nil {
+		return nil, fmt.Errorf("list title translation candidates: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan title translation candidate: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func (r *SQLiteRepository) SetCover(videoID int64, status string) error {

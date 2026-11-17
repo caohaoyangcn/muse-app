@@ -12,6 +12,7 @@ import (
 	"muse-app/backend/cloud"
 	"muse-app/backend/group"
 	"muse-app/backend/jav"
+	"muse-app/backend/llm"
 	"muse-app/backend/netproxy"
 	"muse-app/backend/platform"
 	"muse-app/backend/server"
@@ -26,6 +27,26 @@ type JavBusCookieStatus struct {
 
 type FC2CookieStatus struct {
 	Configured bool `json:"configured"`
+}
+
+// LLMSettings is the 片名翻译 configuration the settings page edits. The API
+// key is never returned to the client; HasAPIKey only reports whether one is
+// stored (and therefore whether translation can run).
+type LLMSettings struct {
+	Enabled   bool   `json:"enabled"`
+	BaseURL   string `json:"baseUrl"`
+	Model     string `json:"model"`
+	HasAPIKey bool   `json:"hasApiKey"`
+}
+
+// LLMSettingsInput is the form payload. An empty APIKey keeps the previously
+// saved key, so the endpoint and model can be edited without re-entering the
+// secret.
+type LLMSettingsInput struct {
+	Enabled bool   `json:"enabled"`
+	BaseURL string `json:"baseUrl"`
+	Model   string `json:"model"`
+	APIKey  string `json:"apiKey"`
 }
 
 type javCookieProvider interface {
@@ -169,6 +190,66 @@ func (a *App) ClearFC2Cookie() error {
 // setScrapeProxyConfig wires the runtime proxy resolver. Scraping transports
 // read it on every request, so a settings change needs no provider restart.
 func (a *App) setScrapeProxyConfig(proxy *netproxy.Config) { a.proxy = proxy }
+
+// GetLLMSettings returns the title-translation configuration without the API
+// key. The endpoint/model fall back to the llm package defaults, so a fresh
+// install shows a usable form instead of empty fields.
+func (a *App) GetLLMSettings() (LLMSettings, error) {
+	if a.settings == nil {
+		return LLMSettings{}, fmt.Errorf("设置存储未初始化")
+	}
+	cfg, err := a.settings.LLMConfig()
+	if err != nil {
+		return LLMSettings{}, err
+	}
+	return LLMSettings{
+		Enabled:   cfg.Enabled,
+		BaseURL:   cfg.BaseURL,
+		Model:     cfg.Model,
+		HasAPIKey: cfg.APIKey != "",
+	}, nil
+}
+
+// SetLLMSettings validates and persists the provider configuration. The key is
+// stored with the same DPAPI protection as the scraping cookies; a blank key
+// leaves the existing one untouched.
+func (a *App) SetLLMSettings(input LLMSettingsInput) error {
+	if a.settings == nil {
+		return fmt.Errorf("设置存储未初始化")
+	}
+	return a.settings.SetLLMConfig(llm.Config{
+		Enabled: input.Enabled,
+		BaseURL: input.BaseURL,
+		Model:   input.Model,
+		APIKey:  input.APIKey,
+	})
+}
+
+// ClearLLMAPIKey removes the stored key; translation then reports itself as
+// unconfigured until a new one is saved.
+func (a *App) ClearLLMAPIKey() error {
+	if a.settings == nil {
+		return fmt.Errorf("设置存储未初始化")
+	}
+	return a.settings.ClearLLMAPIKey()
+}
+
+// TranslateVideoTitle queues one favorite's 中文译名 translation.
+func (a *App) TranslateVideoTitle(videoID int64) error {
+	if a.lib == nil {
+		return fmt.Errorf("library not initialized")
+	}
+	return a.lib.TranslateJavTitle(videoID)
+}
+
+// TranslateMissingTitles queues every successfully scraped favorite without a
+// Chinese title and returns how many were newly queued.
+func (a *App) TranslateMissingTitles() (int, error) {
+	if a.lib == nil {
+		return 0, fmt.Errorf("library not initialized")
+	}
+	return a.lib.TranslateMissingJavTitles()
+}
 
 // GetScrapeProxy returns the stored scraping proxy address, or an empty string
 // when scraping dials directly (HTTP_PROXY/HTTPS_PROXY still apply then).

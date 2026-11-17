@@ -39,6 +39,8 @@ export function ClearFC2Cookie():Promise<void>;
 
 export function ClearJavBusCookie():Promise<void>;
 
+export function ClearLLMAPIKey():Promise<void>;
+
 export function ClearVideoLikes(arg1:number):Promise<video.Video>;
 
 export function CloudStorageAvailable():Promise<boolean>;
@@ -72,6 +74,8 @@ export function FileScanStatus():Promise<video.FileScanStatus>;
 export function GetFC2CookieStatus():Promise<main.FC2CookieStatus>;
 
 export function GetJavBusCookieStatus():Promise<main.JavBusCookieStatus>;
+
+export function GetLLMSettings():Promise<main.LLMSettings>;
 
 export function GetScrapeProxy():Promise<string>;
 
@@ -161,6 +165,8 @@ export function SetGroupParent(arg1:number,arg2:any):Promise<group.Group>;
 
 export function SetJavBusCookie(arg1:string):Promise<void>;
 
+export function SetLLMSettings(arg1:main.LLMSettingsInput):Promise<void>;
+
 export function SetLibrary(arg1:api.Library):Promise<void>;
 
 export function SetScrapeProxy(arg1:string):Promise<void>;
@@ -194,6 +200,10 @@ export function StopServer():Promise<void>;
 export function SuggestGroupsForVideos(arg1:Array<string>):Promise<Array<api.VideoGroupSuggestion>>;
 
 export function TestCloudConnection(arg1:cloud.ConnectionInput):Promise<cloud.TestResult>;
+
+export function TranslateMissingTitles():Promise<number>;
+
+export function TranslateVideoTitle(arg1:number):Promise<void>;
 
 export function UnmergeActor(arg1:string):Promise<void>;
 

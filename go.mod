@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/sashabaranov/go-openai v1.43.0
 	github.com/wailsapp/wails/v2 v2.15.0
 	golang.org/x/image v0.45.0
 	golang.org/x/net v0.56.0

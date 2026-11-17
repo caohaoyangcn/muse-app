@@ -351,6 +351,9 @@ export namespace jav {
 	    videoId: number;
 	    code: string;
 	    title: string;
+	    titleZh: string;
+	    titleZhStatus: string;
+	    titleZhError: string;
 	    studio: string;
 	    series: string;
 	    releaseUnix?: number;
@@ -380,6 +383,9 @@ export namespace jav {
 	        this.videoId = source["videoId"];
 	        this.code = source["code"];
 	        this.title = source["title"];
+	        this.titleZh = source["titleZh"];
+	        this.titleZhStatus = source["titleZhStatus"];
+	        this.titleZhError = source["titleZhError"];
 	        this.studio = source["studio"];
 	        this.series = source["series"];
 	        this.releaseUnix = source["releaseUnix"];
@@ -643,6 +649,42 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.configured = source["configured"];
+	    }
+	}
+	export class LLMSettings {
+	    enabled: boolean;
+	    baseUrl: string;
+	    model: string;
+	    hasApiKey: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LLMSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.baseUrl = source["baseUrl"];
+	        this.model = source["model"];
+	        this.hasApiKey = source["hasApiKey"];
+	    }
+	}
+	export class LLMSettingsInput {
+	    enabled: boolean;
+	    baseUrl: string;
+	    model: string;
+	    apiKey: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LLMSettingsInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.baseUrl = source["baseUrl"];
+	        this.model = source["model"];
+	        this.apiKey = source["apiKey"];
 	    }
 	}
 

@@ -64,6 +64,13 @@ type Service struct {
 	resolver ActorResolver
 	fillWake chan struct{}
 	fillOnce sync.Once
+
+	// 中文译名 translation: translator is wiring-time, titleJobs is a
+	// single-worker queue, titlePending dedupes ids already queued or running.
+	translator   TitleTranslator
+	titleJobs    *workQueue[int64]
+	titlePending map[int64]struct{}
+	titleMu      sync.Mutex
 }
 
 type job struct {
@@ -129,11 +136,13 @@ func NewService(repo Repository, videos video.VideoRepository, provider Provider
 	if log == nil {
 		log = slog.Default()
 	}
-	s := &Service{repo: repo, videos: videos, provider: provider, coverDir: coverDir, emit: emit, log: log, jobs: newJobQueue(), pending: make(map[int64]struct{}), stop: make(chan struct{}), stopped: make(chan struct{}), scannerStarted: make(chan struct{}), fillWake: make(chan struct{}, 1)}
+	s := &Service{repo: repo, videos: videos, provider: provider, coverDir: coverDir, emit: emit, log: log, jobs: newJobQueue(), pending: make(map[int64]struct{}), titleJobs: newWorkQueue[int64](), titlePending: make(map[int64]struct{}), stop: make(chan struct{}), stopped: make(chan struct{}), scannerStarted: make(chan struct{}), fillWake: make(chan struct{}, 1)}
 	for i := 0; i < workers; i++ {
 		s.wg.Add(1)
 		go s.worker()
 	}
+	s.wg.Add(1)
+	go s.titleWorker()
 	return s
 }
 
@@ -167,6 +176,7 @@ func (s *Service) Close() {
 		s.closed = true
 		s.mu.Unlock()
 		s.jobs.close()
+		s.titleJobs.close()
 
 		select {
 		case <-s.scannerStarted:
@@ -207,7 +217,18 @@ func (s *Service) recoverPending() {
 	}
 }
 
-func (s *Service) Get(videoID int64) (*Detail, error)         { return s.repo.Get(videoID) }
+func (s *Service) Get(videoID int64) (*Detail, error) {
+	d, err := s.repo.Get(videoID)
+	if err != nil {
+		return nil, err
+	}
+	// A queued/running translation is in-memory state, overlaid on the stored
+	// result so the detail panel can show 翻译中… without persisting it.
+	if s.titleTranslationPending(videoID) {
+		d.TitleZhStatus = TitleZhPending
+	}
+	return d, nil
+}
 func (s *Service) GetTask(videoID int64) (*Task, error)       { return s.repo.GetTask(videoID) }
 func (s *Service) ListTaskOverviews() ([]TaskOverview, error) { return s.repo.ListTaskOverviews() }
 
@@ -740,6 +761,12 @@ func (s *Service) process(j job) {
 	}
 	s.log.Info("jav task succeeded", "videoId", j.id, "code", m.Code, "provider", m.Provider, "attempts", claimed.Attempts)
 	s.emitUpdate(j.id)
+	// 中文译名 is background enrichment: queued after the task is already
+	// succeeded, on its own worker, and skipped while the provider is not
+	// configured. It can never change the scrape outcome.
+	if s.translator != nil && s.translator.Configured() && strings.TrimSpace(m.Title) != "" {
+		s.enqueueTitleTranslation(j.id, true)
+	}
 }
 
 func (s *Service) processCover(videoID int64, rawURL, providerName string) error {

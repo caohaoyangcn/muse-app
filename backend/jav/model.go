@@ -25,6 +25,14 @@ const (
 	CoverPending   = "pending"
 	CoverSucceeded = "succeeded"
 	CoverFailed    = "failed"
+
+	// 中文译名（LLM 翻译）的状态。Stored state is none/succeeded/failed;
+	// pending is an in-memory overlay while the translation sits in the queue,
+	// so a crash never leaves a row stuck in "翻译中".
+	TitleZhNone      = "none"
+	TitleZhPending   = "pending"
+	TitleZhSucceeded = "succeeded"
+	TitleZhFailed    = "failed"
 )
 
 const (
@@ -43,6 +51,9 @@ const (
 	// ErrorActorProfile is a resolver failure that is neither a lookup miss nor
 	// a storage problem: an unexpected provider response.
 	ErrorActorProfile = "actor_profile"
+	// ErrorTitleTranslation is a failed 中文译名 translation. Enrichment only:
+	// the scrape itself already succeeded.
+	ErrorTitleTranslation = "title_translation"
 )
 
 type Metadata struct {
@@ -152,28 +163,35 @@ type ActorMerge struct {
 }
 
 type Detail struct {
-	VideoID      int64    `json:"videoId"`
-	Code         string   `json:"code"`
-	Title        string   `json:"title"`
-	Studio       string   `json:"studio"`
-	Series       string   `json:"series"`
-	ReleaseUnix  *int64   `json:"releaseUnix,omitempty"`
-	DurationMin  *int     `json:"durationMin,omitempty"`
-	IsUncensored *bool    `json:"isUncensored,omitempty"`
-	Actors       []string `json:"actors"`
-	Tags         []string `json:"tags"`
-	CoverURL     string   `json:"coverUrl"`
-	CoverStatus  string   `json:"coverStatus"`
-	Provider     string   `json:"provider"`
-	CodeSource   string   `json:"codeSource"`
-	OverrideMode string   `json:"overrideMode"`
-	ScrapeStatus string   `json:"scrapeStatus"`
-	Attempts     int      `json:"attempts"`
-	LastError    string   `json:"lastError"`
-	NextRetryAt  *int64   `json:"nextRetryAt,omitempty"`
-	FetchedAt    *int64   `json:"fetchedAt,omitempty"`
-	ErrorCode    string   `json:"errorCode"`
-	ErrorAt      *int64   `json:"errorAt,omitempty"`
+	VideoID int64  `json:"videoId"`
+	Code    string `json:"code"`
+	Title   string `json:"title"`
+	// TitleZh is the LLM's Simplified-Chinese translation of Title (中文译名).
+	// TitleZhStatus says whether a translation has been attempted and why it is
+	// missing; TitleZhError carries the last failure message for the detail
+	// panel.
+	TitleZh       string   `json:"titleZh"`
+	TitleZhStatus string   `json:"titleZhStatus"`
+	TitleZhError  string   `json:"titleZhError"`
+	Studio        string   `json:"studio"`
+	Series        string   `json:"series"`
+	ReleaseUnix   *int64   `json:"releaseUnix,omitempty"`
+	DurationMin   *int     `json:"durationMin,omitempty"`
+	IsUncensored  *bool    `json:"isUncensored,omitempty"`
+	Actors        []string `json:"actors"`
+	Tags          []string `json:"tags"`
+	CoverURL      string   `json:"coverUrl"`
+	CoverStatus   string   `json:"coverStatus"`
+	Provider      string   `json:"provider"`
+	CodeSource    string   `json:"codeSource"`
+	OverrideMode  string   `json:"overrideMode"`
+	ScrapeStatus  string   `json:"scrapeStatus"`
+	Attempts      int      `json:"attempts"`
+	LastError     string   `json:"lastError"`
+	NextRetryAt   *int64   `json:"nextRetryAt,omitempty"`
+	FetchedAt     *int64   `json:"fetchedAt,omitempty"`
+	ErrorCode     string   `json:"errorCode"`
+	ErrorAt       *int64   `json:"errorAt,omitempty"`
 }
 
 type Task struct {

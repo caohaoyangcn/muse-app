@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -940,5 +941,200 @@ func TestRepositorySkipsExhaustedRetryableTasksInRecovery(t *testing.T) {
 	}
 	if !got[ids[2]] {
 		t.Error("a queued task must be recovered")
+	}
+}
+
+// fakeTitleTranslator is a controllable TitleTranslator: configured gates the
+// scrape-time trigger, started/release let a test hold a translation in flight,
+// and result/err describe the provider's answer.
+type fakeTitleTranslator struct {
+	configured atomic.Bool
+	started    chan struct{}
+	release    chan struct{}
+	once       sync.Once
+	mu         sync.Mutex
+	titles     []string
+	result     string
+	err        error
+}
+
+func (f *fakeTitleTranslator) Configured() bool { return f.configured.Load() }
+
+func (f *fakeTitleTranslator) Available() bool { return f.configured.Load() }
+
+func (f *fakeTitleTranslator) TranslateTitle(ctx context.Context, title string) (string, error) {
+	f.mu.Lock()
+	f.titles = append(f.titles, title)
+	f.mu.Unlock()
+	if f.started != nil && f.release != nil {
+		f.once.Do(func() { close(f.started) })
+		select {
+		case <-f.release:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	if f.err != nil {
+		return "", f.err
+	}
+	return f.result, nil
+}
+
+func (f *fakeTitleTranslator) translatedTitles() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.titles...)
+}
+
+func TestServiceTranslatesTitleAfterScrape(t *testing.T) {
+	provider := &sequenceProvider{results: map[string]sequenceResult{
+		"IPX-633": {metadata: &Metadata{Code: "IPX-633", Title: "となりの人妻"}},
+	}}
+	s, _, _, id := newServiceFixture(t, provider, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{result: "邻家的人妻"}
+	translator.configured.Store(true)
+	s.SetTitleTranslator(translator)
+
+	s.Enqueue(id)
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZhStatus == TitleZhSucceeded })
+	if d.TitleZh != "邻家的人妻" {
+		t.Fatalf("titleZh = %q, want 邻家的人妻", d.TitleZh)
+	}
+	if d.TitleZhError != "" {
+		t.Fatalf("titleZhError = %q, want empty", d.TitleZhError)
+	}
+	if d.ScrapeStatus != StatusSucceeded {
+		t.Fatalf("scrape status = %q, want succeeded", d.ScrapeStatus)
+	}
+	if got := translator.translatedTitles(); len(got) != 1 || got[0] != "となりの人妻" {
+		t.Fatalf("translated titles = %#v, want the scraped title", got)
+	}
+}
+
+func TestServiceSkipsTranslationWhenProviderNotConfigured(t *testing.T) {
+	s, _, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{result: "不应出现"}
+	s.SetTitleTranslator(translator)
+
+	s.Enqueue(id)
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.ScrapeStatus == StatusSucceeded })
+	if d.TitleZh != "" || d.TitleZhStatus != TitleZhNone {
+		t.Fatalf("translation = (%q, %q), want none while unconfigured", d.TitleZh, d.TitleZhStatus)
+	}
+	// Give a stray worker a moment to (incorrectly) run before asserting.
+	time.Sleep(20 * time.Millisecond)
+	if got := translator.translatedTitles(); len(got) != 0 {
+		t.Fatalf("translator was called while unconfigured: %#v", got)
+	}
+}
+
+func TestServiceRecordsTranslationFailureWithoutFailingScrape(t *testing.T) {
+	s, _, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{err: errors.New("LLM 鉴权失败（401）：请检查 API Key 是否有权限")}
+	translator.configured.Store(true)
+	s.SetTitleTranslator(translator)
+
+	s.Enqueue(id)
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZhStatus == TitleZhFailed })
+	if d.ScrapeStatus != StatusSucceeded {
+		t.Fatalf("scrape status = %q, want succeeded", d.ScrapeStatus)
+	}
+	if d.TitleZh != "" {
+		t.Fatalf("titleZh = %q, want empty on failure", d.TitleZh)
+	}
+	if !strings.Contains(d.TitleZhError, "API Key") {
+		t.Fatalf("titleZhError = %q, want the provider message", d.TitleZhError)
+	}
+}
+
+func TestServiceBulkTranslatesMissingTitles(t *testing.T) {
+	s, _, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{result: "邻家的人妻"}
+	s.SetTitleTranslator(translator)
+
+	// Scraped while translation was off: the work lands without a translation.
+	s.Enqueue(id)
+	waitForDetail(t, s, id, func(d *Detail) bool { return d.ScrapeStatus == StatusSucceeded })
+
+	translator.configured.Store(true)
+	queued, err := s.TranslateMissingTitles()
+	if err != nil {
+		t.Fatalf("translate missing: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("queued = %d, want 1", queued)
+	}
+	// Pressing again while the work is queued must not enqueue it twice.
+	if again, err := s.TranslateMissingTitles(); err != nil || again != 0 {
+		t.Fatalf("second translate missing = %d, %v; want 0, nil", again, err)
+	}
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZhStatus == TitleZhSucceeded })
+	if d.TitleZh != "邻家的人妻" {
+		t.Fatalf("titleZh = %q, want 邻家的人妻", d.TitleZh)
+	}
+}
+
+func TestServiceReportsPendingTranslationInDetail(t *testing.T) {
+	s, _, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		result:  "邻家的人妻",
+	}
+	s.SetTitleTranslator(translator)
+
+	s.Enqueue(id)
+	waitForDetail(t, s, id, func(d *Detail) bool { return d.ScrapeStatus == StatusSucceeded })
+
+	translator.configured.Store(true)
+	if err := s.TranslateTitle(id); err != nil {
+		t.Fatalf("translate title: %v", err)
+	}
+	select {
+	case <-translator.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("translation never started")
+	}
+	pending, err := s.Get(id)
+	if err != nil {
+		t.Fatalf("get pending detail: %v", err)
+	}
+	if pending.TitleZhStatus != TitleZhPending {
+		t.Fatalf("status = %q, want pending while the worker is busy", pending.TitleZhStatus)
+	}
+
+	close(translator.release)
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZhStatus == TitleZhSucceeded })
+	if d.TitleZh != "邻家的人妻" {
+		t.Fatalf("titleZh = %q, want 邻家的人妻", d.TitleZh)
+	}
+}
+
+func TestServiceRescrapeReplacesStaleTranslation(t *testing.T) {
+	s, _, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{result: "旧译名"}
+	translator.configured.Store(true)
+	s.SetTitleTranslator(translator)
+
+	s.Enqueue(id)
+	waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZh == "旧译名" })
+
+	translator.mu.Lock()
+	translator.result = "新译名"
+	translator.mu.Unlock()
+	s.EnqueueForce(id)
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZh == "新译名" })
+	if d.TitleZh != "新译名" {
+		t.Fatalf("titleZh = %q, want the translation of the new scrape", d.TitleZh)
+	}
+}
+
+func TestServiceTranslateTitleRequiresConfiguredProvider(t *testing.T) {
+	s, _, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	if err := s.TranslateTitle(id); err == nil || !strings.Contains(err.Error(), "尚未配置") {
+		t.Fatalf("TranslateTitle unconfigured error = %v, want a configuration hint", err)
+	}
+	if _, err := s.TranslateMissingTitles(); err == nil || !strings.Contains(err.Error(), "尚未配置") {
+		t.Fatalf("TranslateMissingTitles unconfigured error = %v, want a configuration hint", err)
 	}
 }

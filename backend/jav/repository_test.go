@@ -2,6 +2,7 @@ package jav
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"muse-app/backend/database"
@@ -156,5 +157,99 @@ func TestTrashedVideosAreHiddenFromJavReads(t *testing.T) {
 		if task.VideoID == trashed.ID {
 			t.Errorf("trashed favorite is still in the retry scan: %+v", task)
 		}
+	}
+}
+
+// TestTitleTranslationStorage verifies the two 中文译名 columns and the bulk
+// work list: only successfully scraped, non-trashed, untranslated works are
+// candidates, and a re-scrape clears a translation that no longer matches.
+func TestTitleTranslationStorage(t *testing.T) {
+	db, _, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	repo := NewSQLiteRepository(db)
+	videos := video.NewSQLiteRepository(db)
+	create := func(name, title, status string) int64 {
+		t.Helper()
+		v := &video.Video{
+			Path:      filepath.Join(t.TempDir(), name),
+			FileName:  name,
+			FileSize:  1,
+			CreatedAt: 1,
+			UpdatedAt: 1,
+			Status:    video.StatusAvailable,
+		}
+		if err := videos.Create(v); err != nil {
+			t.Fatalf("create favorite %q: %v", name, err)
+		}
+		if err := repo.PrepareTask(v.ID, false); err != nil {
+			t.Fatalf("prepare task %q: %v", name, err)
+		}
+		if err := repo.SaveSuccess(v.ID, Metadata{Code: "IPX-633", Title: title}, "filename", 2); err != nil {
+			t.Fatalf("save success %q: %v", name, err)
+		}
+		if err := repo.SetTaskStatus(v.ID, "", status, "", "", nil); err != nil {
+			t.Fatalf("set task status %q: %v", name, err)
+		}
+		return v.ID
+	}
+
+	untranslated := create("a.mp4", "元タイトル A", StatusSucceeded)
+	translated := create("b.mp4", "元タイトル B", StatusSucceeded)
+	if err := repo.SetTitleTranslation(translated, "乙的中文名", ""); err != nil {
+		t.Fatalf("save translation: %v", err)
+	}
+	_ = create("c.mp4", "元タイトル C", StatusFailed)
+	trashed := create("d.mp4", "元タイトル D", StatusSucceeded)
+	if _, err := db.Exec(`UPDATE videos SET deleted_at = 1 WHERE id = ?`, trashed); err != nil {
+		t.Fatalf("trash favorite: %v", err)
+	}
+	emptyTitle := create("e.mp4", "   ", StatusSucceeded)
+
+	candidates, err := repo.ListTitleTranslationCandidates()
+	if err != nil {
+		t.Fatalf("list candidates: %v", err)
+	}
+	if !reflect.DeepEqual(candidates, []int64{untranslated}) {
+		t.Fatalf("candidates = %#v, want only the untranslated succeeded favorite", candidates)
+	}
+	_ = emptyTitle
+
+	// Success and failure columns are mutually exclusive, so a later success
+	// clears an earlier failure message and vice versa.
+	if err := repo.SetTitleTranslation(untranslated, "", "LLM 鉴权失败"); err != nil {
+		t.Fatalf("save failure: %v", err)
+	}
+	d, err := repo.Get(untranslated)
+	if err != nil {
+		t.Fatalf("get failed detail: %v", err)
+	}
+	if d.TitleZh != "" || d.TitleZhError != "LLM 鉴权失败" || d.TitleZhStatus != TitleZhFailed {
+		t.Fatalf("failed detail = (%q, %q, %q)", d.TitleZh, d.TitleZhError, d.TitleZhStatus)
+	}
+	if err := repo.SetTitleTranslation(untranslated, "甲的中文名", ""); err != nil {
+		t.Fatalf("save late success: %v", err)
+	}
+	d, err = repo.Get(untranslated)
+	if err != nil {
+		t.Fatalf("get translated detail: %v", err)
+	}
+	if d.TitleZh != "甲的中文名" || d.TitleZhError != "" || d.TitleZhStatus != TitleZhSucceeded {
+		t.Fatalf("translated detail = (%q, %q, %q)", d.TitleZh, d.TitleZhError, d.TitleZhStatus)
+	}
+
+	// A forced re-scrape replaces the title, so the old translation is cleared.
+	if err := repo.SaveSuccess(untranslated, Metadata{Code: "IPX-633", Title: "新しいタイトル"}, "filename", 3); err != nil {
+		t.Fatalf("re-save success: %v", err)
+	}
+	d, err = repo.Get(untranslated)
+	if err != nil {
+		t.Fatalf("get re-scraped detail: %v", err)
+	}
+	if d.TitleZh != "" || d.TitleZhError != "" || d.TitleZhStatus != TitleZhNone {
+		t.Fatalf("re-scraped translation = (%q, %q, %q), want none", d.TitleZh, d.TitleZhError, d.TitleZhStatus)
 	}
 }

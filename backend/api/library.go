@@ -1068,6 +1068,25 @@ func (l *Library) SetVideoJavOverride(videoID int64, mode, code string) error {
 	return l.jav.SetOverride(videoID, mode, code)
 }
 
+// TranslateJavTitle queues one favorite's 中文译名 translation. The work runs
+// on the scraper's translation queue, so the call returns before the provider
+// answers; the detail panel follows the result through the scrape event.
+func (l *Library) TranslateJavTitle(videoID int64) error {
+	if l.jav == nil {
+		return fmt.Errorf("jav service not configured")
+	}
+	return l.jav.TranslateTitle(videoID)
+}
+
+// TranslateMissingJavTitles queues every successfully scraped favorite without
+// a Chinese title and returns how many were newly queued.
+func (l *Library) TranslateMissingJavTitles() (int, error) {
+	if l.jav == nil {
+		return 0, fmt.Errorf("jav service not configured")
+	}
+	return l.jav.TranslateMissingTitles()
+}
+
 // CreateGroup makes a new empty group.
 func (l *Library) CreateGroup(name string) (*group.Group, error) {
 	return l.groups.Create(name)
