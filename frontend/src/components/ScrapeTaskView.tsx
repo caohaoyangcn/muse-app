@@ -94,8 +94,8 @@ export default function ScrapeTaskView({
     }
     listTopRef.current?.scrollIntoView({ block: "start" });
   }, [listKey]);
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     listTopRef.current?.scrollIntoView({ block: "start" });
   };
 
@@ -170,8 +170,7 @@ export default function ScrapeTaskView({
             pageCount={paging.pageCount}
             total={visible.length}
             unit="条"
-            onPrev={() => turnPage(paging.prevPage)}
-            onNext={() => turnPage(paging.nextPage)}
+            onPageChange={turnPage}
           />
         </>
       )}

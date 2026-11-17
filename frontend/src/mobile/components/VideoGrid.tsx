@@ -124,8 +124,8 @@ export function VideoGrid({
 }) {
   const paging = usePagedList({ total: videos.length, listKey: memoryKey, pageSize: PAGE_SIZE });
   const listRef = useRef<HTMLDivElement | null>(null);
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     listRef.current?.scrollIntoView({ block: "start" });
   };
 
@@ -170,8 +170,7 @@ export function VideoGrid({
         pageCount={paging.pageCount}
         total={videos.length}
         unit="部"
-        onPrev={() => turnPage(paging.prevPage)}
-        onNext={() => turnPage(paging.nextPage)}
+        onPageChange={turnPage}
       />
     </div>
   );
@@ -196,8 +195,8 @@ export function VideoList({
 }) {
   const paging = usePagedList({ total: videos.length, listKey: memoryKey, pageSize: PAGE_SIZE });
   const listRef = useRef<HTMLDivElement | null>(null);
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     listRef.current?.scrollIntoView({ block: "start" });
   };
 
@@ -262,8 +261,7 @@ export function VideoList({
         pageCount={paging.pageCount}
         total={videos.length}
         unit="部"
-        onPrev={() => turnPage(paging.prevPage)}
-        onNext={() => turnPage(paging.nextPage)}
+        onPageChange={turnPage}
       />
     </div>
   );

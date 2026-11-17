@@ -88,8 +88,8 @@ export default function TrashView({
     }
     listTopRef.current?.scrollIntoView({ block: "start" });
   }, [listKey]);
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     listTopRef.current?.scrollIntoView({ block: "start" });
   };
 
@@ -217,19 +217,18 @@ export default function TrashView({
         </List>
       )}
 
+      <p className="mt-3 text-xs leading-relaxed text-[var(--muted)]">
+        这里只保存收藏记录与已生成的缩略图/封面，不复制视频内容。普通回收站条目按保留期自动清理；
+        归档长期保留，直到你点「清空归档」或彻底删除。源视频与网盘文件都不会被删除。
+      </p>
+
       <Pagination
         page={paging.page}
         pageCount={paging.pageCount}
         total={archiveMode ? groupedArchive.length : videos.length}
         unit={archiveMode ? "组" : "项"}
-        onPrev={() => turnPage(paging.prevPage)}
-        onNext={() => turnPage(paging.nextPage)}
+        onPageChange={turnPage}
       />
-
-      <p className="mt-3 text-xs leading-relaxed text-[var(--muted)]">
-        这里只保存收藏记录与已生成的缩略图/封面，不复制视频内容。普通回收站条目按保留期自动清理；
-        归档长期保留，直到你点「清空归档」或彻底删除。源视频与网盘文件都不会被删除。
-      </p>
 
       {purgeTarget && (
         <ConfirmDialog

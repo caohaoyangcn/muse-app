@@ -125,8 +125,8 @@ export default function ContentDuplicatePanel({
     }
     listTopRef.current?.scrollIntoView({ block: "start" });
   }, [listKey]);
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     listTopRef.current?.scrollIntoView({ block: "start" });
   };
 
@@ -247,8 +247,7 @@ export default function ContentDuplicatePanel({
         pageCount={paging.pageCount}
         total={filtered.length}
         unit="组"
-        onPrev={() => turnPage(paging.prevPage)}
-        onNext={() => turnPage(paging.nextPage)}
+        onPageChange={turnPage}
       />
 
       {pendingKeep && (

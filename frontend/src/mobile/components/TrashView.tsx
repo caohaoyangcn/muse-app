@@ -78,8 +78,8 @@ export function TrashView({
     }
     scrollRef.current?.scrollTo({ top: 0 });
   }, [listKey]);
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     scrollRef.current?.scrollTo({ top: 0 });
   };
 
@@ -122,35 +122,33 @@ export function TrashView({
           title={mode === "archive" ? "归档是空的" : "回收站是空的"}
         />
       ) : (
-        <>
-          <List className="flex flex-col">
-            {pageVideos.map((video) => (
-              <TrashRow
-                archived={mode === "archive"}
-                busy={busy}
-                key={video.id}
-                retentionDays={retentionDays}
-                video={video}
-                onPurge={() => setTarget(video)}
-                onRestore={() => void restore(video)}
-              />
-            ))}
-          </List>
-          <Pagination
-            page={paging.page}
-            pageCount={paging.pageCount}
-            total={videos.length}
-            unit="项"
-            onPrev={() => turnPage(paging.prevPage)}
-            onNext={() => turnPage(paging.nextPage)}
-          />
-        </>
+        <List className="flex flex-col">
+          {pageVideos.map((video) => (
+            <TrashRow
+              archived={mode === "archive"}
+              busy={busy}
+              key={video.id}
+              retentionDays={retentionDays}
+              video={video}
+              onPurge={() => setTarget(video)}
+              onRestore={() => void restore(video)}
+            />
+          ))}
+        </List>
       )}
 
       <p className="px-4 py-4 text-[11px] leading-relaxed text-[var(--muted)]">
         这里不复制原视频；彻底删除或超期清理只删除 Muse 的收藏记录与生成的缩略图/封面，不会删除源视频或网盘文件。
         归档长期保留，直到你清空归档或单条彻底删除。
       </p>
+
+      <Pagination
+        page={paging.page}
+        pageCount={paging.pageCount}
+        total={videos.length}
+        unit="项"
+        onPageChange={turnPage}
+      />
 
       <ConfirmSheet
         busy={busy}

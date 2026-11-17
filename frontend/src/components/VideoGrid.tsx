@@ -71,8 +71,8 @@ export default function VideoGrid({
   // track list, so the centred tracks and the spacing stay in step.
   const gap = Math.round(scaleBetween(cardSize, DESKTOP_CARD_SIZE, 12, 20));
 
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     // The sticky toolbar sits over the top of the pane; the wrapper's
     // scroll-margin keeps the first row visible below it.
     listRef.current?.scrollIntoView({ block: "start", inline: "nearest" });
@@ -108,8 +108,7 @@ export default function VideoGrid({
         pageCount={paging.pageCount}
         total={videos.length}
         unit="部"
-        onPrev={() => turnPage(paging.prevPage)}
-        onNext={() => turnPage(paging.nextPage)}
+        onPageChange={turnPage}
       />
     </div>
   );

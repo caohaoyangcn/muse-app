@@ -50,8 +50,8 @@ export default function ActorIndexView({
     listTopRef.current?.scrollIntoView({ block: "start" });
   }, [listKey]);
   const pageActors = filtered.slice(paging.startIndex, paging.endIndex);
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     listTopRef.current?.scrollIntoView({ block: "start" });
   };
   const [dragName, setDragName] = useState<string | null>(null);
@@ -229,8 +229,7 @@ export default function ActorIndexView({
             pageCount={paging.pageCount}
             total={filtered.length}
             unit="位"
-            onPrev={() => turnPage(paging.prevPage)}
-            onNext={() => turnPage(paging.nextPage)}
+            onPageChange={turnPage}
           />
         </>
       )}

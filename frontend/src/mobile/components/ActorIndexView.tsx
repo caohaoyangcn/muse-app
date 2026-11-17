@@ -31,8 +31,8 @@ export function ActorIndexView({ onSelect }: { onSelect: (name: string) => void 
     }
     scrollRef.current?.scrollTo({ top: 0 });
   }, [filter]);
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     scrollRef.current?.scrollTo({ top: 0 });
   };
 
@@ -95,8 +95,7 @@ export function ActorIndexView({ onSelect }: { onSelect: (name: string) => void 
               pageCount={paging.pageCount}
               total={shown.length}
               unit="位"
-              onPrev={() => turnPage(paging.prevPage)}
-              onNext={() => turnPage(paging.nextPage)}
+              onPageChange={turnPage}
             />
           </>
         )}

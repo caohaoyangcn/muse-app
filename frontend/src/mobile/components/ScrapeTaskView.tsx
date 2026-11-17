@@ -41,8 +41,8 @@ export function ScrapeTaskView({ onOpenVideo }: { onOpenVideo: (v: Video) => voi
     }
     scrollRef.current?.scrollTo({ top: 0 });
   }, [listKey]);
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     scrollRef.current?.scrollTo({ top: 0 });
   };
 
@@ -113,8 +113,7 @@ export function ScrapeTaskView({ onOpenVideo }: { onOpenVideo: (v: Video) => voi
               pageCount={paging.pageCount}
               total={shown.length}
               unit="条"
-              onPrev={() => turnPage(paging.prevPage)}
-              onNext={() => turnPage(paging.nextPage)}
+              onPageChange={turnPage}
             />
           </>
         )}

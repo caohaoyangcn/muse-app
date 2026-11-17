@@ -109,8 +109,8 @@ function JavDuplicatePanel({
     }
     scrollRef.current?.scrollTo({ top: 0 });
   }, [listKey]);
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     scrollRef.current?.scrollTo({ top: 0 });
   };
 
@@ -220,8 +220,7 @@ function JavDuplicatePanel({
               pageCount={paging.pageCount}
               total={groups.length}
               unit="组"
-              onPrev={() => turnPage(paging.prevPage)}
-              onNext={() => turnPage(paging.nextPage)}
+              onPageChange={turnPage}
             />
           </>
         )}

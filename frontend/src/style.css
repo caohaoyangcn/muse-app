@@ -58,6 +58,13 @@ body {
   height: 100%;
 }
 
+/* A paged list's bar is the last element in the pane. Let it sit on the pane's
+   bottom edge instead of above the pane's own bottom padding: the bar itself
+   carries the separation from the last row. */
+main:has(nav[aria-label="分页"]) {
+  padding-bottom: 0;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;

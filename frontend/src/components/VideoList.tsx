@@ -85,8 +85,8 @@ export default function VideoList({
     revealIndex: revealIndex != null && revealIndex >= 0 ? revealIndex : null,
   });
 
-  const turnPage = (step: () => void) => {
-    step();
+  const turnPage = (next: number) => {
+    paging.goToPage(next);
     listRef.current?.scrollIntoView({ block: "start", inline: "nearest" });
   };
 
@@ -238,8 +238,7 @@ export default function VideoList({
         pageCount={paging.pageCount}
         total={videos.length}
         unit="部"
-        onPrev={() => turnPage(paging.prevPage)}
-        onNext={() => turnPage(paging.nextPage)}
+        onPageChange={turnPage}
       />
     </div>
   );
