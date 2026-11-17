@@ -62,7 +62,7 @@ token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScri
 | `ui/report.tsx` | `Banner` | `<ReportBanner>` | 长结果常驻；Toast 只留一句话 |
 | `drawer.tsx` | `Drawer` + `DrawerHeader` | 不变 | `side` 映射 `start`/`end`；头部改用 Astryx `DrawerHeader`（标题、副标题、关闭按钮），行改为 `Button` 并把图标放进 `icon` 插槽 |
 | `sheet.tsx` | `BottomSheet` + `Dialog` | 不变 | `height` 使用 Astryx 的 `hug` / `capped` / `tall` 起始高度；`ConfirmSheet` 改用 Astryx Dialog；行改为 `Button` |
-| `astryx.tsx` | `AlertDialog`、`Badge`、`EmptyState`、`Spinner`、`Skeleton`、`Banner`、`Toolbar`、`SegmentedControl`、`ToggleButtonGroup`、`Slider`、`ClickableCard`、`AspectRatio`、`Grid`、`List`/`ListItem`、`Section`、`Divider` 等 | 直接 re-export | 业务层只经这个 barrel 取用；`toggleChipClass` 统一多选 Chip 的静态样式 |
+| `astryx.tsx` | `AlertDialog`、`Badge`、`EmptyState`、`Spinner`、`Skeleton`、`Banner`、`Toolbar`、`SegmentedControl`、`ToggleButtonGroup`、`Slider`、`ClickableCard`、`AspectRatio`、`Grid`、`List`/`ListItem`、`Section`、`Divider`、`Text` 等 | 直接 re-export | 业务层只经这个 barrel 取用；`toggleChipClass` 统一多选 Chip 的静态样式 |
 | `icon.tsx` | `Icon` + `registerIcons` | `name` 仍用 kebab-case | Muse SVG 注册为 `muse:*`；menu/close/warning/funnel/chevron 等直接映射 Astryx 内置语义名 |
 | `muse-icons.tsx` | — | — | Muse 自有 SVG 路径转成组件，交给 `Icon` 渲染；资产仍是唯一图形来源 |
 
