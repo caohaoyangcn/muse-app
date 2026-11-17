@@ -34,11 +34,20 @@ type Repository interface {
 	// SetTitleTranslation stores one translation attempt: the Chinese title on
 	// success, or the failure message while titleZh stays empty.
 	SetTitleTranslation(videoID int64, titleZh, lastError string) error
+	// SetTitleTranslationFailure records a failed refresh while keeping the
+	// translation the row already had, so 重新翻译 can surface the error
+	// without destroying a readable title.
+	SetTitleTranslationFailure(videoID int64, lastError string) error
 	// ListTitleTranslationCandidates returns the successfully scraped,
 	// non-trashed favorites that still have no Chinese title. It is the work
 	// list for the bulk 翻译缺少译名的片名 action; the in-memory queue removes
 	// duplicates, so an in-flight translation may appear here.
 	ListTitleTranslationCandidates() ([]int64, error)
+	// ListTitleRetranslationCandidates returns every successfully scraped,
+	// non-trashed favorite with a title, including ones that already have a
+	// Chinese title. It is the work list for 重新翻译全部译名, which refreshes
+	// existing results after a prompt or provider change.
+	ListTitleRetranslationCandidates() ([]int64, error)
 	ListActorFilmRefs() ([]ActorFilmRef, error)
 	ListActorMerges() ([]ActorMerge, error)
 	UpsertActorMerge(alias, canonical string) error
@@ -409,14 +418,15 @@ func stringList(values []string) []string {
 }
 
 // titleZhStatus turns the stored translation columns into the status the UI
-// reads. A success always wins over a stale error, so a row that once failed
-// and later succeeded reports "succeeded".
+// reads. A failure wins over a kept translation: refreshing an existing title
+// can fail, and the detail panel must still show why even though the previous
+// title remains readable. A later success clears the error.
 func titleZhStatus(titleZh, lastError string) string {
 	switch {
-	case strings.TrimSpace(titleZh) != "":
-		return TitleZhSucceeded
 	case strings.TrimSpace(lastError) != "":
 		return TitleZhFailed
+	case strings.TrimSpace(titleZh) != "":
+		return TitleZhSucceeded
 	default:
 		return TitleZhNone
 	}
@@ -430,10 +440,7 @@ const maxTitleZhErrorLength = 500
 // the previous failure and vice versa, so the two columns cannot disagree.
 func (r *SQLiteRepository) SetTitleTranslation(videoID int64, titleZh, lastError string) error {
 	titleZh = strings.TrimSpace(titleZh)
-	lastError = strings.TrimSpace(lastError)
-	if len(lastError) > maxTitleZhErrorLength {
-		lastError = lastError[:maxTitleZhErrorLength]
-	}
+	lastError = truncateTitleZhError(lastError)
 	if _, err := r.db.Exec(
 		`UPDATE video_jav SET title_zh=?, title_zh_error=?, updated_at=? WHERE video_id=?`,
 		titleZh, lastError, time.Now().UnixMilli(), videoID,
@@ -443,19 +450,56 @@ func (r *SQLiteRepository) SetTitleTranslation(videoID int64, titleZh, lastError
 	return nil
 }
 
+// SetTitleTranslationFailure records only the failure column, preserving the
+// translation already on the row. It is the failed-refresh path: the detail
+// panel shows the new error next to the kept 中文译名 instead of losing it.
+func (r *SQLiteRepository) SetTitleTranslationFailure(videoID int64, lastError string) error {
+	if _, err := r.db.Exec(
+		`UPDATE video_jav SET title_zh_error=?, updated_at=? WHERE video_id=?`,
+		truncateTitleZhError(lastError), time.Now().UnixMilli(), videoID,
+	); err != nil {
+		return fmt.Errorf("save jav title translation failure: %w", err)
+	}
+	return nil
+}
+
+func truncateTitleZhError(lastError string) string {
+	lastError = strings.TrimSpace(lastError)
+	if len(lastError) > maxTitleZhErrorLength {
+		lastError = lastError[:maxTitleZhErrorLength]
+	}
+	return lastError
+}
+
 // ListTitleTranslationCandidates returns every scraped, non-trashed favorite
 // without a Chinese title. Failed attempts are included on purpose: the bulk
 // action is the user's retry after fixing a provider configuration.
 func (r *SQLiteRepository) ListTitleTranslationCandidates() ([]int64, error) {
-	rows, err := r.db.Query(`
+	return r.listTitleCandidates(true)
+}
+
+// ListTitleRetranslationCandidates returns every scraped, non-trashed favorite
+// with a title, translated or not. 重新翻译全部译名 uses it to refresh the
+// whole library after editing the prompt or switching providers.
+func (r *SQLiteRepository) ListTitleRetranslationCandidates() ([]int64, error) {
+	return r.listTitleCandidates(false)
+}
+
+func (r *SQLiteRepository) listTitleCandidates(onlyMissing bool) ([]int64, error) {
+	query := `
 		SELECT j.video_id
 		FROM video_jav j
 		JOIN videos v ON v.id = j.video_id AND v.deleted_at IS NULL
 		LEFT JOIN jav_scrape_tasks t ON t.video_id = j.video_id
 		WHERE COALESCE(t.status, j.scrape_status) = 'succeeded'
-		  AND TRIM(j.title) <> ''
-		  AND TRIM(j.title_zh) = ''
-		ORDER BY j.video_id`)
+		  AND TRIM(j.title) <> ''`
+	if onlyMissing {
+		query += `
+		  AND TRIM(j.title_zh) = ''`
+	}
+	query += `
+		ORDER BY j.video_id`
+	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("list title translation candidates: %w", err)
 	}

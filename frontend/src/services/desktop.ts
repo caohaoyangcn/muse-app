@@ -54,6 +54,7 @@ export {
   reorderGroups,
   rescanWatchDirs,
   resetVideoCover,
+  retranslateAllTitles,
   saveCloudConnection,
   scanFileStatuses,
   scrapeVideoJav,

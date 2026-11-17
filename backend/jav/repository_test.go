@@ -216,6 +216,16 @@ func TestTitleTranslationStorage(t *testing.T) {
 	if !reflect.DeepEqual(candidates, []int64{untranslated}) {
 		t.Fatalf("candidates = %#v, want only the untranslated succeeded favorite", candidates)
 	}
+	// 重新翻译全部译名 works from a wider list: it includes rows that already
+	// have a translation, while still skipping failed, trashed and titleless
+	// rows.
+	refreshable, err := repo.ListTitleRetranslationCandidates()
+	if err != nil {
+		t.Fatalf("list retranslation candidates: %v", err)
+	}
+	if !reflect.DeepEqual(refreshable, []int64{untranslated, translated}) {
+		t.Fatalf("retranslation candidates = %#v, want every succeeded titled favorite", refreshable)
+	}
 	_ = emptyTitle
 
 	// Success and failure columns are mutually exclusive, so a later success
@@ -239,6 +249,29 @@ func TestTitleTranslationStorage(t *testing.T) {
 	}
 	if d.TitleZh != "甲的中文名" || d.TitleZhError != "" || d.TitleZhStatus != TitleZhSucceeded {
 		t.Fatalf("translated detail = (%q, %q, %q)", d.TitleZh, d.TitleZhError, d.TitleZhStatus)
+	}
+
+	// A failed refresh keeps the previous translation and records the error:
+	// 重新翻译 must not turn a readable title into a blank row.
+	if err := repo.SetTitleTranslationFailure(translated, "LLM 请求过于频繁"); err != nil {
+		t.Fatalf("save refresh failure: %v", err)
+	}
+	d, err = repo.Get(translated)
+	if err != nil {
+		t.Fatalf("get kept translation: %v", err)
+	}
+	if d.TitleZh != "乙的中文名" || d.TitleZhError != "LLM 请求过于频繁" || d.TitleZhStatus != TitleZhFailed {
+		t.Fatalf("kept translation = (%q, %q, %q), want the old title plus the refresh error", d.TitleZh, d.TitleZhError, d.TitleZhStatus)
+	}
+	if err := repo.SetTitleTranslation(translated, "乙的新译名", ""); err != nil {
+		t.Fatalf("save refreshed translation: %v", err)
+	}
+	d, err = repo.Get(translated)
+	if err != nil {
+		t.Fatalf("get refreshed translation: %v", err)
+	}
+	if d.TitleZh != "乙的新译名" || d.TitleZhError != "" || d.TitleZhStatus != TitleZhSucceeded {
+		t.Fatalf("refreshed translation = (%q, %q, %q), want the error cleared", d.TitleZh, d.TitleZhError, d.TitleZhStatus)
 	}
 
 	// A forced re-scrape replaces the title, so the old translation is cleared.

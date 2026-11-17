@@ -38,12 +38,12 @@
 | `title_zh` | 成功翻译后的简体中文片名；空字符串表示还没有译名 |
 | `title_zh_error` | 最近一次翻译失败的原因；成功或从未尝试时为空 |
 
-成功与失败互斥：`SetTitleTranslation` 每次写入都会清掉另一列，读取时由 `titleZhStatus` 统一解释：
+成功与失败通常互斥：`SetTitleTranslation` 每次写入都会清掉另一列。例外是「重新翻译已有译名时失败」：`SetTitleTranslationFailure` 只更新错误列、保留旧译名，此时两列同时非空，`titleZhStatus` 按 `failed` 报告并在详情页显示失败原因，旧译名仍然可读；下一次成功会清掉错误。读取时由 `titleZhStatus` 统一解释：
 
 | `title_zh` | `title_zh_error` | 状态 |
 | --- | --- | --- |
+| 任意 | 非空 | `failed`（旧译名可能仍在，见上） |
 | 非空 | 空 | `succeeded` |
-| 空 | 非空 | `failed` |
 | 空 | 空 | `none` |
 
 `pending`（翻译中）**不落库**：它只是服务内存里 `titlePending` 集合的投影。这样进程崩溃不会留下永远停在「翻译中…」的行；重启后该影片回到 `none`，由下一次刮削或批量翻译重新排队。
@@ -74,7 +74,7 @@
 
 - 客户端：`backend/llm.Client`，实现 `jav.TitleTranslator`（`TranslateTitle` + `Configured` + `Available`）。
 - 每次翻译都重新读取设置，因此改配置无需重启；HTTP 复用刮削代理（`netproxy.Config.Transport()`），LLM 与元数据请求走同一条网络路径。
-- 单次请求 60 秒超时；提示词要求「只输出译名、不重复番号（番号由界面单独显示）、保留系列/人名、已是中文则原样返回、40 字以内」。
+- 单次请求 60 秒超时；提示词要求只输出最终简体中文译文（不输出原文、翻译过程、词汇解释或前言），并保留原文的语气、情绪与表达强度。
 - 输出清洗：取第一行、去掉 `中文译名：` 之类前缀与包裹引号、上限 200 字符；空结果按失败处理。
 - 错误映射成可操作的中文：401/403 提示检查 API Key，404 提示接口/模型，429 提示稍后重试，5xx 提示服务不可用，网络错误提示无法连接。
 
@@ -87,6 +87,7 @@
 - worker 完成后先写库、再清 `titlePending`、最后发 `jav:scrape:updated`。顺序很重要：前端收到事件会立即重读，pending 必须先清除，否则已完成的译名会继续显示成翻译中。
 - 失败写入 `title_zh_error` 并发事件；不自动重试，避免用错误的配置反复请求。
 - 批量入队（`TranslateMissingTitles`）只发一次结果事件，避免 N 条「待刷新」事件同时打到前端。
+- 「重新翻译全部译名」（`RetranslateAllTitles`）用更宽的候选查询：所有已成功刮削、带标题的行都入队，**包括已有译名**。这条动作是给「改了提示词 / 换了模型」之后整库刷新用的：旧译名继续显示，直到新结果落库；单条刷新失败时只更新 `title_zh_error` 并保留旧译名（`finishTitleTranslationFailure`），详情页会显示失败原因，避免一次限流把整库译名清空。单条「重新翻译」按钮也遵循同样的保留行为。
 - 队列只在内存里，退出或崩溃即丢失。`llm_resume_missing_titles` 打开时，`jav.Service.Start()` 会在后台调用一次 `TranslateMissingTitles`：已保存的译名不受影响，候选查询只返回 `title_zh` 为空的行，因此重启后是「从断点继续」而不是「从头再译」；强退时正在请求的那一条没有落库，会重译一次。开关关闭时则完全依赖设置页的批量按钮。
 
 ## 6. API
@@ -95,6 +96,7 @@
 
 - `TranslateJavTitle(videoID) error`
 - `TranslateMissingJavTitles() (int, error)`
+- `RetranslateAllJavTitles() (int, error)`
 
 Wails（仅桌面端设置/操作）：
 
@@ -103,13 +105,14 @@ Wails（仅桌面端设置/操作）：
 - `ClearLLMAPIKey() error`
 - `TranslateVideoTitle(videoID) error`
 - `TranslateMissingTitles() (int, error)`
+- `RetranslateAllTitles() (int, error)` —— 设置页「重新翻译全部译名」；先弹确认，避免误触后消耗整库请求
 - `TestLLMSettings(input LLMSettingsInput) (string, error)` —— 设置页「测试连接」；只读表单值，不落库
 
 `jav.Detail` 新增 `titleZh` / `titleZhStatus` / `titleZhError`，因此桌面详情、局域网 JSON API 和手机详情页都自动拿到译名，不需要额外端点。
 
 ## 7. 前端
 
-- **设置 → 片名翻译**：接口地址、模型、API Key、启用开关、「启动时自动补齐缺失的译名」开关、保存/清除 Key、「测试连接」，以及「翻译缺少译名的片名」批量入口。测试成功会直接显示示例译名（连接成功，示例译名：…），失败显示 401/404/429/网络等具体原因。状态只显示「已配置 / 已暂停 / 未配置」。
+- **设置 → 片名翻译**：接口地址、模型、API Key、启用开关、「启动时自动补齐缺失的译名」开关、保存/清除 Key、「测试连接」，以及「翻译缺少译名的片名」批量入口。另提供「重新翻译全部译名」：确认后把已有的译名也重新排队，用于调整提示词或更换模型后整库刷新。测试成功会直接显示示例译名（连接成功，示例译名：…），失败显示 401/404/429/网络等具体原因。状态只显示「已配置 / 已暂停 / 未配置」。
 - **桌面详情页**：元数据表新增「中文译名」一行；标题存在时提供「翻译片名 / 重新翻译」按钮，失败时在按钮下方显示原因。
 - **手机详情页**：只读显示「中文译名」（翻译中 / 翻译失败 / 尚未翻译），不提供触发入口。
 - **卡片主标题（两端统一）**：`videoDisplayName` 的输出规则为
@@ -129,7 +132,7 @@ Wails（仅桌面端设置/操作）：
 - `backend/settings`：默认配置、往返读写、无效地址拒绝、Key 加密存储（Windows DPAPI / macOS 钥匙串）、无安全存储平台上的降级行为。
 - `backend/secret`：Windows DPAPI 往返；macOS 真实钥匙串写入/读取/覆盖隔离/幂等删除；不支持的平台返回 `ErrUnsupported`。
 - `backend/database`：v26 → v27 增量升级、已有刮削数据保留、译名跨再次迁移保留。
-- `backend/jav`：刮削后自动翻译、未配置时跳过、失败不改变刮削状态、批量去重、`pending` 覆盖、重新刮削替换旧译名、仓库层候选查询；`ListTitles` / `SearchTitleIDs` 的投影、跳过与回收站边界、关键词大小写与通配符转义。
+- `backend/jav`：刮削后自动翻译、未配置时跳过、失败不改变刮削状态、批量去重、整库重译替换旧译名、重译失败保留旧译名、`pending` 覆盖、重新刮削替换旧译名、仓库层候选查询（缺失 / 全部两套工作列表）；`ListTitles` / `SearchTitleIDs` 的投影、跳过与回收站边界、关键词大小写与通配符转义。
 - `backend/api`：`SearchVideos` 合并刮削字段（番号/原标题/译名）、不重复返回、并投影 `javTitle` / `javTitleZh`。
 - 前端：Astryx `Text` 的截断 tooltip 用真实浏览器验证过（hover 被截断的卡片标题后出现 `role="tooltip"`，内容为完整片名）。
 

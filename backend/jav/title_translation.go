@@ -68,16 +68,40 @@ func (s *Service) TranslateMissingTitles() (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	return s.enqueueTitleTranslations(ids), nil
+}
+
+// RetranslateAllTitles queues every successfully scraped favorite with a
+// title, including the rows that already have a Chinese title. It is the
+// 重新翻译全部译名 action: after editing the prompt or switching providers the
+// user can refresh the whole library without clearing the column by hand.
+//
+// The stored translation stays visible until the replacement lands, and a
+// failed refresh keeps it (see translateTitle), so one bad batch never wipes a
+// readable library.
+func (s *Service) RetranslateAllTitles() (int, error) {
+	if s.translator == nil || !s.translator.Available() {
+		return 0, fmt.Errorf("尚未配置 LLM 片名翻译，请先在「设置 → 片名翻译」中填写接口地址、模型与 API Key")
+	}
+	ids, err := s.repo.ListTitleRetranslationCandidates()
+	if err != nil {
+		return 0, err
+	}
+	return s.enqueueTitleTranslations(ids), nil
+}
+
+// enqueueTitleTranslations adds a batch to the queue and returns how many were
+// newly accepted. notify stays false: a library-wide action would otherwise
+// emit one read invalidating event per row before a single translation
+// completed. The worker emits when each result lands.
+func (s *Service) enqueueTitleTranslations(ids []int64) int {
 	queued := 0
-	// notify stays false: a library-wide action would otherwise emit one read
-	// invalidating event per row before a single translation completed. The
-	// worker emits when each result lands.
 	for _, id := range ids {
 		if s.enqueueTitleTranslation(id, false) {
 			queued++
 		}
 	}
-	return queued, nil
+	return queued
 }
 
 // SetTitleResumeOnStart wires the startup backfill switch. It must be called
@@ -183,9 +207,17 @@ func (s *Service) translateTitle(videoID int64) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), titleTranslationTimeout)
 	defer cancel()
+	previousZh := strings.TrimSpace(d.TitleZh)
 	translated, err := s.translator.TranslateTitle(ctx, title)
 	if err != nil {
 		s.log.Warn("jav title translation failed", "videoId", videoID, "errorCode", ErrorTitleTranslation, "err", err)
+		if previousZh != "" {
+			// A refresh (重新翻译) failed: keep the readable translation the row
+			// already had, but record why the refresh failed so the detail panel
+			// can show the error next to the kept title.
+			s.finishTitleTranslationFailure(videoID, err.Error())
+			return
+		}
 		s.finishTitleTranslation(videoID, "", err.Error())
 		return
 	}
@@ -193,13 +225,29 @@ func (s *Service) translateTitle(videoID int64) {
 	s.finishTitleTranslation(videoID, translated, "")
 }
 
+// finishTitleTranslationFailure ends one failed refresh without clearing the
+// stored translation. The error column is updated, so the next Get reports
+// failed while TitleZh still carries the previous readable title. Like
+// finishTitleTranslation, it clears the pending overlay before emitting.
+func (s *Service) finishTitleTranslationFailure(videoID int64, failure string) {
+	if err := s.repo.SetTitleTranslationFailure(videoID, failure); err != nil {
+		s.log.Error("jav title translation failure save failed", "videoId", videoID, "errorCode", ErrorDatabase, "err", err)
+	}
+	s.titleMu.Lock()
+	delete(s.titlePending, videoID)
+	s.titleMu.Unlock()
+	s.emitUpdate(videoID)
+}
+
 // finishTitleTranslation stores one attempt and announces the result. It
 // clears the in-memory pending mark *before* emitting: the detail panel reads
 // the row as soon as the event arrives, so the pending overlay must already be
 // gone or a finished translation would still render as 翻译中….
 //
-// A translation failure is only recorded here; the scrape itself is never
-// touched, because a translation is enrichment and not a reason to fail a work.
+// A translation failure is only recorded here (or in
+// finishTitleTranslationFailure when an existing title is kept); the scrape
+// itself is never touched, because a translation is enrichment and not a
+// reason to fail a work.
 func (s *Service) finishTitleTranslation(videoID int64, titleZh, failure string) {
 	if err := s.repo.SetTitleTranslation(videoID, titleZh, failure); err != nil {
 		s.log.Error("jav title translation save failed", "videoId", videoID, "errorCode", ErrorDatabase, "err", err)

@@ -143,6 +143,8 @@ export function ResetVideoCover(arg1:number):Promise<video.Video>;
 
 export function RestoreVideo(arg1:number):Promise<void>;
 
+export function RetranslateAllTitles():Promise<number>;
+
 export function ReverifyContentDuplicate(arg1:string):Promise<void>;
 
 export function SaveCloudConnection(arg1:cloud.ConnectionInput):Promise<cloud.ConnectionView>;

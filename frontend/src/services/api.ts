@@ -93,6 +93,7 @@ import {
   TestLLMSettings,
   TranslateMissingTitles,
   TranslateVideoTitle,
+  RetranslateAllTitles,
   ClearFC2Cookie,
   GetFC2CookieStatus,
   SetFC2Cookie,
@@ -394,6 +395,12 @@ export const translateVideoTitle = (videoId: number): Promise<void> =>
 
 /** 为所有已刮削但缺少中文译名的收藏排队翻译，返回新入队数量。 */
 export const translateMissingTitles = (): Promise<number> => TranslateMissingTitles();
+
+/**
+ * 为所有已成功刮削、带标题的收藏重新排队翻译（包括已有译名的），返回新入队数量。
+ * 调整提示词或更换模型后用它整库刷新；旧译名会保留到新结果返回。
+ */
+export const retranslateAllTitles = (): Promise<number> => RetranslateAllTitles();
 
 /**
  * 浏览器扩展查询用：某个番号（JavDB 页面渲染出来的片号）是否已在收藏库中。

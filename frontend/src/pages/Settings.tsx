@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { client, checkJavCodes, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getLLMSettings, setLLMSettings, clearLLMAPIKey, testLLMSettings, translateMissingTitles, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
+import { client, checkJavCodes, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getLLMSettings, setLLMSettings, clearLLMAPIKey, testLLMSettings, translateMissingTitles, retranslateAllTitles, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
 import type {
   CloudConnection,
   CloudConnectionInput,
@@ -991,6 +991,8 @@ function LLMSection() {
   const [clearing, setClearing] = useState(false);
   const [testing, setTesting] = useState(false);
   const [batching, setBatching] = useState(false);
+  const [retranslating, setRetranslating] = useState(false);
+  const [confirmRetranslate, setConfirmRetranslate] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -1096,7 +1098,25 @@ function LLMSection() {
     }
   };
 
-  const busy = saving || clearing || testing || batching;
+  const retranslateEveryTitle = async () => {
+    setConfirmRetranslate(false);
+    clearFeedback();
+    setRetranslating(true);
+    try {
+      const queued = await retranslateAllTitles();
+      setNotice(
+        queued > 0
+          ? `已将 ${queued} 部影片重新加入翻译队列，新译名返回后会覆盖旧结果。`
+          : "没有可重新翻译的影片。",
+      );
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setRetranslating(false);
+    }
+  };
+
+  const busy = saving || clearing || testing || batching || retranslating;
   const canTest = Boolean(apiKey.trim() || hasKey);
 
   return (
@@ -1226,9 +1246,16 @@ function LLMSection() {
               为所有已成功刮削、但还没有中文译名的影片排队翻译；之前翻译失败的也会重试。
               任务在后台逐条执行，不会影响正在进行的刮削。
             </p>
-            <div className="mt-3">
+            <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--muted)]">
+              调整提示词或更换模型后，可用「重新翻译全部译名」整库刷新：已有译名也会重新排队，
+              旧译名会保留到新结果返回；某一条刷新失败时保留旧译名，并单独显示失败原因。
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2.5">
               <Button onClick={() => void translateAll()} disabled={busy || !hasKey}>
                 {batching ? "入队中…" : "翻译缺少译名的片名"}
+              </Button>
+              <Button onClick={() => setConfirmRetranslate(true)} disabled={busy || !hasKey}>
+                {retranslating ? "入队中…" : "重新翻译全部译名"}
               </Button>
             </div>
           </div>
@@ -1236,6 +1263,17 @@ function LLMSection() {
           {notice && <p className="mt-2.5 text-[13px] text-[#7ad9a2]">{notice}</p>}
           {error && <p className="mt-2.5 text-[13px] text-[var(--danger)]">{error}</p>}
         </div>
+      )}
+
+      {confirmRetranslate && (
+        <ConfirmDialog
+          title="重新翻译全部译名"
+          message="所有已成功刮削的影片都会重新排队翻译，现有译名会在新结果返回后覆盖；每部影片会消耗一次 LLM 请求。确定继续？"
+          confirmLabel="重新翻译"
+          cancelLabel="取消"
+          onConfirm={() => void retranslateEveryTitle()}
+          onCancel={() => setConfirmRetranslate(false)}
+        />
       )}
     </section>
   );

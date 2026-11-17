@@ -1141,6 +1141,16 @@ func (l *Library) TranslateMissingJavTitles() (int, error) {
 	return l.jav.TranslateMissingTitles()
 }
 
+// RetranslateAllJavTitles queues every successfully scraped favorite's title
+// for a fresh translation, including works that already have a Chinese title,
+// and returns how many were newly queued.
+func (l *Library) RetranslateAllJavTitles() (int, error) {
+	if l.jav == nil {
+		return 0, fmt.Errorf("jav service not configured")
+	}
+	return l.jav.RetranslateAllTitles()
+}
+
 // CreateGroup makes a new empty group.
 func (l *Library) CreateGroup(name string) (*group.Group, error) {
 	return l.groups.Create(name)

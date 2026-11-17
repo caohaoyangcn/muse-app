@@ -300,6 +300,16 @@ func (a *App) TranslateMissingTitles() (int, error) {
 	return a.lib.TranslateMissingJavTitles()
 }
 
+// RetranslateAllTitles queues every successfully scraped favorite for a fresh
+// 中文译名 translation, including works that already have one. It backs the
+// settings page's 重新翻译全部译名 action after a prompt or provider change.
+func (a *App) RetranslateAllTitles() (int, error) {
+	if a.lib == nil {
+		return 0, fmt.Errorf("library not initialized")
+	}
+	return a.lib.RetranslateAllJavTitles()
+}
+
 // GetScrapeProxy returns the stored scraping proxy address, or an empty string
 // when scraping dials directly (HTTP_PROXY/HTTPS_PROXY still apply then).
 func (a *App) GetScrapeProxy() (string, error) {

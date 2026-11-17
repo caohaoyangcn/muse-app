@@ -1074,6 +1074,92 @@ func TestServiceBulkTranslatesMissingTitles(t *testing.T) {
 	}
 }
 
+// TestServiceRetranslatesEveryTitle verifies the 重新翻译全部译名 batch: a row
+// that already has a Chinese title is queued again, a second press while it is
+// in flight is ignored, and the new result replaces the stored one.
+func TestServiceRetranslatesEveryTitle(t *testing.T) {
+	s, db, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		result:  "新译名",
+	}
+	s.SetTitleTranslator(translator)
+
+	// Scrape while translation is off, then seed a translation so the row looks
+	// like one translated under the old prompt.
+	s.Enqueue(id)
+	waitForDetail(t, s, id, func(d *Detail) bool { return d.ScrapeStatus == StatusSucceeded })
+	if err := NewSQLiteRepository(db).SetTitleTranslation(id, "旧译名", ""); err != nil {
+		t.Fatalf("seed translation: %v", err)
+	}
+
+	translator.configured.Store(true)
+	queued, err := s.RetranslateAllTitles()
+	if err != nil {
+		t.Fatalf("retranslate all: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("queued = %d, want 1 even though the row was translated", queued)
+	}
+	select {
+	case <-translator.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("retranslation never started")
+	}
+	// Pressing again while the refresh is running must not enqueue it twice.
+	if again, err := s.RetranslateAllTitles(); err != nil || again != 0 {
+		t.Fatalf("second retranslate all = %d, %v; want 0, nil", again, err)
+	}
+
+	close(translator.release)
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZh == "新译名" })
+	if d.TitleZh != "新译名" {
+		t.Fatalf("titleZh = %q, want the refreshed translation", d.TitleZh)
+	}
+}
+
+// TestServiceRetranslationFailureKeepsPreviousTitle backs the promise that a
+// bad batch is recoverable: when refreshing an existing translation fails, the
+// old readable title stays and the failure is recorded next to it.
+func TestServiceRetranslationFailureKeepsPreviousTitle(t *testing.T) {
+	s, db, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		err:     errors.New("LLM 请求过于频繁（429）：请稍后再试"),
+	}
+	s.SetTitleTranslator(translator)
+
+	s.Enqueue(id)
+	waitForDetail(t, s, id, func(d *Detail) bool { return d.ScrapeStatus == StatusSucceeded })
+	if err := NewSQLiteRepository(db).SetTitleTranslation(id, "旧译名", ""); err != nil {
+		t.Fatalf("seed translation: %v", err)
+	}
+
+	translator.configured.Store(true)
+	if _, err := s.RetranslateAllTitles(); err != nil {
+		t.Fatalf("retranslate all: %v", err)
+	}
+	select {
+	case <-translator.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("retranslation never started")
+	}
+	close(translator.release)
+
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZhStatus != TitleZhPending })
+	if d.TitleZh != "旧译名" {
+		t.Fatalf("titleZh = %q, want the previous translation kept after a failed refresh", d.TitleZh)
+	}
+	if d.TitleZhStatus != TitleZhFailed {
+		t.Fatalf("status = %q, want failed while the kept title reports the refresh error", d.TitleZhStatus)
+	}
+	if !strings.Contains(d.TitleZhError, "429") {
+		t.Fatalf("titleZhError = %q, want the provider failure", d.TitleZhError)
+	}
+}
+
 // TestServiceResumesMissingTitlesOnStart verifies the opt-in startup backfill:
 // a favorite scraped while translation was paused is queued again when Start
 // runs, so a batch interrupted by a quit picks up without a manual click.
@@ -1198,5 +1284,8 @@ func TestServiceTranslateTitleRequiresConfiguredProvider(t *testing.T) {
 	}
 	if _, err := s.TranslateMissingTitles(); err == nil || !strings.Contains(err.Error(), "尚未配置") {
 		t.Fatalf("TranslateMissingTitles unconfigured error = %v, want a configuration hint", err)
+	}
+	if _, err := s.RetranslateAllTitles(); err == nil || !strings.Contains(err.Error(), "尚未配置") {
+		t.Fatalf("RetranslateAllTitles unconfigured error = %v, want a configuration hint", err)
 	}
 }

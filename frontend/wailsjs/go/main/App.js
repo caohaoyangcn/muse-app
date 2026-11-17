@@ -266,6 +266,10 @@ export function RestoreVideo(arg1) {
   return window['go']['main']['App']['RestoreVideo'](arg1);
 }
 
+export function RetranslateAllTitles() {
+  return window['go']['main']['App']['RetranslateAllTitles']();
+}
+
 export function ReverifyContentDuplicate(arg1) {
   return window['go']['main']['App']['ReverifyContentDuplicate'](arg1);
 }
