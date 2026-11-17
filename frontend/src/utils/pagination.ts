@@ -17,3 +17,23 @@ export function pageShortcuts(page: number, pageCount: number): number[] {
   pages.add(last);
   return [...pages].sort((a, b) => a - b);
 }
+
+/** One entry per gap or page number in the shortcut strip. */
+export type PageShortcut = number | "gap";
+
+/**
+ * The shortcut strip with the skipped ranges made visible.
+ *
+ * The pager cannot draw a button for every page, so a jump from 1 to 5 leaves a
+ * silent hole. Inserting a decorative mark there is what tells the reader that
+ * pages 2–4 exist but are not offered; consecutive numbers stay adjacent.
+ */
+export function pageShortcutItems(page: number, pageCount: number): PageShortcut[] {
+  const numbers = pageShortcuts(page, pageCount);
+  const items: PageShortcut[] = [];
+  numbers.forEach((number, index) => {
+    if (index > 0 && number > numbers[index - 1] + 1) items.push("gap");
+    items.push(number);
+  });
+  return items;
+}

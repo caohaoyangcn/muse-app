@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { cn } from "../lib/utils";
-import { pageShortcuts } from "../utils/pagination";
+import { pageShortcutItems } from "../utils/pagination";
 import { Button } from "./button";
 
 /**
@@ -60,7 +60,7 @@ export function Pagination({
   // A list that fits on one page needs neither the control nor the count.
   if (pageCount <= 1) return null;
   const totalText = total > 0 ? ` · 共 ${total}${unit ? ` ${unit}` : ""}` : "";
-  const numbers = pageShortcuts(page, pageCount);
+  const items = pageShortcutItems(page, pageCount);
 
   return (
     <nav
@@ -90,21 +90,32 @@ export function Pagination({
           ref={stripRef}
         >
           <div className="mx-auto flex w-max items-center gap-1">
-            {numbers.map((p) => {
-              const current = p === page;
+            {items.map((item, index) => {
+              if (item === "gap") {
+                return (
+                  <span
+                    aria-hidden="true"
+                    className="shrink-0 px-0.5 text-[11px] leading-none text-[var(--muted)]"
+                    key={`gap-${index}`}
+                  >
+                    …
+                  </span>
+                );
+              }
+              const current = item === page;
               return (
                 <Button
                   aria-current={current ? "page" : undefined}
-                  aria-label={`第 ${p} 页`}
+                  aria-label={`第 ${item} 页`}
                   className={cn("min-w-7 shrink-0 px-1.5 tabular-nums", current && "font-semibold")}
-                  key={p}
-                  onClick={() => onPageChange(p)}
+                  key={item}
+                  onClick={() => onPageChange(item)}
                   ref={current ? activeRef : undefined}
                   size="sm"
-                  title={p === 1 ? "第一页" : p === pageCount ? "最后一页" : undefined}
+                  title={item === 1 ? "第一页" : item === pageCount ? "最后一页" : undefined}
                   variant={current ? "primary" : "ghost"}
                 >
-                  {p}
+                  {item}
                 </Button>
               );
             })}
