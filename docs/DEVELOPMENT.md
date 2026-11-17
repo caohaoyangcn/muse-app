@@ -41,6 +41,7 @@ npm run dev             # Vite 开发服务器（另开 /gallery.html 可双端�
 npm run build           # tsc 类型检查 + 桌面端构建
 npm run build:mobile    # 构建移动端，产物写入 backend/server/webui/
 npm run lint            # ESLint + 跨平台目录规则检查（必须无错误、无警告）
+npm test                # Vitest（jsdom）回归测试，写 `*.test.ts(x)` 旁边
 npm run gaps            # 列出移动端相对桌面端还缺哪些能力（读 src/views/manifest.json）
 ```
 

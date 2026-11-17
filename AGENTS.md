@@ -23,10 +23,11 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - `wails build` —— 产出 `build/bin/Muse.exe`
 - `scripts/package-windows.sh` —— 交叉编译并打包 Windows 分发 zip（含 FFmpeg、首次运行说明），产出 `dist/Muse-<版本>-win64.zip`；细节见 `docs/distribution-windows.md`
 - `go test ./...` —— 后端单元测试（默认不跑集成测试）
-- 每次修改代码后必须运行对应范围的静态检查；修改 Go 代码必须运行 `golangci-lint run ./...`，修改前端代码必须运行 `npm run lint` 和 `npm run build`（均在 `frontend/` 下），并在提交前处理所有静态检查问题
+- 每次修改代码后必须运行对应范围的静态检查；修改 Go 代码必须运行 `golangci-lint run ./...`，修改前端代码必须运行 `npm run lint`、`npm run build` 与 `npm test`（均在 `frontend/` 下），并在提交前处理所有静态检查问题
 - 每完成一个边界清晰且可验证的模块，必须立即运行该模块的针对性验证并单独提交；提交应保持单一职责，不要把多个已完成模块攒成一个提交
 - `go test -tags integration ./...` —— 集成测试（真实 ffmpeg，显式指定才运行）
 - `npm run build`（在 `frontend/` 下）—— `tsc` 类型检查 + Vite 构建
+- `npm test`（在 `frontend/` 下）—— Vitest（jsdom）回归测试；测试写在源码旁的 `*.test.ts(x)`，覆盖「错了不报错、界面悄悄不对」的共享逻辑（行窗口化、移动端分页、筛选、排序、卡片命名），秒级完成
 - `npm run lint`（在 `frontend/` 下）—— ESLint 检查 `src/` 中的 TypeScript、React Hooks 与 Fast Refresh 规则，随后跑 `scripts/check-shared-ui.mjs` 校验跨平台目录规则（`ui/` 不依赖业务、`mobile/` 不 import 桌面组件、两端各引自己的传输层、每个共享视图模型两端都被引用、裸 `<button>` 不新增）；lint 必须无错误、无警告
 
 ## 编码风格与命名约定
@@ -39,7 +40,8 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - 后端：使用 Go `testing`，按行为编写表驱动测试，共享辅助代码放在 `testhelpers_test.go`
 - 集成测试（-tags integration）会使用真实 SQLite + ffmpeg，需要这些工具在 PATH 中
 - 运行 `go test ./...`；覆盖率用 `go test ./... -cover`
-- 前端尚未配置测试框架
+- 前端：`frontend/` 下跑 `npm test`（Vitest + jsdom，约 3 秒）。测试写在源码旁的 `*.test.ts(x)`，夹具在 `src/test/fixtures.ts`。按行为断言，覆盖那些「错了也不会报错、只是界面悄悄不对」的逻辑：`useVirtualRows` 的测量与窗口（含 0 高包装层）、`useLoadMore` 的移动端分页契约、`mobile/libraryFilters` 的筛选语义、`utils/diskFilter`、`utils/sortVideos`、`utils/videoName`。修这类共享逻辑的 bug 时，先补一条能复现的测试再改实现（本次「桌面列表只显示 24 部」的回归就是这么钉住的）
+- 断言的写法：一条测试只钉一个行为，名称描述用户可见的结果，不测实现细节（不写「调用了 setRows」，写「滚动后窗口跟着移动」）
 
 ## 提交与 Pull Request 规范
 
