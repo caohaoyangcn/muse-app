@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EventsOn } from "../../wailsjs/runtime";
 import type { ContentDuplicateGroup, ContentDuplicateMember, ContentScanStatus, Video } from "../types";
+import { usePagedList } from "../hooks/usePagedList";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import {
@@ -17,6 +18,7 @@ import {
 } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Icon } from "../ui/icon";
+import { Pagination } from "../ui/pagination";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +33,9 @@ import {
   useContentDuplicates,
   type ConfirmProgress,
 } from "../views/duplicates/useContentDuplicates";
+
+/** One page of duplicate content groups; each group can carry several copies. */
+const GROUP_PAGE_SIZE = 20;
 
 /**
  * 内容重复 panel: the favorites that hold byte-identical files, grouped by the
@@ -108,6 +113,22 @@ export default function ContentDuplicatePanel({
   });
 
   const filtered = useMemo(() => filterContentGroups(groups, keyword), [groups, keyword]);
+  const listKey = `desktop:dups:content:${includeIgnored}:${keyword}`;
+  const paging = usePagedList({ total: filtered.length, listKey, pageSize: GROUP_PAGE_SIZE });
+  const pageGroups = filtered.slice(paging.startIndex, paging.endIndex);
+  const listTopRef = useRef<HTMLDivElement | null>(null);
+  const firstListKey = useRef(true);
+  useEffect(() => {
+    if (firstListKey.current) {
+      firstListKey.current = false;
+      return;
+    }
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  }, [listKey]);
+  const turnPage = (step: () => void) => {
+    step();
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  };
 
   const confirmKeep = async () => {
     if (!pendingKeep) return;
@@ -145,6 +166,8 @@ export default function ContentDuplicatePanel({
 
       <ScanBar status={scan} onScan={() => void startScan()} />
 
+      <div className="scroll-mt-4" ref={listTopRef} />
+
       {error ? (
         <EmptyState
           actions={<Button onClick={reload} size="sm" variant="primary">重试</Button>}
@@ -164,7 +187,7 @@ export default function ContentDuplicatePanel({
         <EmptyState description={`没有匹配“${keyword.trim()}”的重复内容`} title="无结果" />
       ) : (
         <div className="flex flex-col gap-4 pb-8">
-          {filtered.map((group) => (
+          {pageGroups.map((group) => (
             <section
               key={group.hash}
               className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)]"
@@ -218,6 +241,15 @@ export default function ContentDuplicatePanel({
           ))}
         </div>
       )}
+
+      <Pagination
+        page={paging.page}
+        pageCount={paging.pageCount}
+        total={filtered.length}
+        unit="组"
+        onPrev={() => turnPage(paging.prevPage)}
+        onNext={() => turnPage(paging.nextPage)}
+      />
 
       {pendingKeep && (
         <KeepCopyDialog

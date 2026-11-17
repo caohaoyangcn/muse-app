@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { refreshStatus } from "../services/desktop";
 import type { JavDuplicateGroup, Video } from "../types";
+import { usePagedList } from "../hooks/usePagedList";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import ContentDuplicatePanel from "./ContentDuplicateView";
@@ -18,6 +19,7 @@ import {
 } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Icon } from "../ui/icon";
+import { Pagination } from "../ui/pagination";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +28,9 @@ import {
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { filterJavGroups, useJavDuplicates } from "../views/duplicates/useJavDuplicates";
+
+/** One page of duplicate works; each work can carry several version cards. */
+const GROUP_PAGE_SIZE = 20;
 
 /** What both duplicate panels need from the library shell. */
 type DuplicatePanelProps = {
@@ -109,6 +114,22 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
   });
 
   const filtered = useMemo(() => filterJavGroups(groups, keyword), [groups, keyword]);
+  const listKey = `desktop:dups:jav:${includeIgnored}:${keyword}`;
+  const paging = usePagedList({ total: filtered.length, listKey, pageSize: GROUP_PAGE_SIZE });
+  const pageGroups = filtered.slice(paging.startIndex, paging.endIndex);
+  const listTopRef = useRef<HTMLDivElement | null>(null);
+  const firstListKey = useRef(true);
+  useEffect(() => {
+    if (firstListKey.current) {
+      firstListKey.current = false;
+      return;
+    }
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  }, [listKey]);
+  const turnPage = (step: () => void) => {
+    step();
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  };
 
   // Keep one version: every other record in the group leaves the favorites. The
   // underlying files are not deleted, matching the app-wide rule that a
@@ -147,6 +168,8 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
         </div>
       </div>
 
+      <div className="scroll-mt-4" ref={listTopRef} />
+
       {error ? (
         <EmptyState
           actions={<Button onClick={reload} size="sm" variant="primary">重试</Button>}
@@ -166,7 +189,7 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
         <EmptyState description={`没有匹配“${keyword.trim()}”的重复作品`} title="无结果" />
       ) : (
         <div className="flex flex-col gap-4 pb-8">
-          {filtered.map((group) => (
+          {pageGroups.map((group) => (
             <section
               key={group.key}
               className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)]"
@@ -208,6 +231,15 @@ function JavDuplicatePanel({ onOpen, onContextMenu, onResolved, onNotify }: Dupl
           ))}
         </div>
       )}
+
+      <Pagination
+        page={paging.page}
+        pageCount={paging.pageCount}
+        total={filtered.length}
+        unit="组"
+        onPrev={() => turnPage(paging.prevPage)}
+        onNext={() => turnPage(paging.nextPage)}
+      />
 
       {pendingKeep && (
         <KeepVersionDialog

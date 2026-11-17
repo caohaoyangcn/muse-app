@@ -1,4 +1,6 @@
+import { useEffect, useRef } from "react";
 import type { JavTaskOverview, Video } from "../types";
+import { usePagedList } from "../hooks/usePagedList";
 import { formatDateTime } from "../utils/datetime";
 import { videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
@@ -15,6 +17,7 @@ import {
 } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Icon } from "../ui/icon";
+import { Pagination } from "../ui/pagination";
 import {
   SCRAPE_CATEGORY_LABELS,
   scrapeStatusLabel,
@@ -23,6 +26,9 @@ import {
 } from "../views/scrape/useScrapeTasks";
 
 export type ScrapeTaskStatus = ScrapeTaskCategory;
+
+/** The board can hold a thousand finished rows; one page holds 50. */
+const PAGE_SIZE = 50;
 
 function TaskRow({ task, onOpen }: { task: JavTaskOverview; onOpen: (video: Video) => void }) {
   const { video } = task;
@@ -76,6 +82,22 @@ export default function ScrapeTaskView({
     status,
     keyword,
   });
+  const listKey = `desktop:tasks:${status}:${keyword}:${sortDir}`;
+  const paging = usePagedList({ total: visible.length, listKey, pageSize: PAGE_SIZE });
+  const pageTasks = visible.slice(paging.startIndex, paging.endIndex);
+  const listTopRef = useRef<HTMLDivElement | null>(null);
+  const firstListKey = useRef(true);
+  useEffect(() => {
+    if (firstListKey.current) {
+      firstListKey.current = false;
+      return;
+    }
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  }, [listKey]);
+  const turnPage = (step: () => void) => {
+    step();
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  };
 
   return (
     <section className="mx-auto flex min-h-full w-full max-w-[1080px] flex-col">
@@ -121,6 +143,7 @@ export default function ScrapeTaskView({
         }
       />
 
+      <div className="scroll-mt-24" ref={listTopRef} />
 
       {error ? (
         <EmptyState
@@ -138,9 +161,19 @@ export default function ScrapeTaskView({
           title={keyword.trim() ? "无匹配任务" : `暂无${SCRAPE_CATEGORY_LABELS[status]}任务`}
         />
       ) : (
-        <List className="flex flex-col gap-1.5 pb-8">
-          {visible.map((task) => <TaskRow key={task.id} onOpen={onOpen} task={task} />)}
-        </List>
+        <>
+          <List className="flex flex-col gap-1.5 pb-8">
+            {pageTasks.map((task) => <TaskRow key={task.id} onOpen={onOpen} task={task} />)}
+          </List>
+          <Pagination
+            page={paging.page}
+            pageCount={paging.pageCount}
+            total={visible.length}
+            unit="条"
+            onPrev={() => turnPage(paging.prevPage)}
+            onNext={() => turnPage(paging.nextPage)}
+          />
+        </>
       )}
     </section>
   );

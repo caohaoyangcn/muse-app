@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Video } from "../types";
+import { usePagedList } from "../hooks/usePagedList";
 import { formatFileSize, videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
 import ConfirmDialog from "./ConfirmDialog";
@@ -16,7 +17,13 @@ import {
 } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Icon } from "../ui/icon";
+import { Pagination } from "../ui/pagination";
 import { groupTrashBySource, remainingDays, useTrash } from "../views/trash/useTrash";
+
+/** Recycle-bin rows per page. */
+const PAGE_SIZE = 50;
+/** Archived favorites are grouped by source; a page holds 20 source groups. */
+const ARCHIVE_GROUP_PAGE_SIZE = 20;
 
 /**
  * 回收站: favorites removed from the library, kept restorable for the retention
@@ -59,6 +66,32 @@ export default function TrashView({
   const [clearArchiveTarget, setClearArchiveTarget] = useState(false);
 
   const groupedArchive = groupTrashBySource(archivedVideos);
+
+  // The archive keeps whole source groups on one page, so a source heading is
+  // never split; the plain recycle bin pages individual rows.
+  const archiveMode = mode === "archive";
+  const pageSize = archiveMode ? ARCHIVE_GROUP_PAGE_SIZE : PAGE_SIZE;
+  const listKey = `desktop:trash:${mode}`;
+  const paging = usePagedList({
+    total: archiveMode ? groupedArchive.length : videos.length,
+    listKey,
+    pageSize,
+  });
+  const pageGroups = groupedArchive.slice(paging.startIndex, paging.endIndex);
+  const pageVideos = videos.slice(paging.startIndex, paging.endIndex);
+  const listTopRef = useRef<HTMLDivElement | null>(null);
+  const firstListKey = useRef(true);
+  useEffect(() => {
+    if (firstListKey.current) {
+      firstListKey.current = false;
+      return;
+    }
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  }, [listKey]);
+  const turnPage = (step: () => void) => {
+    step();
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  };
 
   if (loading) {
     return (
@@ -134,6 +167,8 @@ export default function TrashView({
         }
       />
 
+      <div className="scroll-mt-24" ref={listTopRef} />
+
       {videos.length === 0 ? (
         <EmptyState
           description={
@@ -145,7 +180,7 @@ export default function TrashView({
         />
       ) : mode === "archive" ? (
         <div className="flex flex-col gap-3">
-          {groupedArchive.map((group) => (
+          {pageGroups.map((group) => (
             <section key={group.name}>
               <h3 className="mb-1.5 flex items-center gap-2 text-xs font-medium text-[var(--muted)]">
                 <span>{group.name}</span>
@@ -169,7 +204,7 @@ export default function TrashView({
         </div>
       ) : (
         <List className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)]">
-          {videos.map((video) => (
+          {pageVideos.map((video) => (
             <TrashRow
               busy={busyId === video.id}
               key={video.id}
@@ -181,6 +216,15 @@ export default function TrashView({
           ))}
         </List>
       )}
+
+      <Pagination
+        page={paging.page}
+        pageCount={paging.pageCount}
+        total={archiveMode ? groupedArchive.length : videos.length}
+        unit={archiveMode ? "组" : "项"}
+        onPrev={() => turnPage(paging.prevPage)}
+        onNext={() => turnPage(paging.nextPage)}
+      />
 
       <p className="mt-3 text-xs leading-relaxed text-[var(--muted)]">
         这里只保存收藏记录与已生成的缩略图/封面，不复制视频内容。普通回收站条目按保留期自动清理；

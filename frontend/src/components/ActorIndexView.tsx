@@ -1,16 +1,21 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { actorFillStatus, mergeActors, startActorFill, unmergeActor } from "../services/desktop";
 import { invalidate } from "../services/live";
 import { useLiveQuery } from "../hooks/useLiveQuery";
+import { usePagedList } from "../hooks/usePagedList";
 import type { ActorFillStatus, ActorSummary } from "../types";
 import { MIME_ACTOR_DRAG } from "../types";
 import { actorAvatarURL } from "../utils/format";
 import { Avatar, Badge, DropdownMenuItem, EmptyState, Spinner } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Pagination } from "../ui/pagination";
 import { cn } from "../lib/utils";
 import { MenuSurface } from "../ui/menu";
 import { useActorIndex } from "../views/actors/useActorIndex";
+
+/** One page of actor chips; the index can carry several hundred. */
+const PAGE_SIZE = 50;
 
 /**
  * Aggregated actor index (演员): one chip per actor, with the number of
@@ -33,6 +38,22 @@ export default function ActorIndexView({
   onNotify: (message: string, kind: "success" | "error") => void;
 }) {
   const { actors, filtered, keyword, setKeyword, loading, error } = useActorIndex();
+  const listKey = `desktop:actors:${keyword}`;
+  const paging = usePagedList({ total: filtered.length, listKey, pageSize: PAGE_SIZE });
+  const listTopRef = useRef<HTMLDivElement | null>(null);
+  const firstListKey = useRef(true);
+  useEffect(() => {
+    if (firstListKey.current) {
+      firstListKey.current = false;
+      return;
+    }
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  }, [listKey]);
+  const pageActors = filtered.slice(paging.startIndex, paging.endIndex);
+  const turnPage = (step: () => void) => {
+    step();
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  };
   const [dragName, setDragName] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; actor: ActorSummary } | null>(null);
@@ -114,6 +135,7 @@ export default function ActorIndexView({
 
   return (
     <div className="pt-4">
+      <div className="scroll-mt-4" ref={listTopRef} />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h2 className="text-sm font-semibold">演员</h2>
         <span className="text-xs text-[var(--muted)]">
@@ -157,8 +179,9 @@ export default function ActorIndexView({
       ) : filtered.length === 0 ? (
         <EmptyState description={`没有匹配“${keyword.trim()}”的演员`} title="无结果" />
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {filtered.map((a) => {
+        <>
+          <div className="flex flex-wrap gap-2">
+            {pageActors.map((a) => {
             const dragging = dragName === a.name;
             const over = dropTarget === a.name && dragName !== a.name;
             return (
@@ -200,7 +223,16 @@ export default function ActorIndexView({
               </div>
             );
           })}
-        </div>
+          </div>
+          <Pagination
+            page={paging.page}
+            pageCount={paging.pageCount}
+            total={filtered.length}
+            unit="位"
+            onPrev={() => turnPage(paging.prevPage)}
+            onNext={() => turnPage(paging.nextPage)}
+          />
+        </>
       )}
 
       {menu && (
