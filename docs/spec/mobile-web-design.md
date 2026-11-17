@@ -85,7 +85,7 @@ npm run build:mobile      # frontend/ 下
 | 框选（长按拖出选择框） | 不提供；两端均以复选框多选取代（见第 8 节） |
 | 网格多列固定 | 竖屏手机默认两列、卡片统一 3:4 比例；平板/横屏按可用宽度最多四列（`useVirtualRows` 的 136px 轨道下限） |
 
-安全区适配：`viewport-fit=cover` + `env(safe-area-inset-*)` + `100dvh`；`overscroll-behavior: none` 避免页面级橡皮筋；输入框恢复 `user-select: text`（全局禁用选择以免长按选中 UI 文本）。
+安全区适配：`viewport-fit=cover` + `env(safe-area-inset-*)` + `100dvh`；`overscroll-behavior: none` 避免页面级橡皮筋；输入框恢复 `user-select: text`（全局禁用选择以免长按选中 UI 文本）；详情页正文也恢复选择，长按即可走系统「拷贝」菜单（见 `docs/spec/detail-page-copy.md`）。
 
 ## 6. HTTP API
 

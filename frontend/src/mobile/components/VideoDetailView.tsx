@@ -164,7 +164,9 @@ export function VideoDetailView({
   if (v.sourceId > 0) fileRows.push(["网盘", v.sourceName || "已配置连接"]);
 
   return (
-    <div className="flex h-full flex-col">
+    // 详情页是阅读面：正文可以长按选中、走系统的「拷贝」菜单。壳层其余部分
+    // 仍然禁选，避免点卡片或滚动时误选 UI 文本（见 mobile.css）。
+    <div className="flex h-full select-text flex-col">
       <DetailHeader
         badge={v.mosaicRestored ? <Badge label="马赛克破解" variant="purple" /> : null}
         onBack={onBack}

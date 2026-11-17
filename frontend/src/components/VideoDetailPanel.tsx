@@ -63,6 +63,11 @@ function isMissingJavDetail(error: unknown): boolean {
   return message.includes("no rows in result set") || message.includes("sql: no rows");
 }
 
+/** A click that ends a text-selection drag must not also run the control's action. */
+function hasActiveSelection(): boolean {
+  return (window.getSelection()?.toString().length ?? 0) > 0;
+}
+
 export default function VideoDetailPanel({
   video,
   onOpenSettings,
@@ -215,7 +220,7 @@ export default function VideoDetailPanel({
   };
 
   return (
-    <section className="mx-auto flex min-h-full w-full max-w-[980px] flex-col gap-5 pb-8">
+    <section className="mx-auto flex min-h-full w-full max-w-[980px] select-text flex-col gap-5 pb-8">
       <Toolbar
         className="border-b border-[var(--border)] px-0 pb-4"
         endContent={
@@ -420,7 +425,13 @@ export default function VideoDetailPanel({
                 {onRevealPath ? (
                   <Button
                     className="h-auto justify-start px-0 text-left"
-                    onClick={onRevealPath}
+                    onClick={() => {
+                      // The path is also the text users most want to copy. A drag
+                      // that selects it still ends with a click on this button;
+                      // reveal the file only for a plain click.
+                      if (hasActiveSelection()) return;
+                      onRevealPath();
+                    }}
                     size="sm"
                     title={remote ? "在 OpenList 网页中打开" : "在文件管理器中定位该文件"}
                     variant="ghost"
