@@ -163,7 +163,7 @@ func TestTranslateTitleSendsPromptAndModel(t *testing.T) {
 		t.Fatalf("TranslateTitle: %v", err)
 	}
 	request := body.Load().(string)
-	for _, want := range []string{`"model":"deepseek-chat"`, "となりの人妻", "只输出译名本身", "不要重复作品番号"} {
+	for _, want := range []string{`"model":"deepseek-chat"`, "となりの人妻", "只输出最终中文译文", "日文原文"} {
 		if !strings.Contains(request, want) {
 			t.Fatalf("request body missing %q: %s", want, request)
 		}
@@ -260,7 +260,7 @@ func TestCheckUsesExplicitConfigWithoutSaving(t *testing.T) {
 		t.Fatalf("Check = %q, want the sample translation", got)
 	}
 	request := body.Load().(string)
-	for _, want := range []string{"となりの人妻", `"model":"deepseek-chat"`, "只输出译名本身"} {
+	for _, want := range []string{"となりの人妻", `"model":"deepseek-chat"`, "只输出最终中文译文"} {
 		if !strings.Contains(request, want) {
 			t.Fatalf("smoke-test request missing %q: %s", want, request)
 		}
