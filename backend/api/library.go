@@ -105,6 +105,21 @@ func (l *Library) scrapedCodes() map[int64]string {
 	return codes
 }
 
+// scrapedTitles loads the scraped original title and Chinese translation per
+// favorite. Best effort like scrapedCodes: without it a card simply keeps its
+// previous display fallback instead of failing the library read.
+func (l *Library) scrapedTitles() map[int64]jav.ScrapedTitle {
+	if l.jav == nil {
+		return nil
+	}
+	titles, err := l.jav.Titles()
+	if err != nil {
+		l.log.Warn("load scraped titles failed", "err", err)
+		return nil
+	}
+	return titles
+}
+
 // scrapedActors loads the canonical cast per favorite for the video read
 // model. Best effort like scrapedCodes: without a scrape result a favorite
 // simply has no actors and never joins an automatic tab group.
@@ -144,6 +159,7 @@ func (l *Library) restoredVideoIDs() map[int64]struct{} {
 // are loaded once per batch by loadVideoReadModel and applied to every row.
 type videoReadModel struct {
 	codes    map[int64]string
+	titles   map[int64]jav.ScrapedTitle
 	actors   map[int64][]string
 	restored map[int64]struct{}
 	sources  map[int64]cloud.SourceState
@@ -156,6 +172,7 @@ type videoReadModel struct {
 func (l *Library) loadVideoReadModel() videoReadModel {
 	return videoReadModel{
 		codes:    l.scrapedCodes(),
+		titles:   l.scrapedTitles(),
 		actors:   l.scrapedActors(),
 		restored: l.restoredVideoIDs(),
 		sources:  l.cloudSources(),
@@ -167,6 +184,10 @@ func (l *Library) loadVideoReadModel() videoReadModel {
 // the 马赛克破解 tag, backup state and the cloud source badge.
 func (m videoReadModel) apply(v *video.Video) {
 	v.JavCode = m.codes[v.ID]
+	if scraped, ok := m.titles[v.ID]; ok {
+		v.JavTitle = scraped.Title
+		v.JavTitleZh = scraped.TitleZh
+	}
 	v.Actors = m.actors[v.ID]
 	if v.Actors == nil {
 		// The API contract is an array, not JSON null; the workspace tab strip
@@ -259,11 +280,44 @@ func (l *Library) ListVideos() ([]video.Video, error) {
 	return videos, nil
 }
 
-// SearchVideos filters favorites by file name or path.
+// SearchVideos filters favorites by file name/path and by the scraped 番号,
+// original title or Chinese translation. The scrape columns live in video_jav,
+// so the façade merges a second id lookup instead of teaching the video
+// repository about another domain's table.
 func (l *Library) SearchVideos(keyword string) ([]video.Video, error) {
 	videos, err := l.videos.Search(keyword)
 	if err != nil {
 		return nil, err
+	}
+	keyword = strings.TrimSpace(keyword)
+	if l.jav != nil && keyword != "" {
+		ids, err := l.jav.SearchTitleIDs(keyword)
+		if err != nil {
+			l.log.Warn("search scraped titles failed", "err", err)
+		} else if len(ids) > 0 {
+			seen := make(map[int64]struct{}, len(videos))
+			for _, v := range videos {
+				seen[v.ID] = struct{}{}
+			}
+			for _, id := range ids {
+				if _, ok := seen[id]; ok {
+					continue
+				}
+				v, err := l.videos.Get(id)
+				if err != nil || v == nil {
+					continue
+				}
+				seen[id] = struct{}{}
+				videos = append(videos, *v)
+			}
+			// Keep the same newest-first order as video.Repository.Search.
+			sort.SliceStable(videos, func(i, j int) bool {
+				if videos[i].CreatedAt == videos[j].CreatedAt {
+					return videos[i].ID > videos[j].ID
+				}
+				return videos[i].CreatedAt > videos[j].CreatedAt
+			})
+		}
 	}
 	l.attachReadModel(videos)
 	return videos, nil

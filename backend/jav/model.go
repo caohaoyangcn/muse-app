@@ -156,6 +156,14 @@ type ActorFilmRef struct {
 	VideoID int64
 }
 
+// ScrapedTitle is one favorite's scraped title pair: the provider's original
+// title and the LLM's Simplified-Chinese translation. Both are projections of
+// video_jav, used by the video read model to format a card's display name.
+type ScrapedTitle struct {
+	Title   string
+	TitleZh string
+}
+
 // ActorMerge is one persisted alias → canonical mapping.
 type ActorMerge struct {
 	Alias     string `json:"alias"`

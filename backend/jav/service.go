@@ -236,6 +236,18 @@ func (s *Service) ListTaskOverviews() ([]TaskOverview, error) { return s.repo.Li
 // model. A favorite with no saved code is absent from the map.
 func (s *Service) Codes() (map[int64]string, error) { return s.repo.ListCodes() }
 
+// Titles returns the scraped original title and Chinese translation per
+// favorite for the shared video read model. Like Codes it is best effort at the
+// call site: a failure only leaves cards on their file-name fallback.
+func (s *Service) Titles() (map[int64]ScrapedTitle, error) { return s.repo.ListTitles() }
+
+// SearchTitleIDs resolves a keyword against 番号, original titles and Chinese
+// translations, so a card shown as 【番号】译名 can be found by typing either
+// half even when the file name says nothing about it.
+func (s *Service) SearchTitleIDs(keyword string) ([]int64, error) {
+	return s.repo.SearchTitleIDs(keyword)
+}
+
 // ActorsByVideo returns the canonical cast per favorite for the shared video
 // read model. Merged stage names (演员合并) resolve to their canonical name, so
 // an automatically grouped workspace tab and the actor index agree on who the

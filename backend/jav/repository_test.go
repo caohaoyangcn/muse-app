@@ -253,3 +253,114 @@ func TestTitleTranslationStorage(t *testing.T) {
 		t.Fatalf("re-scraped translation = (%q, %q, %q), want none", d.TitleZh, d.TitleZhError, d.TitleZhStatus)
 	}
 }
+
+// TestListTitlesAndSearchTitlesParams cover the read-model projections behind
+// the 【番号】译名 card title: the original/translated pair, and the keyword
+// search that lets a user find a card by either half even though the file name
+// says nothing about it.
+func TestListTitlesAndSearchTitlesParams(t *testing.T) {
+	db, _, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	repo := NewSQLiteRepository(db)
+	videos := video.NewSQLiteRepository(db)
+	create := func(name string) int64 {
+		t.Helper()
+		v := &video.Video{
+			Path:      filepath.Join(t.TempDir(), name),
+			FileName:  name,
+			FileSize:  1,
+			CreatedAt: 1,
+			UpdatedAt: 1,
+			Status:    video.StatusAvailable,
+		}
+		if err := videos.Create(v); err != nil {
+			t.Fatalf("create favorite %q: %v", name, err)
+		}
+		if err := repo.PrepareTask(v.ID, false); err != nil {
+			t.Fatalf("prepare task %q: %v", name, err)
+		}
+		return v.ID
+	}
+
+	translated := create("a.mp4")
+	if err := repo.SaveSuccess(translated, Metadata{Code: "IPX-633", Title: "となりの人妻"}, "filename", 2); err != nil {
+		t.Fatalf("save translated work: %v", err)
+	}
+	if err := repo.SetTitleTranslation(translated, "邻家的人妻", ""); err != nil {
+		t.Fatalf("save translation: %v", err)
+	}
+
+	untranslated := create("b.mp4")
+	if err := repo.SaveSuccess(untranslated, Metadata{Code: "ABW-180", Title: "あの娘"}, "filename", 2); err != nil {
+		t.Fatalf("save untranslated work: %v", err)
+	}
+	// A failed task still has a scraped title; the read model keeps it so the
+	// original title stands in until a later translation succeeds.
+	if err := repo.SetTaskStatus(untranslated, "", StatusFailed, "", "", nil); err != nil {
+		t.Fatalf("fail task: %v", err)
+	}
+
+	unscraped := create("c.mp4")
+	skipped := create("d.mp4")
+	if err := repo.SaveSuccess(skipped, Metadata{Code: "SSIS-001", Title: "スキップ"}, "filename", 2); err != nil {
+		t.Fatalf("save skipped work: %v", err)
+	}
+	if err := repo.SetOverride(skipped, OverrideSkip, ""); err != nil {
+		t.Fatalf("skip work: %v", err)
+	}
+	trashed := create("e.mp4")
+	if err := repo.SaveSuccess(trashed, Metadata{Code: "TRASH-1", Title: "ゴミ"}, "filename", 2); err != nil {
+		t.Fatalf("save trashed work: %v", err)
+	}
+	if err := videos.Trash(trashed, video.TrashReasonUser, 1000); err != nil {
+		t.Fatalf("trash favorite: %v", err)
+	}
+
+	titles, err := repo.ListTitles()
+	if err != nil {
+		t.Fatalf("list titles: %v", err)
+	}
+	if got := titles[translated]; got.Title != "となりの人妻" || got.TitleZh != "邻家的人妻" {
+		t.Errorf("translated pair = %+v", got)
+	}
+	if got := titles[untranslated]; got.Title != "あの娘" || got.TitleZh != "" {
+		t.Errorf("untranslated pair = %+v", got)
+	}
+	if _, ok := titles[unscraped]; ok {
+		t.Error("an unscraped favorite must not carry a scraped title")
+	}
+	if _, ok := titles[skipped]; ok {
+		t.Error("a skipped favorite must not carry a scraped title")
+	}
+	if _, ok := titles[trashed]; ok {
+		t.Error("a trashed favorite must not carry a scraped title")
+	}
+
+	for _, tc := range []struct {
+		name    string
+		keyword string
+		want    []int64
+	}{
+		{name: "translation", keyword: "邻家", want: []int64{translated}},
+		{name: "original title", keyword: "あの娘", want: []int64{untranslated}},
+		{name: "code is case-insensitive", keyword: "ipx-633", want: []int64{translated}},
+		{name: "code", keyword: "ABW", want: []int64{untranslated}},
+		{name: "skipped and trashed are excluded", keyword: "SSIS", want: []int64{}},
+		{name: "wildcards are literal", keyword: "%", want: []int64{}},
+		{name: "blank", keyword: "   ", want: []int64{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := repo.SearchTitleIDs(tc.keyword)
+			if err != nil {
+				t.Fatalf("search: %v", err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("SearchTitleIDs(%q) = %#v, want %#v", tc.keyword, got, tc.want)
+			}
+		})
+	}
+}

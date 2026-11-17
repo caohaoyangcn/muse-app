@@ -18,6 +18,12 @@ type Repository interface {
 	// shared video read model, which shows a favorite under its authoritative
 	// code once a scrape has produced one.
 	ListCodes() (map[int64]string, error)
+	// ListTitles returns the scraped original title and Chinese translation per
+	// favorite. It feeds the video read model's 【番号】译名 display name.
+	ListTitles() (map[int64]ScrapedTitle, error)
+	// SearchTitleIDs returns the favorites whose 番号, original title or
+	// Chinese translation matches the keyword.
+	SearchTitleIDs(keyword string) ([]int64, error)
 	PrepareTask(videoID int64, force bool) error
 	ClaimTask(videoID int64, token string, now, leaseUntil int64) (*Task, bool, error)
 	SetTaskStatus(videoID int64, token, status, errorCode, lastError string, nextRetryAt *int64) error
@@ -169,6 +175,65 @@ func (r *SQLiteRepository) ListCodes() (map[int64]string, error) {
 		out[videoID] = code
 	}
 	return out, rows.Err()
+}
+
+// ListTitles returns the scraped title pair per favorite. A favorite the user
+// chose to skip is omitted, mirroring ListCodes, so its card keeps the file
+// name instead of stale scrape data.
+func (r *SQLiteRepository) ListTitles() (map[int64]ScrapedTitle, error) {
+	rows, err := r.db.Query(`
+		SELECT j.video_id, TRIM(j.title), TRIM(j.title_zh)
+		FROM video_jav j
+		JOIN videos v ON v.id = j.video_id AND v.deleted_at IS NULL
+		WHERE j.override_mode <> 'skip'
+		  AND (TRIM(j.title) <> '' OR TRIM(j.title_zh) <> '')`)
+	if err != nil {
+		return nil, fmt.Errorf("list jav titles: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make(map[int64]ScrapedTitle)
+	for rows.Next() {
+		var videoID int64
+		var title ScrapedTitle
+		if err := rows.Scan(&videoID, &title.Title, &title.TitleZh); err != nil {
+			return nil, fmt.Errorf("scan jav title: %w", err)
+		}
+		out[videoID] = title
+	}
+	return out, rows.Err()
+}
+
+// SearchTitleIDs matches a keyword against the 番号, the original title and the
+// Chinese translation. Search used to be file-name-only; with 【番号】译名 as
+// the card title, a user typing the Chinese name must still find the favorite.
+func (r *SQLiteRepository) SearchTitleIDs(keyword string) ([]int64, error) {
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return []int64{}, nil
+	}
+	pattern := "%" + escapeLike(keyword) + "%"
+	rows, err := r.db.Query(`
+		SELECT j.video_id
+		FROM video_jav j
+		JOIN videos v ON v.id = j.video_id AND v.deleted_at IS NULL
+		WHERE j.override_mode <> 'skip'
+		  AND (j.code LIKE ? ESCAPE '\' OR j.title LIKE ? ESCAPE '\' OR j.title_zh LIKE ? ESCAPE '\')
+		ORDER BY j.video_id`, pattern, pattern, pattern)
+	if err != nil {
+		return nil, fmt.Errorf("search jav titles: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan jav title match: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func (r *SQLiteRepository) GetTask(videoID int64) (*Task, error) {
@@ -669,6 +734,12 @@ func (r *SQLiteRepository) Delete(videoID int64) error {
 	_, err := r.db.Exec(`DELETE FROM video_jav WHERE video_id=?`, videoID)
 	return err
 }
+
+// escapeLike escapes LIKE wildcards so a user keyword matches literally.
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
 func nullableInt64(v sql.NullInt64) *int64 {
 	if !v.Valid {
 		return nil

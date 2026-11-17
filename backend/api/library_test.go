@@ -1343,3 +1343,97 @@ func TestEmptyTrashPurgesEverythingAndReportsCount(t *testing.T) {
 		t.Errorf("trash still has %d rows", len(trash.Videos))
 	}
 }
+
+// TestSearchVideosMatchesScrapedTitlesAndProjectsDisplayFields pins the
+// 【番号】译名 read model: the list carries both title halves, and a keyword
+// matching the code, original title or translation finds the favorite even
+// though its file name says nothing about it.
+func TestSearchVideosMatchesScrapedTitlesAndProjectsDisplayFields(t *testing.T) {
+	db, err := sql.Open(database.DriverName, "file:"+filepath.Join(t.TempDir(), "app.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := database.Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+
+	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
+	vr := video.NewSQLiteRepository(db)
+	lib := New(
+		video.NewService(vr, nil, t.TempDir(), discard, nil),
+		group.NewService(&memGroupRepo{members: map[int64][]int64{}}, discard, nil),
+		discard,
+	)
+	javRepo := jav.NewSQLiteRepository(db)
+	svc := jav.NewService(javRepo, vr, nil, "", nil, discard, 1)
+	t.Cleanup(svc.Close)
+	lib.SetJavService(svc)
+
+	create := func(name string, createdAt int64) *video.Video {
+		t.Helper()
+		v := &video.Video{
+			Path:      filepath.Join(t.TempDir(), name),
+			FileName:  name,
+			Status:    video.StatusAvailable,
+			CreatedAt: createdAt,
+			UpdatedAt: createdAt,
+		}
+		if err := vr.Create(v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	scraped := create("a.mp4", 10)
+	if err := javRepo.PrepareTask(scraped.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := javRepo.SaveSuccess(scraped.ID, jav.Metadata{Code: "IPX-633", Title: "となりの人妻"}, "filename", 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := javRepo.SetTaskStatus(scraped.ID, "", jav.StatusSucceeded, "", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := javRepo.SetTitleTranslation(scraped.ID, "邻家的人妻", ""); err != nil {
+		t.Fatal(err)
+	}
+	unscraped := create("b.mp4", 20)
+
+	list, err := lib.ListVideos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[int64]video.Video{}
+	for _, v := range list {
+		byID[v.ID] = v
+	}
+	if got := byID[scraped.ID]; got.JavTitle != "となりの人妻" || got.JavTitleZh != "邻家的人妻" || got.JavCode != "IPX-633" {
+		t.Errorf("scraped projection = %+v", got)
+	}
+	if got := byID[unscraped.ID]; got.JavTitle != "" || got.JavTitleZh != "" {
+		t.Errorf("unscraped projection = %+v, want empty titles", got)
+	}
+
+	for _, keyword := range []string{"邻家", "ipx-633", "人妻"} {
+		got, err := lib.SearchVideos(keyword)
+		if err != nil {
+			t.Fatalf("search %q: %v", keyword, err)
+		}
+		if len(got) != 1 || got[0].ID != scraped.ID {
+			t.Fatalf("search %q = %+v, want only the scraped favorite", keyword, got)
+		}
+		if got[0].JavTitleZh != "邻家的人妻" {
+			t.Errorf("search %q forgot the translation: %+v", keyword, got[0])
+		}
+	}
+
+	// A file-name match still works and is not duplicated by the scrape lookup.
+	got, err := lib.SearchVideos("a.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != scraped.ID {
+		t.Fatalf("file-name search = %+v, want one non-duplicated row", got)
+	}
+}

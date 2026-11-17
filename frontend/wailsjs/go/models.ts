@@ -788,6 +788,8 @@ export namespace video {
 	    title: string;
 	    notes: string;
 	    javCode: string;
+	    javTitle: string;
+	    javTitleZh: string;
 	    actors: string[];
 	    mosaicRestored: boolean;
 	    customCoverAt: number;
@@ -836,6 +838,8 @@ export namespace video {
 	        this.title = source["title"];
 	        this.notes = source["notes"];
 	        this.javCode = source["javCode"];
+	        this.javTitle = source["javTitle"];
+	        this.javTitleZh = source["javTitleZh"];
 	        this.actors = source["actors"];
 	        this.mosaicRestored = source["mosaicRestored"];
 	        this.customCoverAt = source["customCoverAt"];

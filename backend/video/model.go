@@ -60,6 +60,15 @@ type Video struct {
 	// code. Once set, the UI presents the favorite under it instead of the file
 	// name, so a messy file name never stands in for the work's identity.
 	JavCode string `json:"javCode"`
+	// JavTitle is the provider's original title for this favorite
+	// (video_jav.title). Like JavCode it is a read-model projection, never a
+	// column on videos. The UI uses it as the display-name fallback when no
+	// Chinese translation exists yet.
+	JavTitle string `json:"javTitle"`
+	// JavTitleZh is the LLM's Simplified-Chinese translation of JavTitle
+	// (video_jav.title_zh), also a read-model projection. The UI formats a
+	// scraped favorite's display name as 【番号】译名 from this field.
+	JavTitleZh string `json:"javTitleZh"`
 	// Actors is the canonical cast (演员) the scraper recorded for this favorite,
 	// with 演员合并 aliases folded into their canonical name. Like JavCode it is a
 	// read-model projection filled by the shared façade from
