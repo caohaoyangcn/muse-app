@@ -274,6 +274,7 @@ func main() {
 	// scraping proxy route so an LLM behind the same proxy works too.
 	llmClient := llm.NewClient(settingsStore.LLMConfig, &http.Client{Transport: proxyCfg.Transport()})
 	javSvc.SetTitleTranslator(llmClient)
+	app.setLLMClient(llmClient)
 	lib.SetJavService(javSvc)
 	javSvc.Start()
 	// After ffprobe confirms a 4K resolution, the background processor asks the

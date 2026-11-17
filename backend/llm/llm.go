@@ -152,16 +152,50 @@ func (c *Client) Available() bool {
 // TranslateTitle returns one Simplified-Chinese title. The model is asked for
 // the title alone; cleanTranslation removes the decorations models add anyway.
 func (c *Client) TranslateTitle(ctx context.Context, title string) (string, error) {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		return "", errors.New("标题为空，无法翻译")
-	}
 	cfg, err := c.loadConfig()
 	if err != nil {
 		return "", fmt.Errorf("读取片名翻译设置失败：%w", err)
 	}
 	if !cfg.Usable() {
 		return "", ErrNotConfigured
+	}
+	return c.translate(ctx, cfg, title)
+}
+
+// checkSampleTitle is the short Japanese title used by Check. It has kana and
+// kanji but no番号, so it exercises the real translation prompt without
+// depending on any scraped record.
+const checkSampleTitle = "となりの人妻"
+
+// Check validates an explicit provider configuration by translating one short
+// sample title. It is the settings page's 测试连接 action: the values come from
+// the form (which may not be saved yet), and the sample translation proves that
+// the endpoint, the API key and the model all work together.
+//
+// Enabled is ignored on purpose: testing a provider that is currently paused
+// must still report whether it is correctly configured.
+func (c *Client) Check(ctx context.Context, cfg Config) (string, error) {
+	normalized, err := Normalize(cfg)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(normalized.APIKey) == "" {
+		return "", errors.New("请填写 API Key（留空时使用已保存的 Key）")
+	}
+	translated, err := c.translate(ctx, normalized, checkSampleTitle)
+	if err != nil {
+		return "", err
+	}
+	return translated, nil
+}
+
+// translate performs one chat-completions request with an already validated
+// configuration. Both the production path (TranslateTitle) and the settings
+// smoke test (Check) share it, so the test exercises exactly what a scrape does.
+func (c *Client) translate(ctx context.Context, cfg Config, title string) (string, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "", errors.New("标题为空，无法翻译")
 	}
 	if utf8.RuneCountInString(title) > maxTitleRunes {
 		title = string([]rune(title)[:maxTitleRunes])

@@ -382,6 +382,10 @@ export function TestCloudConnection(arg1) {
   return window['go']['main']['App']['TestCloudConnection'](arg1);
 }
 
+export function TestLLMSettings(arg1) {
+  return window['go']['main']['App']['TestLLMSettings'](arg1);
+}
+
 export function TranslateMissingTitles() {
   return window['go']['main']['App']['TranslateMissingTitles']();
 }

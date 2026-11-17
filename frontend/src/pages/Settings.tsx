@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { client, checkJavCodes, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getLLMSettings, setLLMSettings, clearLLMAPIKey, translateMissingTitles, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
+import { client, checkJavCodes, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getLLMSettings, setLLMSettings, clearLLMAPIKey, testLLMSettings, translateMissingTitles, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
 import type {
   CloudConnection,
   CloudConnectionInput,
@@ -973,6 +973,10 @@ function FC2Section() {
  * scraping cookies and is never echoed back, so the form only learns whether
  * one exists. Translation runs on its own queue after a scrape succeeds — a
  * provider failure never fails the scrape itself.
+ *
+ * 测试连接 sends the form's current values through one real translation (without
+ * saving them), so a wrong endpoint, model or key is caught before any scrape
+ * depends on it.
  */
 function LLMSection() {
   const [enabled, setEnabled] = useState(true);
@@ -984,9 +988,15 @@ function LLMSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [batching, setBatching] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const clearFeedback = () => {
+    setNotice(null);
+    setError(null);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -1008,9 +1018,8 @@ function LLMSection() {
   }, [load]);
 
   const save = async () => {
+    clearFeedback();
     setSaving(true);
-    setError(null);
-    setSaved(false);
     try {
       await setLLMSettings({
         enabled,
@@ -1020,7 +1029,7 @@ function LLMSection() {
       });
       setApiKey("");
       setShowKey(false);
-      setSaved(true);
+      setNotice("设置已保存 ✓");
       // Re-read so the defaults the backend filled in are what the form shows.
       await load();
     } catch (e) {
@@ -1030,15 +1039,34 @@ function LLMSection() {
     }
   };
 
+  const test = async () => {
+    clearFeedback();
+    setTesting(true);
+    try {
+      // Tests the values on screen, before they are saved. A blank key uses
+      // the stored one, so retesting an endpoint does not require the secret.
+      const sample = await testLLMSettings({
+        enabled,
+        baseUrl: baseURL.trim(),
+        model: model.trim(),
+        apiKey: apiKey.trim(),
+      });
+      setNotice(`连接成功，示例译名：${sample}`);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const clearKey = async () => {
+    clearFeedback();
     setClearing(true);
-    setError(null);
-    setSaved(false);
     try {
       await clearLLMAPIKey();
       setApiKey("");
       setShowKey(false);
-      setSaved(true);
+      setNotice("API Key 已清除");
       await load();
     } catch (e) {
       setError(String(e));
@@ -1048,13 +1076,11 @@ function LLMSection() {
   };
 
   const translateAll = async () => {
+    clearFeedback();
     setBatching(true);
-    setError(null);
-    setSaved(false);
     try {
       const queued = await translateMissingTitles();
-      setSaved(true);
-      setError(
+      setNotice(
         queued > 0
           ? `已将 ${queued} 部影片加入翻译队列，完成后详情页会显示中文译名。`
           : "没有需要翻译的片名。",
@@ -1066,7 +1092,8 @@ function LLMSection() {
     }
   };
 
-  const busy = saving || clearing || batching;
+  const busy = saving || clearing || testing || batching;
+  const canTest = Boolean(apiKey.trim() || hasKey);
 
   return (
     <section className="max-w-[640px]">
@@ -1093,8 +1120,7 @@ function LLMSection() {
             value={baseURL}
             onChange={(e) => {
               setBaseURL(e.target.value);
-              setSaved(false);
-              setError(null);
+              clearFeedback();
             }}
             placeholder="https://api.deepseek.com/v1"
             autoComplete="off"
@@ -1112,8 +1138,7 @@ function LLMSection() {
             value={model}
             onChange={(e) => {
               setModel(e.target.value);
-              setSaved(false);
-              setError(null);
+              clearFeedback();
             }}
             placeholder="deepseek-chat"
             autoComplete="off"
@@ -1129,8 +1154,7 @@ function LLMSection() {
               value={apiKey}
               onChange={(e) => {
                 setApiKey(e.target.value);
-                setSaved(false);
-                setError(null);
+                clearFeedback();
               }}
               placeholder={hasKey ? "已保存，留空则不修改" : "粘贴 API Key"}
               autoComplete="off"
@@ -1157,7 +1181,7 @@ function LLMSection() {
               description="关闭后保留已保存的 Key，但不再自动翻译；手动「翻译片名」仍可使用。"
               onChange={(checked) => {
                 setEnabled(checked);
-                setSaved(false);
+                clearFeedback();
               }}
               value={enabled}
             />
@@ -1167,10 +1191,17 @@ function LLMSection() {
             <Button variant="primary" onClick={() => void save()} disabled={busy}>
               {saving ? "保存中…" : "保存设置"}
             </Button>
+            <Button onClick={() => void test()} disabled={busy || !canTest}>
+              {testing ? "测试中…" : "测试连接"}
+            </Button>
             <Button onClick={() => void clearKey()} disabled={busy || !hasKey}>
               {clearing ? "清除中…" : "清除 API Key"}
             </Button>
           </div>
+          <p className="mt-2 text-xs leading-relaxed text-[var(--muted)]">
+            测试会发送一条示例片名并返回真实译名，用来验证接口地址、模型与 Key；测试不会保存设置，
+            Key 留空时使用已保存的 Key。
+          </p>
 
           <div className="mt-6 border-t border-[var(--border)] pt-5">
             <h3 className="text-sm font-semibold">批量翻译</h3>
@@ -1185,12 +1216,8 @@ function LLMSection() {
             </div>
           </div>
 
-          {saved && !error && <p className="mt-2.5 text-[13px] text-[#7ad9a2]">操作成功 ✓</p>}
-          {error && (
-            <p className={cn("mt-2.5 text-[13px]", error.startsWith("已将 ") || error === "没有需要翻译的片名。" ? "text-[var(--muted)]" : "text-[var(--danger)]")}>
-              {error}
-            </p>
-          )}
+          {notice && <p className="mt-2.5 text-[13px] text-[#7ad9a2]">{notice}</p>}
+          {error && <p className="mt-2.5 text-[13px] text-[var(--danger)]">{error}</p>}
         </div>
       )}
     </section>

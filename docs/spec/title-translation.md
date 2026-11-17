@@ -65,6 +65,8 @@
 
 `baseURL && model && apiKey` 齐备时 `llm.Client.Available()` 为真，手动翻译（详情页按钮、批量补齐）可用；再加上 `enabled` 才算 `Configured()`，刮削成功后才自动翻译。暂停自动翻译不会挡住手动操作，刮削流程也直接跳过，不写任何失败状态。
 
+配置表单提供「测试连接」（`llm.Client.Check`）：用**当前表单里的**接口地址、模型与 Key（Key 留空时取已保存的 Key）翻译一条固定示例片名 `となりの人妻`，返回真实译名或可操作错误。它不写数据库，所以配错的值不会被保存；即使自动翻译处于暂停状态也能测试。
+
 ## 4. 请求与输出
 
 - 客户端：`backend/llm.Client`，实现 `jav.TitleTranslator`（`TranslateTitle` + `Configured` + `Available`）。
@@ -97,18 +99,19 @@ Wails（仅桌面端设置/操作）：
 - `ClearLLMAPIKey() error`
 - `TranslateVideoTitle(videoID) error`
 - `TranslateMissingTitles() (int, error)`
+- `TestLLMSettings(input LLMSettingsInput) (string, error)` —— 设置页「测试连接」；只读表单值，不落库
 
 `jav.Detail` 新增 `titleZh` / `titleZhStatus` / `titleZhError`，因此桌面详情、局域网 JSON API 和手机详情页都自动拿到译名，不需要额外端点。
 
 ## 7. 前端
 
-- **设置 → 片名翻译**：接口地址、模型、API Key、启用开关、保存/清除 Key，以及「翻译缺少译名的片名」批量入口。状态只显示「已配置 / 已暂停 / 未配置」。
+- **设置 → 片名翻译**：接口地址、模型、API Key、启用开关、保存/清除 Key、「测试连接」，以及「翻译缺少译名的片名」批量入口。测试成功会直接显示示例译名（连接成功，示例译名：…），失败显示 401/404/429/网络等具体原因。状态只显示「已配置 / 已暂停 / 未配置」。
 - **桌面详情页**：元数据表新增「中文译名」一行；标题存在时提供「翻译片名 / 重新翻译」按钮，失败时在按钮下方显示原因。
 - **手机详情页**：只读显示「中文译名」（翻译中 / 翻译失败 / 尚未翻译），不提供触发入口。
 
 ## 8. 测试
 
-- `backend/llm`：默认值与校验、输出清洗、请求体（模型 + 提示词）、401 映射、设置实时生效、设置读取失败视为未配置。
+- `backend/llm`：默认值与校验、输出清洗、请求体（模型 + 提示词）、401 映射、设置实时生效、设置读取失败视为未配置；`Check` 用显式配置（不读已存设置、暂停状态也可测）并返回示例译名，缺 Key / 鉴权失败给出可操作错误。
 - `backend/settings`：默认配置、往返读写、无效地址拒绝、Key 加密存储（Windows）、非 Windows 平台无安全存储时的降级行为。
 - `backend/database`：v26 → v27 增量升级、已有刮削数据保留、译名跨再次迁移保留。
 - `backend/jav`：刮削后自动翻译、未配置时跳过、失败不改变刮削状态、批量去重、`pending` 覆盖、重新刮削替换旧译名、仓库层候选查询。

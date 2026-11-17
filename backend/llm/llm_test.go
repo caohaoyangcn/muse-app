@@ -240,3 +240,50 @@ func TestTranslateTitleFailsWhenSettingsCannotBeRead(t *testing.T) {
 		t.Fatal("expected an error")
 	}
 }
+
+func TestCheckUsesExplicitConfigWithoutSaving(t *testing.T) {
+	server, body := chatServer(t, http.StatusOK, "邻家的人妻")
+	// The stored settings are irrelevant: Check must test the form values.
+	client := NewClient(func() (Config, error) {
+		return Config{}, errors.New("stored settings must not be read")
+	}, server.Client())
+	got, err := client.Check(context.Background(), Config{
+		Enabled: false, // paused auto-translate must still be testable
+		BaseURL: server.URL + "/v1",
+		Model:   "deepseek-chat",
+		APIKey:  "test-key",
+	})
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	if got != "邻家的人妻" {
+		t.Fatalf("Check = %q, want the sample translation", got)
+	}
+	request := body.Load().(string)
+	for _, want := range []string{"となりの人妻", `"model":"deepseek-chat"`, "只输出译名本身"} {
+		if !strings.Contains(request, want) {
+			t.Fatalf("smoke-test request missing %q: %s", want, request)
+		}
+	}
+}
+
+func TestCheckRejectsMissingAPIKey(t *testing.T) {
+	client := NewClient(func() (Config, error) { return Config{}, nil }, nil)
+	_, err := client.Check(context.Background(), Config{BaseURL: DefaultBaseURL, Model: DefaultModel})
+	if err == nil || !strings.Contains(err.Error(), "API Key") {
+		t.Fatalf("Check without a key error = %v, want an API-key hint", err)
+	}
+}
+
+func TestCheckReportsProviderFailure(t *testing.T) {
+	server, _ := chatServer(t, http.StatusUnauthorized, "")
+	client := NewClient(func() (Config, error) { return Config{}, nil }, server.Client())
+	_, err := client.Check(context.Background(), Config{
+		BaseURL: server.URL + "/v1",
+		Model:   "m",
+		APIKey:  "test-key",
+	})
+	if err == nil || !strings.Contains(err.Error(), "API Key") {
+		t.Fatalf("Check 401 error = %v, want an actionable API-key message", err)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync/atomic"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -69,6 +70,7 @@ type App struct {
 	settings          *settings.Store
 	javCookieProvider javCookieProvider
 	fc2CookieProvider javCookieProvider
+	llmClient         *llm.Client
 	proxy             *netproxy.Config
 	dataDir           string
 	log               *slog.Logger
@@ -222,6 +224,41 @@ func (a *App) SetLLMSettings(input LLMSettingsInput) error {
 		BaseURL: input.BaseURL,
 		Model:   input.Model,
 		APIKey:  input.APIKey,
+	})
+}
+
+// setLLMClient wires the provider client used by the settings smoke test. The
+// scrape path keeps its own reference through jav.Service; both share the same
+// settings loader and HTTP transport. Unexported so Wails does not expose an
+// internal setter (or the llm.Client type) to the webview.
+func (a *App) setLLMClient(client *llm.Client) { a.llmClient = client }
+
+// TestLLMSettings validates the provider values currently in the form by
+// translating one short sample title. An empty APIKey reuses the stored key, so
+// the endpoint or model can be re-tested without retyping the secret. Nothing
+// is persisted: a failed test never saves a bad configuration.
+func (a *App) TestLLMSettings(input LLMSettingsInput) (string, error) {
+	if a.llmClient == nil {
+		return "", fmt.Errorf("片名翻译客户端未初始化")
+	}
+	apiKey := strings.TrimSpace(input.APIKey)
+	if apiKey == "" {
+		if a.settings == nil {
+			return "", fmt.Errorf("设置存储未初始化")
+		}
+		stored, err := a.settings.LLMConfig()
+		if err != nil {
+			return "", err
+		}
+		apiKey = stored.APIKey
+	}
+	return a.llmClient.Check(context.Background(), llm.Config{
+		// Testing a paused provider must still work: the smoke test ignores the
+		// auto-translate switch on purpose.
+		Enabled: true,
+		BaseURL: input.BaseURL,
+		Model:   input.Model,
+		APIKey:  apiKey,
 	})
 }
 

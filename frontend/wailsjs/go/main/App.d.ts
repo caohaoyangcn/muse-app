@@ -201,6 +201,8 @@ export function SuggestGroupsForVideos(arg1:Array<string>):Promise<Array<api.Vid
 
 export function TestCloudConnection(arg1:cloud.ConnectionInput):Promise<cloud.TestResult>;
 
+export function TestLLMSettings(arg1:main.LLMSettingsInput):Promise<string>;
+
 export function TranslateMissingTitles():Promise<number>;
 
 export function TranslateVideoTitle(arg1:number):Promise<void>;

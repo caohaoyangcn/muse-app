@@ -90,6 +90,7 @@ import {
   ClearLLMAPIKey,
   GetLLMSettings,
   SetLLMSettings,
+  TestLLMSettings,
   TranslateMissingTitles,
   TranslateVideoTitle,
   ClearFC2Cookie,
@@ -379,6 +380,13 @@ export const setLLMSettings = (input: LLMSettingsInput): Promise<void> =>
 
 /** 清除已保存的 API Key；之后的刮削不再自动翻译。 */
 export const clearLLMAPIKey = (): Promise<void> => ClearLLMAPIKey();
+
+/**
+ * 用表单里的接口地址、模型与 Key 跑一次真实翻译，返回示例译名。
+ * 不会保存任何设置；apiKey 留空时使用已保存的 Key。
+ */
+export const testLLMSettings = (input: LLMSettingsInput): Promise<string> =>
+  TestLLMSettings(input);
 
 /** 为一条收藏排队翻译片名（立即返回，结果通过刮削事件刷新）。 */
 export const translateVideoTitle = (videoId: number): Promise<void> =>
