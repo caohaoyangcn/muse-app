@@ -26,6 +26,7 @@ import {
   Toolbar,
 } from "../ui/astryx";
 import { Dialog, DialogCloseButton, DialogContent } from "../ui/dialog";
+import SimilarVideos from "./SimilarVideos";
 
 type OverrideMode = "auto" | "manual" | "skip";
 
@@ -73,6 +74,7 @@ export default function VideoDetailPanel({
   onOpenSettings,
   onVideoChanged,
   onSelectActor,
+  onOpen,
   onPlay,
   onRevealPath,
 }: {
@@ -81,6 +83,8 @@ export default function VideoDetailPanel({
   onVideoChanged: () => void;
   /** Jump to the aggregated film list for one actor (演员词条快捷跳转). */
   onSelectActor?: (name: string) => void;
+  /** Open a 类似影片 recommendation as its own detail tab. */
+  onOpen: (video: Video) => void;
   /** Play the video with the system default player. */
   onPlay?: () => void;
   /** Reveal the video file in the OS file manager (定位到文件). */
@@ -452,6 +456,8 @@ export default function VideoDetailPanel({
               </p>
             )}
           </section>
+
+          <SimilarVideos videoId={video.id} onOpen={onOpen} />
         </>
       )}
 

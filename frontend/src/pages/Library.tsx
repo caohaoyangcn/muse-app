@@ -1756,6 +1756,7 @@ export default function Library({
                 onOpenSettings={onOpenSettings}
                 onVideoChanged={invalidate}
                 onSelectActor={openActor}
+                onOpen={openDetail}
                 onPlay={() => void handleOpen(activeVideoTab)}
                 onRevealPath={() => handleRevealPath(activeVideoTab)}
               />

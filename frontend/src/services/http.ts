@@ -19,6 +19,7 @@ import type {
   JavDuplicateGroup,
   JavTask,
   JavTaskOverview,
+  SimilarVideo,
   TrashSnapshot,
   Video,
 } from "../types";
@@ -103,6 +104,12 @@ export function listActors(): Promise<ActorSummary[]> {
 
 export function videosByActor(name: string): Promise<Video[]> {
   return request<Video[]>(`${API}/actors/videos?name=${encodeURIComponent(name)}`);
+}
+
+/** 详情页底部的「类似影片」；limit 传 0（或省略）时用后端默认条数。 */
+export function similarVideos(id: number, limit = 0): Promise<SimilarVideo[]> {
+  const query = limit > 0 ? `?limit=${limit}` : "";
+  return request<SimilarVideo[]>(`${API}/videos/${id}/similar${query}`);
 }
 
 /**

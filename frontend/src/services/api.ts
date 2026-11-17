@@ -68,6 +68,7 @@ import {
   ActorFillStatus as FetchActorFillStatus,
   StartActorFill,
   VideosByActor,
+  SimilarVideos,
   MergeActors,
   UnmergeActor,
   ListJavDuplicates,
@@ -108,6 +109,7 @@ import type {
   BackgroundTasks,
   Group,
   ServerStartInfo,
+  SimilarVideo,
   Video,
   VideoGroupSuggestion,
   WatchedDir,
@@ -210,6 +212,13 @@ export const listActors = (): Promise<ActorSummary[]> => ListActors();
 
 /** 某个演员出演过的全部影片（含已合并的艺名，按收藏时间倒序）。 */
 export const videosByActor = (name: string): Promise<Video[]> => VideosByActor(name);
+
+/**
+ * 详情页底部的「类似影片」：按序列、风格标签、演员、厂牌与发行时间打分，
+ * limit 传 0（或省略）时用后端默认条数。
+ */
+export const similarVideos = (id: number, limit = 0): Promise<SimilarVideo[]> =>
+  SimilarVideos(id, limit);
 
 /** 某位演员的档案（头像 / 生日 / 身高三围）。还没补全时返回 null。 */
 export const actorProfile = (name: string): Promise<ActorProfile | null> =>

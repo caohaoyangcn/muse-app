@@ -24,6 +24,7 @@ import type {
   JavDuplicateGroup,
   JavTask,
   JavTaskOverview,
+  SimilarVideo,
   TrashSnapshot,
   Video,
 } from "../types";
@@ -35,6 +36,8 @@ export interface MuseClient {
   listGroups(): Promise<Group[]>;
   listActors(): Promise<ActorSummary[]>;
   videosByActor(name: string): Promise<Video[]>;
+  /** 详情页底部的「类似影片」：按相似度排序，limit 省略时由后端决定条数。 */
+  similarVideos(videoId: number, limit?: number): Promise<SimilarVideo[]>;
   /** 某位演员的档案（头像 / 生日 / 身高三围）；还没补全时为 null。 */
   actorProfile(name: string): Promise<ActorProfile | null>;
 
@@ -101,6 +104,7 @@ export const client: MuseClient = {
   listGroups: () => bound().listGroups(),
   listActors: () => bound().listActors(),
   videosByActor: (name) => bound().videosByActor(name),
+  similarVideos: (videoId, limit) => bound().similarVideos(videoId, limit),
   actorProfile: (name) => bound().actorProfile(name),
 
   videoJav: (id) => bound().videoJav(id),

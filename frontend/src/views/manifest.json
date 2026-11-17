@@ -44,6 +44,13 @@
       "model": "src/views/actors/useActorFilms.ts"
     },
     {
+      "id": "similar-films",
+      "title": "类似影片",
+      "desktop": "src/components/SimilarVideos.tsx",
+      "mobile": "src/mobile/components/SimilarVideos.tsx",
+      "model": "src/views/similar/useSimilarVideos.ts"
+    },
+    {
       "id": "scrape",
       "title": "刮削任务",
       "desktop": "src/components/ScrapeTaskView.tsx",

@@ -559,6 +559,7 @@ export default function App() {
             setPlayerVideo(v);
           }}
           onEdit={setEditVideo}
+          onOpenVideo={openVideo}
           onPlay={requestPlay}
           onSelectActor={openActor}
           videoId={route.videoId}

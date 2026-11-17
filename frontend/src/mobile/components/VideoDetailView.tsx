@@ -28,6 +28,7 @@ import { videoName } from "../videoDisplay";
 import { Button } from "../../ui/button";
 import { Dialog, DialogContent } from "../../ui/dialog";
 import { Icon } from "../../ui/icon";
+import { SimilarVideos } from "./SimilarVideos";
 
 const errorLabels: Record<string, string> = {
   no_code: "未识别到番号",
@@ -82,6 +83,7 @@ export function VideoDetailView({
   onPlay,
   onChoosePlayer,
   onSelectActor,
+  onOpenVideo,
   onEdit,
 }: {
   videoId: number;
@@ -89,6 +91,8 @@ export function VideoDetailView({
   onPlay: (v: Video) => void;
   onChoosePlayer: (v: Video) => void;
   onSelectActor: (name: string) => void;
+  /** Open a 类似影片 recommendation: the shell pushes that detail screen. */
+  onOpenVideo: (v: Video) => void;
   onEdit: (v: Video) => void;
 }) {
   const [lightbox, setLightbox] = useState(false);
@@ -296,6 +300,8 @@ export function VideoDetailView({
             </MetaSection>
           </div>
         </div>
+
+        <SimilarVideos onOpen={onOpenVideo} videoId={videoId} />
       </div>
 
       <Dialog onOpenChange={setLightbox} open={lightbox} width="min(92vw, 900px)" label="封面预览">

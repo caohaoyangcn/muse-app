@@ -6,6 +6,8 @@ export type Video = video.Video;
 export type AddVideoResult = video.AddVideoResult;
 /** 回收站快照：条目 + 当前保留天数（由后端统一给出，避免客户端各算一套）。 */
 export type TrashSnapshot = api.TrashSnapshot;
+/** 详情页底部「类似影片」的一项：影片本身、排序分数与推荐理由。 */
+export type SimilarVideo = api.SimilarVideo;
 export type Group = group.Group;
 export type ServerStartInfo = server.StartInfo;
 export type GroupSuggestion = api.GroupSuggestion;
