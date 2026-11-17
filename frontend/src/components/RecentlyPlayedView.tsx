@@ -15,8 +15,9 @@ type VideoItemProps = Omit<ComponentProps<typeof VideoGrid>, "videos">;
 export default function RecentlyPlayedView({
   groups,
   view,
+  memoryKey,
   ...itemProps
-}: { groups: RecentPlayedGroup[]; view: ViewMode } & VideoItemProps) {
+}: { groups: RecentPlayedGroup[]; view: ViewMode; memoryKey: string } & VideoItemProps) {
   return (
     <div className="flex flex-col gap-6 pb-2">
       {groups.map((group) => (
@@ -31,9 +32,17 @@ export default function RecentlyPlayedView({
             <span className="text-xs text-[var(--muted)]">{group.videos.length} 个视频</span>
           </div>
           {view === "grid" ? (
-            <VideoGrid {...itemProps} videos={group.videos} />
+            <VideoGrid
+              {...itemProps}
+              memoryKey={`${memoryKey}:${group.key}`}
+              videos={group.videos}
+            />
           ) : (
-            <VideoList {...itemProps} videos={group.videos} />
+            <VideoList
+              {...itemProps}
+              memoryKey={`${memoryKey}:${group.key}`}
+              videos={group.videos}
+            />
           )}
         </section>
       ))}

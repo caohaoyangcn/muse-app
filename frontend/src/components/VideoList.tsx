@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import type { CardSize, Video } from "../types";
-import { useVirtualRows } from "../hooks/useVirtualRows";
+import { usePagedList } from "../hooks/usePagedList";
+import { useRevealInPage } from "../hooks/useRevealInPage";
 import { scaleBetween } from "../utils/cardSize";
 import { DESKTOP_CARD_SIZE } from "../utils/viewPrefs";
 import { formatDuration, formatFileSize, videoCoverURL, videoResolution } from "../utils/format";
@@ -16,21 +18,26 @@ import {
   compactBadgeClass,
 } from "../ui/astryx";
 import { Icon } from "../ui/icon";
+import { Pagination } from "../ui/pagination";
+
+/** Same density as the grid, so switching views keeps the same items. */
+const PAGE_SIZE = 60;
 
 /**
- * Compact list view: one row per video. The card-size slider drives the row
- * thumbnail, title size, inner gap and vertical padding continuously, so the
- * list scales with the same control as the grid. It mirrors VideoCard's
- * interactions — click opens, double-click plays, right-click opens the
- * context menu, the checkbox toggles multi-select, and rows are draggable.
+ * Compact list view: one row per video, one page at a time. The card-size
+ * slider drives the row thumbnail, title size, inner gap and vertical padding
+ * continuously, so the list scales with the same control as the grid. It mirrors
+ * VideoCard's interactions — click opens, double-click plays, right-click opens
+ * the context menu, the checkbox toggles multi-select, and rows are draggable.
  *
  * The row is a ClickableCard rather than a ListItem: ClickableCard's hidden
  * full-surface control lets the row stay click-anywhere while the checkbox and
- * like button remain independent nested controls. The virtualizer only decides
- * which rows are mounted.
+ * like button remain independent nested controls. `memoryKey` identifies the
+ * paged list so a return to it restores the page.
  */
 export default function VideoList({
   videos,
+  memoryKey,
   selectedIds,
   onToggleSelect,
   onOpen,
@@ -41,6 +48,7 @@ export default function VideoList({
   cardSize,
 }: {
   videos: Video[];
+  memoryKey: string;
   selectedIds: Set<number>;
   onToggleSelect: (id: number) => void;
   onOpen: (video: Video) => void;
@@ -58,30 +66,34 @@ export default function VideoList({
   const rowGap = Math.round(scaleBetween(cardSize, DESKTOP_CARD_SIZE, 10, 16));
   const rowPad = Math.round(scaleBetween(cardSize, DESKTOP_CARD_SIZE, 4, 8));
 
-  // Keyboard navigation can select a row that sits outside the window.
+  // Keyboard navigation can select a row that sits on another page.
   const selected = selectedIds.size === 1 ? [...selectedIds][0] : null;
   const revealIndex = selected == null ? null : videos.findIndex((v) => v.id === selected);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
-  const virtual = useVirtualRows({
-    count: videos.length,
-    fixedColumns: 1,
-    measureKey: cardSize,
+  const paging = usePagedList({
+    total: videos.length,
+    listKey: memoryKey,
+    pageSize: PAGE_SIZE,
     revealIndex: revealIndex != null && revealIndex >= 0 ? revealIndex : null,
   });
-  const { startIndex, endIndex, windowed, offsetTop, totalHeight } = virtual;
+  useRevealInPage({
+    listRef,
+    items: videos,
+    startIndex: paging.startIndex,
+    endIndex: paging.endIndex,
+    revealIndex: revealIndex != null && revealIndex >= 0 ? revealIndex : null,
+  });
+
+  const turnPage = (step: () => void) => {
+    step();
+    listRef.current?.scrollIntoView({ block: "start", inline: "nearest" });
+  };
 
   return (
-    <div
-      ref={virtual.containerRef}
-      className="relative"
-      style={windowed ? { height: totalHeight } : undefined}
-    >
-      <div
-        ref={(el) => { virtual.windowRef.current = el; }}
-        className="flex flex-col gap-1.5"
-        style={windowed ? { position: "absolute", top: offsetTop, left: 0, right: 0 } : undefined}
-      >
-        {videos.slice(startIndex, endIndex).map((v) => {
+    <div className="scroll-mt-28" ref={listRef}>
+      <div className="flex flex-col gap-1.5">
+        {videos.slice(paging.startIndex, paging.endIndex).map((v) => {
           // A detached volume is not a missing file: the row stays normal and
           // carries only the warning (see VideoCard).
           const offline = v.volumeOffline === true;
@@ -99,6 +111,7 @@ export default function VideoList({
             <ClickableCard
               className={cn(
                 "group relative rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] transition hover:border-[var(--accent)]",
+                "scroll-mt-28",
                 missing && "opacity-75",
                 isSelected &&
                   "border-[var(--accent)] shadow-[0_0_0_1px_var(--accent),0_2px_10px_rgba(124,92,255,0.2)]",
@@ -220,6 +233,14 @@ export default function VideoList({
           );
         })}
       </div>
+      <Pagination
+        page={paging.page}
+        pageCount={paging.pageCount}
+        total={videos.length}
+        unit="部"
+        onPrev={() => turnPage(paging.prevPage)}
+        onNext={() => turnPage(paging.nextPage)}
+      />
     </div>
   );
 }

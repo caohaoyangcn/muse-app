@@ -1,19 +1,32 @@
+import { useRef } from "react";
 import type { CardSize, Video } from "../types";
-import { useVirtualRows } from "../hooks/useVirtualRows";
+import { usePagedList } from "../hooks/usePagedList";
+import { useRevealInPage } from "../hooks/useRevealInPage";
 import { scaleBetween } from "../utils/cardSize";
 import { DESKTOP_CARD_SIZE } from "../utils/viewPrefs";
 import { Grid } from "../ui/astryx";
+import { Pagination } from "../ui/pagination";
 import VideoCard from "./VideoCard";
 
+/** One page is about two screens of cards at the default size, whether the
+ *  wall or the compact list is showing. Both views share the size so switching
+ *  between them keeps the same items on screen. */
+const PAGE_SIZE = 60;
+
 /**
- * Fixed-width card grid. The slider sets the exact track width, so every step
- * changes the cards instead of only reflowing columns (a `minmax(..., 1fr)`
- * track would make the rendered width a function of the column count). The
- * leftover width is centred; at the default size it is only a few tens of
- * pixels.
+ * Fixed-width card grid, one page at a time.
+ *
+ * The slider sets the exact track width, so every step changes the cards
+ * instead of only reflowing columns; the leftover width is centred. The track
+ * list is left to CSS (`repeat(auto-fill, min(...))`) — no layout measurement,
+ * which is what used to leave the list stuck after its starter rows.
+ *
+ * `memoryKey` identifies the list being paged (filters, sort, keyword), so a
+ * return from a detail tab lands on the page the user left.
  */
 export default function VideoGrid({
   videos,
+  memoryKey,
   selectedIds,
   onToggleSelect,
   onOpen,
@@ -24,6 +37,7 @@ export default function VideoGrid({
   cardSize,
 }: {
   videos: Video[];
+  memoryKey: string;
   selectedIds: Set<number>;
   onToggleSelect: (id: number) => void;
   onOpen: (video: Video) => void;
@@ -33,45 +47,49 @@ export default function VideoGrid({
   onLike: (id: number) => void;
   cardSize: CardSize;
 }) {
-  // Keyboard navigation selects items that may sit far outside the viewport, so
-  // the single selected card is the one the window has to keep reachable.
+  // Keyboard navigation selects items that may sit on another page, so the
+  // single selected card is what the paging hook has to follow.
   const selected = selectedIds.size === 1 ? [...selectedIds][0] : null;
   const revealIndex = selected == null ? null : videos.findIndex((v) => v.id === selected);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
-  const virtual = useVirtualRows({
-    count: videos.length,
-    minColumnWidth: cardSize,
-    measureKey: cardSize,
+  const paging = usePagedList({
+    total: videos.length,
+    listKey: memoryKey,
+    pageSize: PAGE_SIZE,
     revealIndex: revealIndex != null && revealIndex >= 0 ? revealIndex : null,
   });
-  const { startIndex, endIndex, columns, windowed, offsetTop, totalHeight } = virtual;
-  // The gap grows a little with the cards; the virtualizer measures the
-  // computed value from the DOM, so it never drifts from the layout.
+  useRevealInPage({
+    listRef,
+    items: videos,
+    startIndex: paging.startIndex,
+    endIndex: paging.endIndex,
+    revealIndex: revealIndex != null && revealIndex >= 0 ? revealIndex : null,
+  });
+
+  // The gap grows a little with the cards and is mirrored into the inline
+  // track list, so the centred tracks and the spacing stay in step.
   const gap = Math.round(scaleBetween(cardSize, DESKTOP_CARD_SIZE, 12, 20));
 
+  const turnPage = (step: () => void) => {
+    step();
+    // The sticky toolbar sits over the top of the pane; the wrapper's
+    // scroll-margin keeps the first row visible below it.
+    listRef.current?.scrollIntoView({ block: "start", inline: "nearest" });
+  };
+
   return (
-    <div
-      ref={virtual.containerRef}
-      className="relative"
-      style={windowed ? { height: totalHeight } : undefined}
-    >
+    <div className="scroll-mt-28" ref={listRef}>
       <Grid
-        ref={(el) => { virtual.windowRef.current = el; }}
-        columns={Math.max(1, columns)}
         gap={2}
-        // An explicit track list keeps the rendered rows aligned with the
-        // window's row maths; the count still follows the container width.
-        // `min(..., 100%)` is a safety net when the window is narrower than
-        // the chosen card size.
         style={{
-          gridTemplateColumns: `repeat(${columns > 0 ? columns : "auto-fill"}, min(${cardSize}px, 100%))`,
+          gridTemplateColumns: `repeat(auto-fill, min(${cardSize}px, 100%))`,
           justifyContent: "center",
           columnGap: gap,
           rowGap: gap,
-          ...(windowed ? { position: "absolute", top: offsetTop, left: 0, right: 0 } : null),
         }}
       >
-        {videos.slice(startIndex, endIndex).map((v) => (
+        {videos.slice(paging.startIndex, paging.endIndex).map((v) => (
           <VideoCard
             key={v.id}
             video={v}
@@ -85,6 +103,14 @@ export default function VideoGrid({
           />
         ))}
       </Grid>
+      <Pagination
+        page={paging.page}
+        pageCount={paging.pageCount}
+        total={videos.length}
+        unit="部"
+        onPrev={() => turnPage(paging.prevPage)}
+        onNext={() => turnPage(paging.nextPage)}
+      />
     </div>
   );
 }

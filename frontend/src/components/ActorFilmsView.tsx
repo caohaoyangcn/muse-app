@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client } from "../services/desktop";
 import { invalidate } from "../services/live";
 import type { ActorProfile, CardSize, SortDir, SortKey, Video, ViewMode } from "../types";
@@ -110,8 +110,11 @@ export default function ActorFilmsView({
     writeCardSize(s);
   }, []);
 
+  // A different actor, keyword or sort is a different paged list.
+  const listKey = `desktop:actor:${name}:${keyword.trim()}:${sortBy}:${sortDir}`;
   const videoListProps = {
     videos: sortedVideos,
+    memoryKey: listKey,
     selectedIds,
     onToggleSelect: toggleSelect,
     onOpen,
@@ -122,8 +125,22 @@ export default function ActorFilmsView({
     cardSize,
   };
 
+  // A new filter or sort starts at the top of the list instead of at the
+  // offset the previous one had scrolled to. The mount pass is skipped so the
+  // shell's tab restore still owns the first position.
+  const listTopRef = useRef<HTMLDivElement | null>(null);
+  const firstListKey = useRef(true);
+  useEffect(() => {
+    if (firstListKey.current) {
+      firstListKey.current = false;
+      return;
+    }
+    listTopRef.current?.scrollIntoView({ block: "start" });
+  }, [listKey]);
+
   return (
     <div>
+      <div className="scroll-mt-24" ref={listTopRef} />
       <Toolbar
         className="sticky top-0 z-[5] mb-3 bg-[var(--bg)] px-0 py-3.5 text-[13px] text-[var(--muted)]"
         label="演员作品筛选"

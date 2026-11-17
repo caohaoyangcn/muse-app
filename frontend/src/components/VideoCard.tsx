@@ -60,6 +60,7 @@ export default function VideoCard({
     <ClickableCard
       className={cn(
         "group relative overflow-hidden transition hover:-translate-y-0.5 hover:border-[var(--accent)]",
+        "scroll-mt-28",
         missing && "opacity-75",
         selected &&
           "border-[var(--accent)] shadow-[0_0_0_1px_var(--accent),0_4px_16px_rgba(124,92,255,0.25)]",

@@ -1193,8 +1193,9 @@ export default function Library({
 
       e.preventDefault();
       if (next < 0 || next >= shownVideos.length) return;
-      // Selecting is enough: the grid/list window scrolls the newly selected
-      // item into view, including when it was never mounted.
+      // Selecting is enough: the paging hook turns to the selected item's page
+      // and the grid/list scrolls it into view, including when it was on a page
+      // that had never been mounted.
       setSelectedIds(new Set([shownVideos[next].id]));
     };
     window.addEventListener("keydown", onKey);
@@ -1460,10 +1461,48 @@ export default function Library({
     [pushNotice],
   );
 
+  // Identity of the paged list. A different filter, sort, keyword or disk
+  // selection is a different list, and each one remembers how far it was paged.
+  // The view mode is deliberately not part of it: grid and list use the same
+  // page size, so switching between them keeps the same items on screen.
+  const filterIdentity =
+    filter.kind === "group"
+      ? `group:${filter.id}`
+      : filter.kind === "scrapeTasks"
+        ? `scrapeTasks:${filter.status}`
+        : filter.kind;
+  const libraryKey = useMemo(
+    () =>
+      [
+        "desktop:library",
+        filterIdentity,
+        debouncedKeyword,
+        sortBy,
+        sortDir,
+        groupKeyword,
+        [...selectedDisks.keys()].sort().join(","),
+      ].join("|"),
+    [filterIdentity, debouncedKeyword, sortBy, sortDir, groupKeyword, selectedDisks],
+  );
+
+  // A new list starts at its top, not at whatever offset the previous one had
+  // scrolled to. The first render is skipped so the tab/scroll restore below is
+  // not overridden, and a pending restore wins over this reset.
+  const firstLibraryKey = useRef(true);
+  useEffect(() => {
+    if (firstLibraryKey.current) {
+      firstLibraryKey.current = false;
+      return;
+    }
+    const main = mainRef.current;
+    if (main && pendingRestoreRef.current == null) main.scrollTo({ top: 0 });
+  }, [libraryKey]);
+
   // Both views (grid/list) share the exact same data and interaction wiring.
   // `videos` is passed separately: the 最近播放 view renders one instance per
   // age group. Declared after handleVideoDragStart, which it references.
   const videoItemProps = {
+    memoryKey: libraryKey,
     selectedIds,
     onToggleSelect: toggleSelect,
     onOpen: openDetail,
