@@ -250,6 +250,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 
 | 日期 | 变更 |
 |---|---|
+| 2026-11-17 | 移动端长列表改为**分页追加**，不再窗口化。新增 `mobile/useLoadMore.ts`（首屏 60 条；底部进入视口前一屏时由 `IntersectionObserver` 追加下一页；页深按列表身份记忆，配合 `scrollMemory` 保持返回位置）与 `mobile/components/LoadMoreFooter.tsx`（「加载更多」按钮 + 「已显示 X / Y 部」）。原因：手机上的窗口化同时依赖 DOM 实测和绝对定位，iOS 在触摸滚动中未必可靠绘制远离视口顶部的绝对定位子树——用户反馈「全部收藏」滚过最初几屏后停住，既没有新行也没有翻页入口。桌面端保留 `useVirtualRows`；移动端海报列数改由 `Grid columns={{minWidth: 136, max: 4}}` 交给 CSS，脚本不再测列数 |
 | 2026-11-13 | 移动端导航改为可呼出的抽屉：移除底部标签栏（省下约 56px 常驻高度），新增 `ui/drawer.tsx`（背板 + 焦点陷阱 + `aria-modal`，与 `BottomSheet` 共用抽出的 `ui/overlay.ts`），`NavIcon` 从 `components/` 上移到 `ui/` 供两端共用，抽屉做成历史条目（返回手势先关抽屉）。顺带修两处安全区问题：详情页顶栏在壳层已加安全区之上再叠加一次（`pt-[calc(var(--safe-top)+6px)]`），以及移除底部栏后底部安全区丢失（根节点补 `pb-[var(--safe-bottom)]`） |
 | 2026-11-13 | 初稿：确立分层、阶段 0-4、度量与目录规则 |
 | 2026-11-13 | 阶段 0 完成：抽出 `frontend/src/theme.css`（两份 token 定义合一，构建产物哈希不变）；`components/ui/` 提升为 `src/ui/`（40 个文件的 import 已改写，产物哈希不变）；目录规则写入 `AGENTS.md` 与 `docs/DEVELOPMENT.md` |

@@ -160,6 +160,23 @@ export function LibraryView({
     return copy;
   }, [baseVideos, sortKey, sortDir]);
 
+  // Identity of the list the paging depth belongs to. A different filter, sort
+  // or keyword is a different list, and each one remembers how far it was
+  // paged; the view mode is not part of it, so switching between the wall and
+  // the compact list keeps the place the user had reached.
+  const listKey = useMemo(
+    () =>
+      [
+        sortKey,
+        sortDir,
+        keyword,
+        groupKey,
+        filters.actors.join(","),
+        filters.disks.join(","),
+      ].join("|"),
+    [sortKey, sortDir, keyword, groupKey, filters.actors, filters.disks],
+  );
+
   const actorOptions = useMemo(
     () => withSelectedActors(collectActorOptions(baseVideos), filters.actors),
     [baseVideos, filters.actors],
@@ -321,6 +338,7 @@ export function LibraryView({
         ) : viewMode === "grid" ? (
           <VideoGrid
             actions={actions}
+            memoryKey={listKey}
             onMenuOpenChange={onMenuOpenChange}
             onOpen={onOpenVideo}
             openMenuId={openMenuId}
@@ -329,6 +347,7 @@ export function LibraryView({
         ) : (
           <VideoList
             actions={actions}
+            memoryKey={listKey}
             onMenuOpenChange={onMenuOpenChange}
             onOpen={onOpenVideo}
             openMenuId={openMenuId}

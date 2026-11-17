@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
- * Row windowing for the video grid and list.
+ * Row windowing for the desktop's video grid and list.
  *
  * The library mounts every favorite, so a large collection puts ~10 DOM nodes
  * per video into the layout tree, and every reflow — a window-resize drag, a
@@ -9,11 +9,14 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
  * keeps only the rows near the viewport mounted and reserves the rest of the
  * height with a spacer, leaving the scrollbar and scroll position unchanged.
  *
+ * The phone does not window: it appends a page at a time
+ * (`src/mobile/useLoadMore.ts`), because measurement and absolutely positioned
+ * rows are exactly what iOS does not paint reliably inside a touch scroller.
+ *
  * Layout metrics are measured from the rendered DOM (item height, gaps,
  * available width) rather than recomputed from the Tailwind classes: `rem`
- * resolves against the root font size, which differs between the desktop
- * (14px) and mobile (16px) client, so the class names alone do not tell us the
- * pixels.
+ * resolves against the root font size, so the class names alone do not tell us
+ * the pixels.
  *
  * Windowing is row-based, so a grid window always begins at a row boundary and
  * its columns line up with the rows above and below it.
@@ -88,8 +91,8 @@ interface RowRange {
 
 const NO_METRICS: Metrics = { columns: 0, itemHeight: 0, rowGap: 0, columnGap: 0 };
 
-/** The nearest scrollable ancestor, by style. Both hosts of the grid are
- *  scrollable: the desktop `<main>` and the mobile `.scroll-area`. */
+/** The nearest scrollable ancestor, by style. The grid scrolls inside the
+ *  desktop `<main>`, never the window itself. */
 function findScroller(from: HTMLElement | null): HTMLElement | null {
   let cur = from?.parentElement ?? null;
   while (cur) {

@@ -9,14 +9,21 @@ import {
   compactBadgeClass,
 } from "../../ui/astryx";
 import { Icon } from "../../ui/icon";
-import { useVirtualRows } from "../../hooks/useVirtualRows";
 import { coverURL } from "../../services/web";
+import { useLoadMore } from "../useLoadMore";
 import { videoMeta, videoName } from "../videoDisplay";
 import { videoMenuItems, type VideoMenuActions } from "../videoMenu";
+import { LoadMoreFooter } from "./LoadMoreFooter";
 
 /** The poster ratio. Every card shares it, so a row always has one height
  *  regardless of how long the title is — the text sits over the artwork. */
 const POSTER_RATIO = 3 / 4;
+
+/** The narrowest poster the wall will draw. `Grid`'s responsive columns derive
+ *  the count from it, so the wall reflows with the screen without anybody
+ *  measuring it: two tracks on a phone, up to four when there is room. */
+const MIN_POSTER_PX = 136;
+const MAX_COLUMNS = 4;
 
 function Thumb({ v }: { v: Video }) {
   if (v.status === "missing" && !v.volumeOffline) {
@@ -90,42 +97,31 @@ function OverlayMeta({ v }: { v: Video }) {
  * viewports add tracks rather than stretching a single card. Astryx's
  * ClickableCard supplies the interactive surface and nested-button handling,
  * while AspectRatio guarantees one poster shape for every row.
+ *
+ * The wall renders one page at a time (see useLoadMore); `memoryKey` identifies
+ * the current list so a return from a detail screen keeps the paging depth.
  */
 export function VideoGrid({
   videos,
+  memoryKey,
   onOpen,
   actions,
   openMenuId,
   onMenuOpenChange,
 }: {
   videos: Video[];
+  memoryKey: string;
   onOpen: (v: Video) => void;
   actions: VideoMenuActions;
   openMenuId: number | null;
   onMenuOpenChange: (video: Video, open: boolean) => void;
 }) {
-  const virtual = useVirtualRows({
-    count: videos.length,
-    minColumnWidth: 136,
-    maxColumns: 4,
-    measureKey: "cinematic",
-  });
-  const columns = virtual.columns > 0 ? virtual.columns : 2;
-  const { startIndex, endIndex, windowed, offsetTop, totalHeight } = virtual;
+  const paging = useLoadMore({ total: videos.length, memoryKey });
 
   return (
-    <div
-      ref={virtual.containerRef}
-      className="relative"
-      style={windowed ? { height: totalHeight } : undefined}
-    >
-      <Grid
-        ref={(el) => { virtual.windowRef.current = el; }}
-        className="gap-2"
-        columns={columns}
-        style={windowed ? { position: "absolute", left: 0, right: 0, top: offsetTop } : undefined}
-      >
-        {videos.slice(startIndex, endIndex).map((v) => (
+    <>
+      <Grid columns={{ minWidth: MIN_POSTER_PX, max: MAX_COLUMNS }} gap={2}>
+        {videos.slice(0, paging.visibleCount).map((v) => (
           <ClickableCard
             className="relative overflow-hidden border border-white/[0.07] bg-[#101013]"
             key={v.id}
@@ -158,44 +154,34 @@ export function VideoGrid({
           </ClickableCard>
         ))}
       </Grid>
-    </div>
+      <LoadMoreFooter state={paging} total={videos.length} />
+    </>
   );
 }
 
-/** The compact list. Rows keep one line of title so the shared row windowing
- *  still measures a single uniform height. */
+/** The compact list, paged the same way as the wall. One line of title per row
+ *  keeps the rows scannable when a page is mostly long translated names. */
 export function VideoList({
   videos,
+  memoryKey,
   onOpen,
   actions,
   openMenuId,
   onMenuOpenChange,
 }: {
   videos: Video[];
+  memoryKey: string;
   onOpen: (v: Video) => void;
   actions: VideoMenuActions;
   openMenuId: number | null;
   onMenuOpenChange: (video: Video, open: boolean) => void;
 }) {
-  const virtual = useVirtualRows({
-    count: videos.length,
-    fixedColumns: 1,
-    measureKey: "cinematic-list",
-  });
-  const { startIndex, endIndex, windowed, offsetTop, totalHeight } = virtual;
+  const paging = useLoadMore({ total: videos.length, memoryKey });
 
   return (
-    <div
-      ref={virtual.containerRef}
-      className="relative"
-      style={windowed ? { height: totalHeight } : undefined}
-    >
-      <div
-        ref={(el) => { virtual.windowRef.current = el; }}
-        className="flex flex-col gap-2"
-        style={windowed ? { position: "absolute", left: 0, right: 0, top: offsetTop } : undefined}
-      >
-        {videos.slice(startIndex, endIndex).map((v) => {
+    <>
+      <div className="flex flex-col gap-2">
+        {videos.slice(0, paging.visibleCount).map((v) => {
           const meta = v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v);
           return (
             <ClickableCard
@@ -248,6 +234,7 @@ export function VideoList({
           );
         })}
       </div>
-    </div>
+      <LoadMoreFooter state={paging} total={videos.length} />
+    </>
   );
 }

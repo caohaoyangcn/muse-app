@@ -91,6 +91,7 @@ export function ActorFilmsView({
         ) : (
           <VideoGrid
             actions={actions}
+            memoryKey={`actor:${name}:${filter}`}
             onMenuOpenChange={onMenuOpenChange}
             onOpen={onOpenVideo}
             openMenuId={openMenuId}
