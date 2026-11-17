@@ -163,7 +163,7 @@ func TestTranslateTitleSendsPromptAndModel(t *testing.T) {
 		t.Fatalf("TranslateTitle: %v", err)
 	}
 	request := body.Load().(string)
-	for _, want := range []string{`"model":"deepseek-chat"`, "となりの人妻", "只输出译名本身"} {
+	for _, want := range []string{`"model":"deepseek-chat"`, "となりの人妻", "只输出译名本身", "不要重复作品番号"} {
 		if !strings.Contains(request, want) {
 			t.Fatalf("request body missing %q: %s", want, request)
 		}
