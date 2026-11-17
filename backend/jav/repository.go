@@ -32,11 +32,16 @@ type Repository interface {
 	SetCover(videoID int64, status string) error
 	SetOverride(videoID int64, mode, code string) error
 	// SetTitleTranslation stores one translation attempt: the Chinese title on
-	// success, or the failure message while titleZh stays empty.
+	// success, or the failure message while titleZh stays empty. It is the
+	// version-less form used by fixtures and older callers.
 	SetTitleTranslation(videoID int64, titleZh, lastError string) error
+	// SetTitleTranslationVersion is SetTitleTranslation plus the
+	// prompt/title/model fingerprint that produced the Chinese title. The
+	// worker uses it so a later bulk pass can tell whether the row is stale.
+	SetTitleTranslationVersion(videoID int64, titleZh, version, lastError string) error
 	// SetTitleTranslationFailure records a failed refresh while keeping the
-	// translation the row already had, so 重新翻译 can surface the error
-	// without destroying a readable title.
+	// translation (and its version) the row already had, so 重新翻译 can
+	// surface the error without destroying a readable title.
 	SetTitleTranslationFailure(videoID int64, lastError string) error
 	// ListTitleTranslationCandidates returns the successfully scraped,
 	// non-trashed favorites that still have no Chinese title. It is the work
@@ -45,9 +50,9 @@ type Repository interface {
 	ListTitleTranslationCandidates() ([]int64, error)
 	// ListTitleRetranslationCandidates returns every successfully scraped,
 	// non-trashed favorite with a title, including ones that already have a
-	// Chinese title. It is the work list for 重新翻译全部译名, which refreshes
-	// existing results after a prompt or provider change.
-	ListTitleRetranslationCandidates() ([]int64, error)
+	// Chinese title. It is the work list for 重新翻译全部译名, which compares
+	// each stored version with the current prompt/model before queueing.
+	ListTitleRetranslationCandidates() ([]TitleTranslationCandidate, error)
 	ListActorFilmRefs() ([]ActorFilmRef, error)
 	ListActorMerges() ([]ActorMerge, error)
 	UpsertActorMerge(alias, canonical string) error
@@ -401,7 +406,7 @@ func (r *SQLiteRepository) SaveSuccess(videoID int64, m Metadata, codeSource str
 	tags, _ := json.Marshal(stringList(m.Tags))
 	// A re-scrape replaces the title, so the old translation no longer describes
 	// the record: clear it and let the service queue a fresh translation.
-	_, err := r.db.Exec(`UPDATE video_jav SET code=?, title=?, title_zh='', title_zh_error='', studio=?, series=?, release_unix=?, duration_min=?, is_uncensored=?, actors_json=?, tags_json=?, cover_url=?, provider=?, code_source=?, fetched_at=?, updated_at=? WHERE video_id=?`, m.Code, m.Title, m.Studio, m.Series, m.ReleaseUnix, m.DurationMin, boolInt(m.IsUncensored), actors, tags, m.CoverURL, m.Provider, codeSource, fetchedAt, fetchedAt, videoID)
+	_, err := r.db.Exec(`UPDATE video_jav SET code=?, title=?, title_zh='', title_zh_error='', title_zh_version='', studio=?, series=?, release_unix=?, duration_min=?, is_uncensored=?, actors_json=?, tags_json=?, cover_url=?, provider=?, code_source=?, fetched_at=?, updated_at=? WHERE video_id=?`, m.Code, m.Title, m.Studio, m.Series, m.ReleaseUnix, m.DurationMin, boolInt(m.IsUncensored), actors, tags, m.CoverURL, m.Provider, codeSource, fetchedAt, fetchedAt, videoID)
 	if err != nil {
 		return fmt.Errorf("save jav metadata: %w", err)
 	}
@@ -436,14 +441,27 @@ func titleZhStatus(titleZh, lastError string) string {
 // shows it, and a verbose stack trace would not help there.
 const maxTitleZhErrorLength = 500
 
-// SetTitleTranslation stores one translation attempt. Saving a success clears
-// the previous failure and vice versa, so the two columns cannot disagree.
+// SetTitleTranslation stores one translation attempt without a version. It
+// keeps the old call sites (fixtures, tests) simple; production translations go
+// through SetTitleTranslationVersion.
 func (r *SQLiteRepository) SetTitleTranslation(videoID int64, titleZh, lastError string) error {
+	return r.SetTitleTranslationVersion(videoID, titleZh, "", lastError)
+}
+
+// SetTitleTranslationVersion stores one translation attempt. Saving a success
+// stores the version that produced the Chinese title and clears the previous
+// failure; saving a failure clears both the title and its version. The two
+// outcomes therefore cannot disagree.
+func (r *SQLiteRepository) SetTitleTranslationVersion(videoID int64, titleZh, version, lastError string) error {
 	titleZh = strings.TrimSpace(titleZh)
+	version = strings.TrimSpace(version)
+	if titleZh == "" {
+		version = ""
+	}
 	lastError = truncateTitleZhError(lastError)
 	if _, err := r.db.Exec(
-		`UPDATE video_jav SET title_zh=?, title_zh_error=?, updated_at=? WHERE video_id=?`,
-		titleZh, lastError, time.Now().UnixMilli(), videoID,
+		`UPDATE video_jav SET title_zh=?, title_zh_version=?, title_zh_error=?, updated_at=? WHERE video_id=?`,
+		titleZh, version, lastError, time.Now().UnixMilli(), videoID,
 	); err != nil {
 		return fmt.Errorf("save jav title translation: %w", err)
 	}
@@ -451,8 +469,9 @@ func (r *SQLiteRepository) SetTitleTranslation(videoID int64, titleZh, lastError
 }
 
 // SetTitleTranslationFailure records only the failure column, preserving the
-// translation already on the row. It is the failed-refresh path: the detail
-// panel shows the new error next to the kept 中文译名 instead of losing it.
+// translation and its version on the row. It is the failed-refresh path: the
+// detail panel shows the new error next to the kept 中文译名 instead of losing
+// it, and the stored version still describes that kept translation.
 func (r *SQLiteRepository) SetTitleTranslationFailure(videoID int64, lastError string) error {
 	if _, err := r.db.Exec(
 		`UPDATE video_jav SET title_zh_error=?, updated_at=? WHERE video_id=?`,
@@ -475,31 +494,15 @@ func truncateTitleZhError(lastError string) string {
 // without a Chinese title. Failed attempts are included on purpose: the bulk
 // action is the user's retry after fixing a provider configuration.
 func (r *SQLiteRepository) ListTitleTranslationCandidates() ([]int64, error) {
-	return r.listTitleCandidates(true)
-}
-
-// ListTitleRetranslationCandidates returns every scraped, non-trashed favorite
-// with a title, translated or not. 重新翻译全部译名 uses it to refresh the
-// whole library after editing the prompt or switching providers.
-func (r *SQLiteRepository) ListTitleRetranslationCandidates() ([]int64, error) {
-	return r.listTitleCandidates(false)
-}
-
-func (r *SQLiteRepository) listTitleCandidates(onlyMissing bool) ([]int64, error) {
-	query := `
+	rows, err := r.db.Query(`
 		SELECT j.video_id
 		FROM video_jav j
 		JOIN videos v ON v.id = j.video_id AND v.deleted_at IS NULL
 		LEFT JOIN jav_scrape_tasks t ON t.video_id = j.video_id
 		WHERE COALESCE(t.status, j.scrape_status) = 'succeeded'
-		  AND TRIM(j.title) <> ''`
-	if onlyMissing {
-		query += `
-		  AND TRIM(j.title_zh) = ''`
-	}
-	query += `
-		ORDER BY j.video_id`
-	rows, err := r.db.Query(query)
+		  AND TRIM(j.title) <> ''
+		  AND TRIM(j.title_zh) = ''
+		ORDER BY j.video_id`)
 	if err != nil {
 		return nil, fmt.Errorf("list title translation candidates: %w", err)
 	}
@@ -514,6 +517,35 @@ func (r *SQLiteRepository) listTitleCandidates(onlyMissing bool) ([]int64, error
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// ListTitleRetranslationCandidates returns every scraped, non-trashed favorite
+// with a title, translated or not. 重新翻译全部译名 uses the stored version to
+// decide which rows are stale, so the whole library does not have to be
+// overwritten on every click.
+func (r *SQLiteRepository) ListTitleRetranslationCandidates() ([]TitleTranslationCandidate, error) {
+	rows, err := r.db.Query(`
+		SELECT j.video_id, TRIM(j.title), TRIM(j.title_zh), TRIM(j.title_zh_error), TRIM(j.title_zh_version)
+		FROM video_jav j
+		JOIN videos v ON v.id = j.video_id AND v.deleted_at IS NULL
+		LEFT JOIN jav_scrape_tasks t ON t.video_id = j.video_id
+		WHERE COALESCE(t.status, j.scrape_status) = 'succeeded'
+		  AND TRIM(j.title) <> ''
+		ORDER BY j.video_id`)
+	if err != nil {
+		return nil, fmt.Errorf("list title retranslation candidates: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	candidates := make([]TitleTranslationCandidate, 0)
+	for rows.Next() {
+		var c TitleTranslationCandidate
+		if err := rows.Scan(&c.VideoID, &c.Title, &c.TitleZh, &c.TitleZhError, &c.Version); err != nil {
+			return nil, fmt.Errorf("scan title retranslation candidate: %w", err)
+		}
+		candidates = append(candidates, c)
+	}
+	return candidates, rows.Err()
 }
 
 func (r *SQLiteRepository) SetCover(videoID int64, status string) error {

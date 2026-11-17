@@ -11,6 +11,8 @@ package llm
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -36,8 +38,10 @@ const (
 	// on this: the translation runs on its own queue.
 	requestTimeout = 60 * time.Second
 	// batchRequestTimeout gives a packed request room for several answers.
-	// It stays below the jav service's 2-minute outer guard.
-	batchRequestTimeout = 90 * time.Second
+	// Ten long titles against a busy provider can exceed 90s, so this stays
+	// below the jav service's 3-minute outer guard without cutting a slow but
+	// successful pack short.
+	batchRequestTimeout = 150 * time.Second
 	// maxTitleRunes bounds what is sent to the model. Titles are far shorter;
 	// the cap protects the request from a pathological scrape result.
 	maxTitleRunes = 400
@@ -167,6 +171,26 @@ func (c *Client) TranslateTitle(ctx context.Context, title string) (string, erro
 	return c.translate(ctx, cfg, title)
 }
 
+// TitleVersions returns the current fingerprint for each title: a hash of the
+// system prompt, the normalized original title and the configured model. The
+// bulk action compares it with the version stored next to the translation and
+// skips rows that already match; an explicit per-video re-translate bypasses
+// this check.
+func (c *Client) TitleVersions(titles []string) ([]string, error) {
+	cfg, err := c.loadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("读取片名翻译设置失败：%w", err)
+	}
+	if !cfg.Usable() {
+		return nil, ErrNotConfigured
+	}
+	versions := make([]string, len(titles))
+	for i, title := range titles {
+		versions[i] = titleVersion(cfg.Model, title)
+	}
+	return versions, nil
+}
+
 // TranslateTitles returns one Simplified-Chinese title per input, in the same
 // order. Both returned slices have the same length as titles: translations[i]
 // is empty when errs[i] explains why that one title could not be translated.
@@ -244,6 +268,25 @@ func (c *Client) TranslateTitles(ctx context.Context, titles []string) ([]string
 		translations[idx], errs[idx] = c.translate(ctx, cfg, batchTitles[i])
 	}
 	return translations, errs
+}
+
+// titleVersion is the fingerprint persisted next to a translation. It covers
+// exactly the inputs the user chose: the system prompt, the normalized original
+// title and the model. A change to any of them makes every affected row stale
+// without a schema change or a manual "clear all" step.
+func titleVersion(model, title string) string {
+	return titleFingerprint(systemPrompt, model, title)
+}
+
+func titleFingerprint(prompt, model, title string) string {
+	key := strings.Join([]string{
+		"muse-title-translation-v1",
+		prompt,
+		sanitizeTitle(title),
+		strings.TrimSpace(model),
+	}, "\x00")
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:16])
 }
 
 // checkSampleTitle is the short Japanese title used by Check. It has kana and

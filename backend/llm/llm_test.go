@@ -155,6 +155,55 @@ func TestTranslateTitleCleansModelOutput(t *testing.T) {
 	}
 }
 
+// TestTitleVersions depend on exactly the inputs the user chose: prompt, title
+// and model. Any change makes the row stale; whitespace-only title differences
+// are normalized away because they are normalized before the request too.
+func TestTitleVersionsDependOnPromptTitleAndModel(t *testing.T) {
+	base := titleFingerprint("prompt-a", "model-a", "タイトル")
+	if base != titleFingerprint("prompt-a", "model-a", "タイトル") {
+		t.Fatal("the same inputs must produce the same version")
+	}
+	if base == titleFingerprint("prompt-b", "model-a", "タイトル") {
+		t.Fatal("a changed system prompt must change the version")
+	}
+	if base == titleFingerprint("prompt-a", "model-b", "タイトル") {
+		t.Fatal("a changed model must change the version")
+	}
+	if base == titleFingerprint("prompt-a", "model-a", "別のタイトル") {
+		t.Fatal("a changed original title must change the version")
+	}
+	if titleFingerprint("p", "m", " タイトル\n") != titleFingerprint("p", "m", "タイトル") {
+		t.Fatal("whitespace that the request normalizes must not change the version")
+	}
+}
+
+func TestTitleVersionsUsesTheCurrentModel(t *testing.T) {
+	model := "model-a"
+	client := NewClient(func() (Config, error) {
+		return Config{Enabled: true, BaseURL: DefaultBaseURL, Model: model, APIKey: "key"}, nil
+	}, nil)
+
+	first, err := client.TitleVersions([]string{"タイトル"})
+	if err != nil {
+		t.Fatalf("TitleVersions: %v", err)
+	}
+	model = "model-b"
+	second, err := client.TitleVersions([]string{"タイトル"})
+	if err != nil {
+		t.Fatalf("TitleVersions after model change: %v", err)
+	}
+	if len(first) != 1 || len(second) != 1 || first[0] == second[0] {
+		t.Fatalf("versions = %#v and %#v, want different keys after a model change", first, second)
+	}
+}
+
+func TestTitleVersionsRequiresAProvider(t *testing.T) {
+	client := NewClient(func() (Config, error) { return Config{}, nil }, nil)
+	if _, err := client.TitleVersions([]string{"タイトル"}); !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("TitleVersions error = %v, want ErrNotConfigured", err)
+	}
+}
+
 func TestTranslateTitlesPacksTitlesAndUnpacksNumbering(t *testing.T) {
 	server, body := chatServer(t, http.StatusOK, "1. 甲\n2. 乙\n3. 丙")
 	client := NewClient(func() (Config, error) {

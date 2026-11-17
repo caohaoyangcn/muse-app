@@ -164,6 +164,18 @@ type ScrapedTitle struct {
 	TitleZh string
 }
 
+// TitleTranslationCandidate is one row of the 重新翻译全部译名 work list. The
+// stored version is the fingerprint of the prompt, title and model that
+// produced TitleZh; an empty TitleZh, a recorded failure, or a different
+// version means the row is stale and should be refreshed.
+type TitleTranslationCandidate struct {
+	VideoID      int64
+	Title        string
+	TitleZh      string
+	TitleZhError string
+	Version      string
+}
+
 // ActorMerge is one persisted alias → canonical mapping.
 type ActorMerge struct {
 	Alias     string `json:"alias"`

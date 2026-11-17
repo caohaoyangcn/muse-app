@@ -8,7 +8,7 @@ import (
 // currentSchemaVersion is the highest applied schema version. It is tracked in
 // PRAGMA user_version. Bump it whenever a migration adds a column/table that
 // requires (or could benefit from) re-extracting data for pre-existing rows.
-const currentSchemaVersion = 27
+const currentSchemaVersion = 28
 
 // MigrationResult reports what happened during Migrate so callers can trigger
 // one-off backfills (e.g. re-probing ffprobe for videos created before a new
@@ -440,6 +440,25 @@ func Migrate(db *sql.DB) (MigrationResult, error) {
 			}
 		}
 		version = 27
+	}
+
+	if version < 28 {
+		// v28 remembers which system prompt, original title and model produced
+		// the stored 中文译名. 重新翻译全部译名 compares this key with the current
+		// one and skips rows that are already current, so clicking it no longer
+		// overwrites every translation unconditionally. Additive, no backfill:
+		// old rows have an empty key and are treated as unknown (they will be
+		// refreshed once, after which the key is recorded).
+		//
+		// schemaV13 keeps the step self-sufficient for a database stamped past
+		// v13 without video_jav (a repaired install, the migration tests).
+		if _, err := db.Exec(schemaV13); err != nil {
+			return res, fmt.Errorf("migrate database v28 base table: %w", err)
+		}
+		if err := addColumnIfMissing(db, "video_jav", "title_zh_version", `ALTER TABLE video_jav ADD COLUMN title_zh_version TEXT NOT NULL DEFAULT ''`); err != nil {
+			return res, fmt.Errorf("migrate database v28 title_zh_version: %w", err)
+		}
+		version = 28
 	}
 
 	res.SchemaVersion = version

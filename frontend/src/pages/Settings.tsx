@@ -1106,8 +1106,8 @@ function LLMSection() {
       const queued = await retranslateAllTitles();
       setNotice(
         queued > 0
-          ? `已将 ${queued} 部影片重新加入翻译队列，新译名返回后会覆盖旧结果。`
-          : "没有可重新翻译的影片。",
+          ? `已将 ${queued} 部影片加入翻译队列，完成后会更新对应译名。`
+          : "所有译名都是当前版本且没有失败记录，无需重译。",
       );
     } catch (e) {
       setError(String(e));
@@ -1248,8 +1248,8 @@ function LLMSection() {
               任务在后台分批打包执行，最多 5 个请求并发，不会影响正在进行的刮削。
             </p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--muted)]">
-              调整提示词或更换模型后，可用「重新翻译全部译名」整库刷新：已有译名也会重新排队，
-              旧译名会保留到新结果返回；某一条刷新失败时保留旧译名，并单独显示失败原因。
+              调整提示词或更换模型后，用「重新翻译全部译名」刷新：只会重译译名缺失、上次失败、
+              或提示词/模型版本已变化的影片，相同版本会跳过。需要强制刷新单条时，用详情页的「重新翻译」。
             </p>
             <div className="mt-3 flex flex-wrap gap-2.5">
               <Button onClick={() => void translateAll()} disabled={busy || !hasKey}>
@@ -1269,7 +1269,7 @@ function LLMSection() {
       {confirmRetranslate && (
         <ConfirmDialog
           title="重新翻译全部译名"
-          message="所有已成功刮削的影片都会重新排队翻译，现有译名会在新结果返回后覆盖；每部影片会消耗一次 LLM 请求。确定继续？"
+          message="将重译译名缺失、上次失败、或提示词/模型已变化的影片；相同版本且没有失败记录的译名会跳过。每部影片会消耗一次 LLM 请求。确定继续？"
           confirmLabel="重新翻译"
           cancelLabel="取消"
           onConfirm={() => void retranslateEveryTitle()}

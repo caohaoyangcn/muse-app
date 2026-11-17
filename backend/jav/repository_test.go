@@ -199,7 +199,7 @@ func TestTitleTranslationStorage(t *testing.T) {
 
 	untranslated := create("a.mp4", "元タイトル A", StatusSucceeded)
 	translated := create("b.mp4", "元タイトル B", StatusSucceeded)
-	if err := repo.SetTitleTranslation(translated, "乙的中文名", ""); err != nil {
+	if err := repo.SetTitleTranslationVersion(translated, "乙的中文名", "v-old", ""); err != nil {
 		t.Fatalf("save translation: %v", err)
 	}
 	_ = create("c.mp4", "元タイトル C", StatusFailed)
@@ -223,8 +223,18 @@ func TestTitleTranslationStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list retranslation candidates: %v", err)
 	}
-	if !reflect.DeepEqual(refreshable, []int64{untranslated, translated}) {
+	gotIDs := make([]int64, len(refreshable))
+	for i := range refreshable {
+		gotIDs[i] = refreshable[i].VideoID
+	}
+	if !reflect.DeepEqual(gotIDs, []int64{untranslated, translated}) {
 		t.Fatalf("retranslation candidates = %#v, want every succeeded titled favorite", refreshable)
+	}
+	if refreshable[0].TitleZh != "" || refreshable[0].Version != "" {
+		t.Fatalf("untranslated candidate = %+v, want no stored translation/version", refreshable[0])
+	}
+	if refreshable[1].TitleZh != "乙的中文名" || refreshable[1].Version != "v-old" {
+		t.Fatalf("translated candidate = %+v, want the stored title and version", refreshable[1])
 	}
 	_ = emptyTitle
 
@@ -263,7 +273,17 @@ func TestTitleTranslationStorage(t *testing.T) {
 	if d.TitleZh != "乙的中文名" || d.TitleZhError != "LLM 请求过于频繁" || d.TitleZhStatus != TitleZhFailed {
 		t.Fatalf("kept translation = (%q, %q, %q), want the old title plus the refresh error", d.TitleZh, d.TitleZhError, d.TitleZhStatus)
 	}
-	if err := repo.SetTitleTranslation(translated, "乙的新译名", ""); err != nil {
+	refreshable, err = repo.ListTitleRetranslationCandidates()
+	if err != nil {
+		t.Fatalf("list candidates after refresh failure: %v", err)
+	}
+	if got := refreshable[1].Version; got != "v-old" {
+		t.Fatalf("version after a failed refresh = %q, want the kept translation's version", got)
+	}
+	if got := refreshable[1].TitleZhError; got != "LLM 请求过于频繁" {
+		t.Fatalf("error after a failed refresh = %q, want it visible to the retry filter", got)
+	}
+	if err := repo.SetTitleTranslationVersion(translated, "乙的新译名", "v-new", ""); err != nil {
 		t.Fatalf("save refreshed translation: %v", err)
 	}
 	d, err = repo.Get(translated)
@@ -272,6 +292,13 @@ func TestTitleTranslationStorage(t *testing.T) {
 	}
 	if d.TitleZh != "乙的新译名" || d.TitleZhError != "" || d.TitleZhStatus != TitleZhSucceeded {
 		t.Fatalf("refreshed translation = (%q, %q, %q), want the error cleared", d.TitleZh, d.TitleZhError, d.TitleZhStatus)
+	}
+	refreshable, err = repo.ListTitleRetranslationCandidates()
+	if err != nil {
+		t.Fatalf("list candidates after refresh: %v", err)
+	}
+	if got := refreshable[1].Version; got != "v-new" {
+		t.Fatalf("version after refresh = %q, want v-new", got)
 	}
 
 	// A forced re-scrape replaces the title, so the old translation is cleared.
@@ -284,6 +311,13 @@ func TestTitleTranslationStorage(t *testing.T) {
 	}
 	if d.TitleZh != "" || d.TitleZhError != "" || d.TitleZhStatus != TitleZhNone {
 		t.Fatalf("re-scraped translation = (%q, %q, %q), want none", d.TitleZh, d.TitleZhError, d.TitleZhStatus)
+	}
+	refreshable, err = repo.ListTitleRetranslationCandidates()
+	if err != nil {
+		t.Fatalf("list candidates after re-scrape: %v", err)
+	}
+	if got := refreshable[0].Version; got != "" {
+		t.Fatalf("version after a re-scrape = %q, want it cleared with the stale title", got)
 	}
 }
 

@@ -989,12 +989,27 @@ type fakeTitleTranslator struct {
 	titles     []string
 	batches    [][]string
 	result     string
+	version    string
 	err        error
 }
 
 func (f *fakeTitleTranslator) Configured() bool { return f.configured.Load() }
 
 func (f *fakeTitleTranslator) Available() bool { return f.configured.Load() }
+
+func (f *fakeTitleTranslator) TitleVersions(titles []string) ([]string, error) {
+	f.mu.Lock()
+	version := f.version
+	f.mu.Unlock()
+	if version == "" {
+		version = "v1"
+	}
+	versions := make([]string, len(titles))
+	for i := range versions {
+		versions[i] = version
+	}
+	return versions, nil
+}
 
 func (f *fakeTitleTranslator) TranslateTitle(ctx context.Context, title string) (string, error) {
 	results, errs := f.translate(ctx, []string{title})
@@ -1277,6 +1292,126 @@ func TestServiceKeepsFiveTranslationRequestsInFlight(t *testing.T) {
 	release()
 	for _, id := range ids {
 		waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZh == "译名" })
+	}
+}
+
+// TestServiceSkipsCurrentVersionInBulkRetranslate is the point of the version
+// key: clicking 重新翻译全部译名 again with the same prompt, title and model
+// must not spend a single provider request.
+func TestServiceSkipsCurrentVersionInBulkRetranslate(t *testing.T) {
+	s, db, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	repo := NewSQLiteRepository(db)
+	seedScrapedTitle(t, repo, id, "IPX-633", "となりの人妻")
+	if err := repo.SetTitleTranslationVersion(id, "旧译名", "v1", ""); err != nil {
+		t.Fatalf("seed translation: %v", err)
+	}
+
+	translator := &fakeTitleTranslator{result: "新译名", version: "v1"}
+	translator.configured.Store(true)
+	s.SetTitleTranslator(translator)
+
+	queued, err := s.RetranslateAllTitles()
+	if err != nil {
+		t.Fatalf("retranslate all: %v", err)
+	}
+	if queued != 0 {
+		t.Fatalf("queued = %d, want 0 for a current version", queued)
+	}
+	if got := translator.translatedTitles(); len(got) != 0 {
+		t.Fatalf("translator was called for a current version: %#v", got)
+	}
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZh == "旧译名" })
+	if d.TitleZh != "旧译名" {
+		t.Fatalf("titleZh = %q, want the current translation untouched", d.TitleZh)
+	}
+}
+
+// TestServiceBulkRetranslateRetriesRecordedFailure keeps the bulk action a
+// retry path: a current-version row whose last refresh failed is still queued,
+// so one 429 or timeout does not strand it behind the version check.
+func TestServiceBulkRetranslateRetriesRecordedFailure(t *testing.T) {
+	s, db, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	repo := NewSQLiteRepository(db)
+	seedScrapedTitle(t, repo, id, "IPX-633", "となりの人妻")
+	if err := repo.SetTitleTranslationVersion(id, "旧译名", "v1", ""); err != nil {
+		t.Fatalf("seed translation: %v", err)
+	}
+	if err := repo.SetTitleTranslationFailure(id, "LLM 请求超时"); err != nil {
+		t.Fatalf("seed failure: %v", err)
+	}
+
+	translator := &fakeTitleTranslator{result: "新译名", version: "v1"}
+	translator.configured.Store(true)
+	s.SetTitleTranslator(translator)
+
+	queued, err := s.RetranslateAllTitles()
+	if err != nil {
+		t.Fatalf("retranslate all: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("queued = %d, want the recorded failure retried", queued)
+	}
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZh == "新译名" })
+	if d.TitleZh != "新译名" {
+		t.Fatalf("titleZh = %q, want the retried translation", d.TitleZh)
+	}
+}
+
+// TestServiceBulkRetranslateQueuesStaleVersion proves a prompt/model change is
+// enough to make a row eligible without any manual clearing.
+func TestServiceBulkRetranslateQueuesStaleVersion(t *testing.T) {
+	s, db, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	repo := NewSQLiteRepository(db)
+	seedScrapedTitle(t, repo, id, "IPX-633", "となりの人妻")
+	if err := repo.SetTitleTranslationVersion(id, "旧译名", "v1", ""); err != nil {
+		t.Fatalf("seed translation: %v", err)
+	}
+
+	translator := &fakeTitleTranslator{result: "新译名", version: "v2"}
+	translator.configured.Store(true)
+	s.SetTitleTranslator(translator)
+
+	queued, err := s.RetranslateAllTitles()
+	if err != nil {
+		t.Fatalf("retranslate all: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("queued = %d, want 1 for a stale version", queued)
+	}
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZh == "新译名" })
+	if d.TitleZh != "新译名" {
+		t.Fatalf("titleZh = %q, want the refreshed translation", d.TitleZh)
+	}
+	candidates, err := repo.ListTitleRetranslationCandidates()
+	if err != nil {
+		t.Fatalf("list candidates: %v", err)
+	}
+	if candidates[0].Version != "v2" {
+		t.Fatalf("stored version = %q, want the version used for the new translation", candidates[0].Version)
+	}
+}
+
+// TestServiceExplicitRetranslateIgnoresCurrentVersion keeps the per-video
+// button a deliberate override: even a current row must be translated again
+// when the user asks for that one title specifically.
+func TestServiceExplicitRetranslateIgnoresCurrentVersion(t *testing.T) {
+	s, db, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	repo := NewSQLiteRepository(db)
+	seedScrapedTitle(t, repo, id, "IPX-633", "となりの人妻")
+	if err := repo.SetTitleTranslationVersion(id, "旧译名", "v1", ""); err != nil {
+		t.Fatalf("seed translation: %v", err)
+	}
+
+	translator := &fakeTitleTranslator{result: "新译名", version: "v1"}
+	translator.configured.Store(true)
+	s.SetTitleTranslator(translator)
+
+	if err := s.TranslateTitle(id); err != nil {
+		t.Fatalf("explicit retranslate: %v", err)
+	}
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZh == "新译名" })
+	if d.TitleZh != "新译名" {
+		t.Fatalf("titleZh = %q, want the explicit retranslate to overwrite the current version", d.TitleZh)
 	}
 }
 

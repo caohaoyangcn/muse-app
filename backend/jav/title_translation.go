@@ -17,8 +17,9 @@ import (
 //
 // TranslateTitles is the packed path: the worker amortizes the large system
 // prompt over several titles in one request. Both returned slices have the same
-// length as titles; a slot's error means that one title failed. TranslateTitle
-// stays for the single-title smoke test and any one-off caller.
+// length as titles; a slot's error means that one title failed.
+//
+// TranslateTitle stays for the single-title smoke test and any one-off caller.
 //
 // The implementation lives outside this package (backend/llm) and is wired once
 // during startup; it reads the settings on every call, so editing the provider
@@ -30,10 +31,21 @@ type TitleTranslator interface {
 	Available() bool
 }
 
+// TitleVersioner is the optional capability behind version-controlled bulk
+// refreshes. The production translator implements it; a test double that does
+// not simply falls back to "refresh everything", which is the old behaviour.
+type TitleVersioner interface {
+	// TitleVersions computes the current fingerprint for each title without
+	// calling the provider: a hash of the system prompt, the normalized title
+	// and the configured model. 重新翻译全部译名 compares it with the stored
+	// version; the detail-panel button deliberately bypasses it.
+	TitleVersions(titles []string) ([]string, error)
+}
+
 // titleTranslationTimeout bounds one queued request. The provider client has
-// its own shorter request timeout; this is the outer guard for a misbehaving
-// implementation, and it is never on the scrape's critical path.
-const titleTranslationTimeout = 2 * time.Minute
+// its own shorter request timeout; this is the outer guard for a slow
+// 10-title pack, and it is never on the scrape's critical path.
+const titleTranslationTimeout = 3 * time.Minute
 
 // titleTranslationBatchSize is how many titles one request packs. Ten keeps the
 // model's numbered output stable and cuts the per-title system-prompt overhead
@@ -89,10 +101,12 @@ func (s *Service) TranslateMissingTitles() (int, error) {
 	return s.enqueueTitleTranslations(ids), nil
 }
 
-// RetranslateAllTitles queues every successfully scraped favorite with a
-// title, including the rows that already have a Chinese title. It is the
-// 重新翻译全部译名 action: after editing the prompt or switching providers the
-// user can refresh the whole library without clearing the column by hand.
+// RetranslateAllTitles queues the successfully scraped favorites whose
+// translation is missing or was produced by a different prompt/title/model
+// version. It is the 重新翻译全部译名 action: after editing the prompt or
+// switching providers, only the affected rows are refreshed; clicking it again
+// with an unchanged configuration queues nothing. The detail-panel
+// TranslateTitle button is the explicit per-video override.
 //
 // The stored translation stays visible until the replacement lands, and a
 // failed refresh keeps it (see translateTitleBatch), so one bad batch never
@@ -101,11 +115,44 @@ func (s *Service) RetranslateAllTitles() (int, error) {
 	if s.translator == nil || !s.translator.Available() {
 		return 0, fmt.Errorf("尚未配置 LLM 片名翻译，请先在「设置 → 片名翻译」中填写接口地址、模型与 API Key")
 	}
-	ids, err := s.repo.ListTitleRetranslationCandidates()
+	candidates, err := s.repo.ListTitleRetranslationCandidates()
 	if err != nil {
 		return 0, err
 	}
-	return s.enqueueTitleTranslations(ids), nil
+	if len(candidates) == 0 {
+		return 0, nil
+	}
+
+	stale := make([]int64, 0, len(candidates))
+	versioner, versioned := s.translator.(TitleVersioner)
+	if !versioned {
+		// A translator without the optional capability cannot tell which rows
+		// are current, so keep the legacy behaviour and refresh everything.
+		for _, candidate := range candidates {
+			stale = append(stale, candidate.VideoID)
+		}
+		return s.enqueueTitleTranslations(stale), nil
+	}
+
+	titles := make([]string, len(candidates))
+	for i, candidate := range candidates {
+		titles[i] = candidate.Title
+	}
+	versions, err := versioner.TitleVersions(titles)
+	if err != nil {
+		return 0, fmt.Errorf("读取当前译名版本失败：%w", err)
+	}
+	if len(versions) != len(candidates) {
+		return 0, fmt.Errorf("译名版本数量不匹配：%d 条候选，%d 个版本", len(candidates), len(versions))
+	}
+	for i, candidate := range candidates {
+		if strings.TrimSpace(candidate.TitleZh) == "" ||
+			candidate.TitleZhError != "" ||
+			candidate.Version != versions[i] {
+			stale = append(stale, candidate.VideoID)
+		}
+	}
+	return s.enqueueTitleTranslations(stale), nil
 }
 
 // enqueueTitleTranslations packs a bulk pass into fixed-size requests and
@@ -250,7 +297,7 @@ func (s *Service) translateTitleBatch(videoIDs []int64) {
 		}
 		title := strings.TrimSpace(d.Title)
 		if title == "" {
-			s.finishTitleTranslation(videoID, "", "标题为空，无法翻译")
+			s.finishTitleTranslation(videoID, "", "", "标题为空，无法翻译")
 			continue
 		}
 		jobs = append(jobs, titleJob{
@@ -264,7 +311,7 @@ func (s *Service) translateTitleBatch(videoIDs []int64) {
 	}
 	if s.translator == nil {
 		for _, job := range jobs {
-			s.finishTitleTranslation(job.videoID, "", "片名翻译未配置")
+			s.finishTitleTranslation(job.videoID, "", "", "片名翻译未配置")
 		}
 		return
 	}
@@ -273,6 +320,25 @@ func (s *Service) translateTitleBatch(videoIDs []int64) {
 	for i, job := range jobs {
 		titles[i] = job.title
 	}
+	versions := make([]string, len(jobs))
+	if versioner, ok := s.translator.(TitleVersioner); ok {
+		var versionErr error
+		versions, versionErr = versioner.TitleVersions(titles)
+		if versionErr != nil {
+			versionErr = fmt.Errorf("读取当前译名版本失败：%w", versionErr)
+			for _, job := range jobs {
+				s.finishOneTitleTranslation(job.videoID, "", "", versionErr, job.previousZh)
+			}
+			return
+		}
+		if len(versions) != len(jobs) {
+			for _, job := range jobs {
+				s.finishTitleTranslationFailure(job.videoID, "译名版本数量不匹配")
+			}
+			return
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), titleTranslationTimeout)
 	defer cancel()
 	translations, errs := s.translator.TranslateTitles(ctx, titles)
@@ -292,21 +358,21 @@ func (s *Service) translateTitleBatch(videoIDs []int64) {
 	}
 	s.log.Info("jav title batch finished", "requested", len(jobs), "translated", translated)
 	for i, job := range jobs {
-		s.finishOneTitleTranslation(job.videoID, translations[i], errs[i], job.previousZh)
+		s.finishOneTitleTranslation(job.videoID, translations[i], versions[i], errs[i], job.previousZh)
 	}
 }
 
 // finishOneTitleTranslation stores one slot of a packed reply. A failed refresh
 // keeps the old readable title and records the error next to it; a first-time
 // failure leaves title_zh empty and the error explains why.
-func (s *Service) finishOneTitleTranslation(videoID int64, translated string, err error, previousZh string) {
+func (s *Service) finishOneTitleTranslation(videoID int64, translated, version string, err error, previousZh string) {
 	if err != nil {
 		s.log.Warn("jav title translation failed", "videoId", videoID, "errorCode", ErrorTitleTranslation, "err", err)
 		if previousZh != "" {
 			s.finishTitleTranslationFailure(videoID, err.Error())
 			return
 		}
-		s.finishTitleTranslation(videoID, "", err.Error())
+		s.finishTitleTranslation(videoID, "", "", err.Error())
 		return
 	}
 	translated = strings.TrimSpace(translated)
@@ -316,11 +382,11 @@ func (s *Service) finishOneTitleTranslation(videoID int64, translated string, er
 			s.finishTitleTranslationFailure(videoID, "LLM 返回了空的翻译结果")
 			return
 		}
-		s.finishTitleTranslation(videoID, "", "LLM 返回了空的翻译结果")
+		s.finishTitleTranslation(videoID, "", "", "LLM 返回了空的翻译结果")
 		return
 	}
 	s.log.Info("jav title translated", "videoId", videoID, "titleZh", translated)
-	s.finishTitleTranslation(videoID, translated, "")
+	s.finishTitleTranslation(videoID, translated, version, "")
 }
 
 // dropTitleTranslation clears the pending overlay for a row that cannot be
@@ -355,8 +421,8 @@ func (s *Service) finishTitleTranslationFailure(videoID int64, failure string) {
 // finishTitleTranslationFailure when an existing title is kept); the scrape
 // itself is never touched, because a translation is enrichment and not a
 // reason to fail a work.
-func (s *Service) finishTitleTranslation(videoID int64, titleZh, failure string) {
-	if err := s.repo.SetTitleTranslation(videoID, titleZh, failure); err != nil {
+func (s *Service) finishTitleTranslation(videoID int64, titleZh, version, failure string) {
+	if err := s.repo.SetTitleTranslationVersion(videoID, titleZh, version, failure); err != nil {
 		s.log.Error("jav title translation save failed", "videoId", videoID, "errorCode", ErrorDatabase, "err", err)
 	}
 	s.titleMu.Lock()

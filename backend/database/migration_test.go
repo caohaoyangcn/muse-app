@@ -892,6 +892,66 @@ func TestV26AddsCloudArchiveSchema(t *testing.T) {
 	}
 }
 
+// TestV28AddsTitleTranslationVersion verifies the version column: a v27
+// library upgrades additively, an existing translation keeps its title and
+// starts with an unknown (empty) version, and a stored version survives a
+// re-migrate.
+func TestV28AddsTitleTranslationVersion(t *testing.T) {
+	db := openMigrated(t)
+	if _, err := Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	// Rewind to v27, which is what the previous release looks like.
+	for _, stmt := range []string{
+		`ALTER TABLE video_jav DROP COLUMN title_zh_version`,
+		`PRAGMA user_version = 27`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("rewind to v27 (%s): %v", stmt, err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status) VALUES ('C:\v\b.mp4','b.mp4',1,1,1,'available')`); err != nil {
+		t.Fatalf("insert video: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO video_jav (video_id, code, title, title_zh, created_at, updated_at) VALUES (1,'IPX-633','元タイトル','已有译名',1,1)`); err != nil {
+		t.Fatalf("insert translated scrape result: %v", err)
+	}
+
+	res, err := Migrate(db)
+	if err != nil {
+		t.Fatalf("migrate v27 -> v28: %v", err)
+	}
+	if res.SchemaVersion != currentSchemaVersion {
+		t.Errorf("schema version = %d, want %d", res.SchemaVersion, currentSchemaVersion)
+	}
+	if !hasColumn(db, "video_jav", "title_zh_version") {
+		t.Fatal("title_zh_version column missing")
+	}
+	var titleZh, version string
+	if err := db.QueryRow(`SELECT title_zh, title_zh_version FROM video_jav WHERE video_id=1`).Scan(&titleZh, &version); err != nil {
+		t.Fatalf("read migrated result: %v", err)
+	}
+	if titleZh != "已有译名" {
+		t.Errorf("title_zh = %q, want the existing translation preserved", titleZh)
+	}
+	if version != "" {
+		t.Errorf("title_zh_version = %q, want an empty (unknown) version", version)
+	}
+
+	if _, err := db.Exec(`UPDATE video_jav SET title_zh_version='v-test' WHERE video_id=1`); err != nil {
+		t.Fatalf("save version: %v", err)
+	}
+	if _, err := Migrate(db); err != nil {
+		t.Fatalf("re-migrate: %v", err)
+	}
+	if err := db.QueryRow(`SELECT title_zh_version FROM video_jav WHERE video_id=1`).Scan(&version); err != nil {
+		t.Fatalf("read version: %v", err)
+	}
+	if version != "v-test" {
+		t.Errorf("title_zh_version = %q, want it preserved across re-migrate", version)
+	}
+}
+
 // TestV27AddsTitleTranslationSchema verifies the 中文译名 columns: an existing
 // v26 library upgrades additively, existing scrape results keep their data and
 // start with an empty translation, and a translated row survives a re-migrate.
