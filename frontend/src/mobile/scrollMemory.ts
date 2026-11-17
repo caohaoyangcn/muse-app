@@ -48,9 +48,9 @@ export function recallScroll(key: string | undefined): Record<string, number> | 
  *
  * Content is fetched per screen, so the pane is often still empty on the first
  * frame. Keep trying for a short window until the pane is tall enough to hold
- * the offset (a virtualised grid only gains its full height once the rows are
- * measured). The timeout also covers an entry whose screen genuinely shrank —
- * the pane stays at its new maximum instead of waiting forever.
+ * the offset (a paged list only reaches its height once its rows and page land).
+ * The timeout also covers an entry whose screen genuinely shrank — the pane
+ * stays at its new maximum instead of waiting forever.
  */
 export function restoreScroll(key: string | undefined): () => void {
   const saved = recallScroll(key);

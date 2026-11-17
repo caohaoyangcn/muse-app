@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import type { Video } from "../../types";
 import { actorAvatarURL, actorProfileMeta } from "../../utils/format";
 import { Icon } from "../../ui/icon";
@@ -37,6 +39,18 @@ export function ActorFilmsView({
     error,
     reload,
   } = useActorFilms(name);
+
+  // A new keyword is a new paged list and starts at the top; the first render
+  // is skipped so a history restore is not overridden.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const firstFilter = useRef(true);
+  useEffect(() => {
+    if (firstFilter.current) {
+      firstFilter.current = false;
+      return;
+    }
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [filter]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -79,7 +93,7 @@ export function ActorFilmsView({
           />
         </div>
       </div>
-      <div className="scroll-area min-h-0 flex-1 px-3 pb-4 pt-2" data-scroll-key="main">
+      <div className="scroll-area min-h-0 flex-1 px-3 pb-4 pt-2" data-scroll-key="main" ref={scrollRef}>
         {loading ? (
           <div className="flex items-center justify-center py-20"><Spinner size="lg" /></div>
         ) : error ? (

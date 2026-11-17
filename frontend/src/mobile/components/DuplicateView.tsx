@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { JavDuplicateGroup, Video } from "../../types";
 import { coverURL } from "../../services/web";
+import { usePagedList } from "../../hooks/usePagedList";
 import { useJavDuplicates } from "../../views/duplicates/useJavDuplicates";
 import { videoMeta, videoName } from "../videoDisplay";
 import { ContentDuplicateView } from "./ContentDuplicateView";
@@ -17,7 +18,11 @@ import {
   Spinner,
 } from "../../ui/astryx";
 import { Button } from "../../ui/button";
+import { Pagination } from "../../ui/pagination";
 import { cn } from "../../lib/utils";
+
+/** One page of duplicate works; each work can hold several versions. */
+const GROUP_PAGE_SIZE = 20;
 
 /**
  * 查重 (duplicates) on the phone holds two worklists that answer different
@@ -92,6 +97,23 @@ function JavDuplicatePanel({
     notify: (notice) => onToast(notice.text, notice.kind === "error" ? "error" : "info"),
   });
 
+  const listKey = `mobile:dups:jav:${includeIgnored}`;
+  const paging = usePagedList({ total: groups.length, listKey, pageSize: GROUP_PAGE_SIZE });
+  const pageGroups = groups.slice(paging.startIndex, paging.endIndex);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const firstListKey = useRef(true);
+  useEffect(() => {
+    if (firstListKey.current) {
+      firstListKey.current = false;
+      return;
+    }
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [listKey]);
+  const turnPage = (step: () => void) => {
+    step();
+    scrollRef.current?.scrollTo({ top: 0 });
+  };
+
   const confirmKeep = async () => {
     if (!pendingKeep) return;
     const { group, keep } = pendingKeep;
@@ -118,15 +140,16 @@ function JavDuplicatePanel({
         </span>
       </div>
 
-      <div className="scroll-area min-h-0 flex-1 pb-4" data-scroll-key="main">
+      <div className="scroll-area min-h-0 flex-1 pb-4" data-scroll-key="main" ref={scrollRef}>
         {groups.length === 0 ? (
           <EmptyState
             description="带 -1 / -2 上下集标记的文件视为不同作品"
             title="没有重复作品"
           />
         ) : (
-          <div className="flex flex-col gap-3">
-            {groups.map((group) => (
+          <>
+            <div className="flex flex-col gap-3">
+              {pageGroups.map((group) => (
               <section
                 className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel)]"
                 key={group.key}
@@ -190,8 +213,17 @@ function JavDuplicatePanel({
                   ))}
                 </List>
               </section>
-            ))}
-          </div>
+              ))}
+            </div>
+            <Pagination
+              page={paging.page}
+              pageCount={paging.pageCount}
+              total={groups.length}
+              unit="组"
+              onPrev={() => turnPage(paging.prevPage)}
+              onNext={() => turnPage(paging.nextPage)}
+            />
+          </>
         )}
       </div>
 

@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import type { Video } from "../../types";
 import {
   AspectRatio,
@@ -9,11 +11,15 @@ import {
   compactBadgeClass,
 } from "../../ui/astryx";
 import { Icon } from "../../ui/icon";
+import { Pagination } from "../../ui/pagination";
 import { coverURL } from "../../services/web";
-import { useLoadMore } from "../useLoadMore";
+import { usePagedList } from "../../hooks/usePagedList";
 import { videoMeta, videoName } from "../videoDisplay";
 import { videoMenuItems, type VideoMenuActions } from "../videoMenu";
-import { LoadMoreFooter } from "./LoadMoreFooter";
+
+/** About three phone screens of posters, or four of rows. Grid and list share
+ *  the size, so switching views keeps the same items on screen. */
+const PAGE_SIZE = 24;
 
 /** The poster ratio. Every card shares it, so a row always has one height
  *  regardless of how long the title is — the text sits over the artwork. */
@@ -98,8 +104,8 @@ function OverlayMeta({ v }: { v: Video }) {
  * ClickableCard supplies the interactive surface and nested-button handling,
  * while AspectRatio guarantees one poster shape for every row.
  *
- * The wall renders one page at a time (see useLoadMore); `memoryKey` identifies
- * the current list so a return from a detail screen keeps the paging depth.
+ * The wall renders one page at a time (see usePagedList); `memoryKey` identifies
+ * the current list so a return from a detail screen keeps the page.
  */
 export function VideoGrid({
   videos,
@@ -116,12 +122,17 @@ export function VideoGrid({
   openMenuId: number | null;
   onMenuOpenChange: (video: Video, open: boolean) => void;
 }) {
-  const paging = useLoadMore({ total: videos.length, memoryKey });
+  const paging = usePagedList({ total: videos.length, listKey: memoryKey, pageSize: PAGE_SIZE });
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const turnPage = (step: () => void) => {
+    step();
+    listRef.current?.scrollIntoView({ block: "start" });
+  };
 
   return (
-    <>
+    <div ref={listRef}>
       <Grid columns={{ minWidth: MIN_POSTER_PX, max: MAX_COLUMNS }} gap={2}>
-        {videos.slice(0, paging.visibleCount).map((v) => (
+        {videos.slice(paging.startIndex, paging.endIndex).map((v) => (
           <ClickableCard
             className="relative overflow-hidden border border-white/[0.07] bg-[#101013]"
             key={v.id}
@@ -154,8 +165,15 @@ export function VideoGrid({
           </ClickableCard>
         ))}
       </Grid>
-      <LoadMoreFooter state={paging} total={videos.length} />
-    </>
+      <Pagination
+        page={paging.page}
+        pageCount={paging.pageCount}
+        total={videos.length}
+        unit="部"
+        onPrev={() => turnPage(paging.prevPage)}
+        onNext={() => turnPage(paging.nextPage)}
+      />
+    </div>
   );
 }
 
@@ -176,12 +194,17 @@ export function VideoList({
   openMenuId: number | null;
   onMenuOpenChange: (video: Video, open: boolean) => void;
 }) {
-  const paging = useLoadMore({ total: videos.length, memoryKey });
+  const paging = usePagedList({ total: videos.length, listKey: memoryKey, pageSize: PAGE_SIZE });
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const turnPage = (step: () => void) => {
+    step();
+    listRef.current?.scrollIntoView({ block: "start" });
+  };
 
   return (
-    <>
+    <div ref={listRef}>
       <div className="flex flex-col gap-2">
-        {videos.slice(0, paging.visibleCount).map((v) => {
+        {videos.slice(paging.startIndex, paging.endIndex).map((v) => {
           const meta = v.status === "missing" && !v.volumeOffline ? "找不到文件" : videoMeta(v);
           return (
             <ClickableCard
@@ -234,7 +257,14 @@ export function VideoList({
           );
         })}
       </div>
-      <LoadMoreFooter state={paging} total={videos.length} />
-    </>
+      <Pagination
+        page={paging.page}
+        pageCount={paging.pageCount}
+        total={videos.length}
+        unit="部"
+        onPrev={() => turnPage(paging.prevPage)}
+        onNext={() => turnPage(paging.nextPage)}
+      />
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Group, SortDir, SortKey, Video, ViewMode } from "../../types";
 import { collectDiskOptions } from "../../utils/diskFilter";
@@ -191,6 +191,17 @@ export function LibraryView({
   );
   const shown = useMemo(() => filterVideos(sorted, filters), [sorted, filters]);
   const count = filterCount(filters);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // A new filter, sort or keyword is a different list and starts at its top.
+  // The mount pass is skipped so the shell's history scroll restore wins.
+  const firstListKey = useRef(true);
+  useEffect(() => {
+    if (firstListKey.current) {
+      firstListKey.current = false;
+      return;
+    }
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [listKey]);
 
   const setSort = useCallback((key: SortKey) => {
     setSortKey(key);
@@ -309,7 +320,7 @@ export function LibraryView({
         ) : null}
       </div>
 
-      <div className="scroll-area min-h-0 flex-1 px-3 pb-4 pt-2" data-scroll-key="main">
+      <div className="scroll-area min-h-0 flex-1 px-3 pb-4 pt-2" data-scroll-key="main" ref={scrollRef}>
         {loading ? (
           <div className="flex items-center justify-center py-20"><Spinner size="lg" /></div>
         ) : error ? (

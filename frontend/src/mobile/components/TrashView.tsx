@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Video } from "../../types";
 import { coverURL } from "../../services/web";
+import { usePagedList } from "../../hooks/usePagedList";
 import { videoName } from "../videoDisplay";
 import { formatFileSize } from "../../utils/format";
 import { ConfirmSheet } from "../../ui/sheet";
@@ -16,6 +17,10 @@ import {
 } from "../../ui/astryx";
 import { Button } from "../../ui/button";
 import { Icon } from "../../ui/icon";
+import { Pagination } from "../../ui/pagination";
+
+/** One page of recycle-bin rows. */
+const PAGE_SIZE = 50;
 
 /**
  * The phone's recycle bin. Removing a favorite anywhere (desktop or phone) only
@@ -61,13 +66,30 @@ export function TrashView({
   // The phone disables every row while one write runs.
   const busy = busyId !== null || emptying || clearingArchive;
 
+  const listKey = `mobile:trash:${mode}`;
+  const paging = usePagedList({ total: videos.length, listKey, pageSize: PAGE_SIZE });
+  const pageVideos = videos.slice(paging.startIndex, paging.endIndex);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const firstListKey = useRef(true);
+  useEffect(() => {
+    if (firstListKey.current) {
+      firstListKey.current = false;
+      return;
+    }
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [listKey]);
+  const turnPage = (step: () => void) => {
+    step();
+    scrollRef.current?.scrollTo({ top: 0 });
+  };
+
   if (loading) return <div className="flex items-center justify-center py-20"><Spinner label={mode === "archive" ? "加载归档…" : "加载回收站…"} size="lg" /></div>;
   if (error && videos.length === 0) {
     return <EmptyState actions={<Button onClick={reload} variant="primary">重试</Button>} description={error} title="加载失败" />;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" ref={scrollRef}>
       <div className="border-b border-[var(--border)] px-4 py-2.5">
         <SegmentedControl className="w-full" label="归档与回收站" onChange={(value) => setMode(value as "trash" | "archive")} value={mode}>
           <SegmentedControlItem label={`归档 ${archivedVideos.length}`} value="archive" />
@@ -100,19 +122,29 @@ export function TrashView({
           title={mode === "archive" ? "归档是空的" : "回收站是空的"}
         />
       ) : (
-        <List className="flex flex-col">
-          {videos.map((video) => (
-            <TrashRow
-              archived={mode === "archive"}
-              busy={busy}
-              key={video.id}
-              retentionDays={retentionDays}
-              video={video}
-              onPurge={() => setTarget(video)}
-              onRestore={() => void restore(video)}
-            />
-          ))}
-        </List>
+        <>
+          <List className="flex flex-col">
+            {pageVideos.map((video) => (
+              <TrashRow
+                archived={mode === "archive"}
+                busy={busy}
+                key={video.id}
+                retentionDays={retentionDays}
+                video={video}
+                onPurge={() => setTarget(video)}
+                onRestore={() => void restore(video)}
+              />
+            ))}
+          </List>
+          <Pagination
+            page={paging.page}
+            pageCount={paging.pageCount}
+            total={videos.length}
+            unit="项"
+            onPrev={() => turnPage(paging.prevPage)}
+            onNext={() => turnPage(paging.nextPage)}
+          />
+        </>
       )}
 
       <p className="px-4 py-4 text-[11px] leading-relaxed text-[var(--muted)]">
