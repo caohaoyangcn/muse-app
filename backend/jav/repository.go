@@ -28,6 +28,10 @@ type Repository interface {
 	// SearchTitleIDs returns the favorites whose 番号, original title or
 	// Chinese translation matches the keyword.
 	SearchTitleIDs(keyword string) ([]int64, error)
+	// ListSimilarRows returns the scraped fields the 「类似影片」 scorer needs,
+	// one row per non-trashed favorite. The JSON lists stay raw here so the
+	// service can apply 演员合并 before they become scoring features.
+	ListSimilarRows() ([]SimilarRow, error)
 	PrepareTask(videoID int64, force bool) error
 	ClaimTask(videoID int64, token string, now, leaseUntil int64) (*Task, bool, error)
 	SetTaskStatus(videoID int64, token, status, errorCode, lastError string, nextRetryAt *int64) error
