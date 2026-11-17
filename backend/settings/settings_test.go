@@ -3,12 +3,12 @@ package settings
 import (
 	"database/sql"
 	"errors"
-	"runtime"
 	"strings"
 	"testing"
 
 	"muse-app/backend/database"
 	"muse-app/backend/llm"
+	"muse-app/backend/secret"
 	"muse-app/backend/windowstate"
 )
 
@@ -263,10 +263,11 @@ func TestFC2CookieValidation(t *testing.T) {
 }
 
 func TestFC2CookieStorage(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("DPAPI storage test requires Windows")
+	if err := secret.Available(); err != nil {
+		t.Skipf("secure storage is unavailable: %v", err)
 	}
 	s := newStore(t)
+	t.Cleanup(func() { _ = s.ClearFC2Cookie() })
 	cookie := " ageVerified=true; fc2cmadb-session=session-value "
 	want := strings.TrimSpace(cookie)
 	if err := s.SetFC2Cookie(cookie); err != nil {
@@ -296,11 +297,12 @@ func TestFC2CookieStorage(t *testing.T) {
 }
 
 func TestJavBusCookieStorage(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("DPAPI storage test requires Windows")
+	if err := secret.Available(); err != nil {
+		t.Skipf("secure storage is unavailable: %v", err)
 	}
 
 	s := newStore(t)
+	t.Cleanup(func() { _ = s.ClearJavBusCookie() })
 	cookie := "  existmag=mag; PHPSESSID=session-value; forum_auth=abc  "
 	want := strings.TrimSpace(cookie)
 	if err := s.SetJavBusCookie(cookie); err != nil {
@@ -353,9 +355,9 @@ func TestJavBusCookieStorage(t *testing.T) {
 	}
 }
 
-func TestFC2CookieUnsupportedOnNonWindows(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("unsupported-platform test requires non-Windows")
+func TestFC2CookieUnsupportedPlatform(t *testing.T) {
+	if err := secret.Available(); err == nil {
+		t.Skip("secure storage is available on this platform")
 	}
 	s := newStore(t)
 	for name, call := range map[string]func() error{
@@ -372,9 +374,9 @@ func TestFC2CookieUnsupportedOnNonWindows(t *testing.T) {
 	}
 }
 
-func TestJavBusCookieUnsupportedOnNonWindows(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("unsupported-platform test requires non-Windows")
+func TestJavBusCookieUnsupportedPlatform(t *testing.T) {
+	if err := secret.Available(); err == nil {
+		t.Skip("secure storage is available on this platform")
 	}
 
 	s := newStore(t)
@@ -503,10 +505,11 @@ func TestLLMConfigRejectsInvalidEndpoint(t *testing.T) {
 }
 
 func TestLLMAPIKeyStorage(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("DPAPI storage test requires Windows")
+	if err := secret.Available(); err != nil {
+		t.Skipf("secure storage is unavailable: %v", err)
 	}
 	s := newStore(t)
+	t.Cleanup(func() { _ = s.ClearLLMAPIKey() })
 	if err := s.SetLLMAPIKey("sk-secret-value"); err != nil {
 		t.Fatalf("set api key: %v", err)
 	}
@@ -557,9 +560,9 @@ func TestLLMAPIKeyStorage(t *testing.T) {
 	}
 }
 
-func TestLLMAPIKeyUnsupportedOnNonWindows(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("unsupported-platform test requires non-Windows")
+func TestLLMAPIKeyUnsupportedPlatform(t *testing.T) {
+	if err := secret.Available(); err == nil {
+		t.Skip("secure storage is available on this platform")
 	}
 	s := newStore(t)
 	if err := s.SetLLMAPIKey("sk-secret-value"); err == nil {

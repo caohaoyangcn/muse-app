@@ -526,8 +526,9 @@ CREATE TABLE IF NOT EXISTS watched_dirs (
 // schemaV24 stores cloud-drive connections. A connection is read-only for
 // Muse: it names one WebDAV endpoint (usually an OpenList/AList mount) and
 // holds the credentials needed to browse and stream it. password_enc is a
-// platform-protected secret (DPAPI on Windows); it is never exposed by the
-// read model. root_path scopes every path the user can browse, and verify_tls
+// platform-protected secret (DPAPI on Windows, Keychain on macOS); it is never
+// exposed by the read model. root_path scopes every path the user can browse,
+// and verify_tls
 // is the per-connection self-signed-certificate switch.
 const schemaV24 = `
 CREATE TABLE IF NOT EXISTS cloud_connections (

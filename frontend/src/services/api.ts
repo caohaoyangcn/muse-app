@@ -446,7 +446,7 @@ export const addCloudVideos = (
   paths: string[],
 ): Promise<AddVideoResult[]> => AddCloudVideos(sourceId, paths);
 
-/** 当前平台是否能安全保存密码（Windows DPAPI）。 */
+/** 当前平台是否能安全保存密码（Windows DPAPI / macOS 钥匙串）。 */
 export const cloudStorageAvailable = (): Promise<boolean> => CloudStorageAvailable();
 
 /** 远程收藏的管理页（OpenList）。Muse 只打开网页，不在内部做写操作。 */

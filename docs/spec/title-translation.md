@@ -27,7 +27,7 @@
 
 - **不阻塞、不改变刮削结果。** 翻译在刮削任务成功之后入队；LLM 未配置、超时、鉴权失败只影响译名，任务仍是 `succeeded`。
 - **不在翻译流程里裸写 HTTP。** 请求/响应交给 `github.com/sashabaranov/go-openai`；Muse 只负责配置、提示词和输出清洗。
-- **凭证加密保存。** API Key 与 JavBus / FC2 Cookie 一样走 Windows DPAPI，没有明文兜底，也不回传前端。
+- **凭证加密保存。** API Key 与 JavBus / FC2 Cookie 一样交给平台安全存储：Windows 用 DPAPI，macOS 用登录钥匙串（`security` CLI，密码经 stdin 传入，不出现在进程参数里）。没有明文兜底，也不回传前端。
 
 ## 2. 数据模型（Migration v27）
 
@@ -59,7 +59,7 @@
 | `llm_enabled` | `"0"` 表示暂停自动翻译；缺省视为启用 |
 | `llm_base_url` | OpenAI 兼容接口根地址；缺省 `https://api.deepseek.com/v1` |
 | `llm_model` | 模型名；缺省 `deepseek-chat` |
-| `llm_api_key_dpapi` | DPAPI 加密后的 API Key |
+| `llm_api_key_dpapi` | 平台安全存储的引用（Windows DPAPI 密文 / macOS Keychain 账号）；键名保留历史命名 |
 
 `llm.Normalize` 负责校验：只接受 `http(s)`、必须带主机名、拒绝查询参数/片段/换行；地址与模型为空时补默认值。保存表单时 API Key 留空表示**保留原 Key**，因此修改接口或模型不需要重新输入密钥。
 
@@ -112,7 +112,8 @@ Wails（仅桌面端设置/操作）：
 ## 8. 测试
 
 - `backend/llm`：默认值与校验、输出清洗、请求体（模型 + 提示词）、401 映射、设置实时生效、设置读取失败视为未配置；`Check` 用显式配置（不读已存设置、暂停状态也可测）并返回示例译名，缺 Key / 鉴权失败给出可操作错误。
-- `backend/settings`：默认配置、往返读写、无效地址拒绝、Key 加密存储（Windows）、非 Windows 平台无安全存储时的降级行为。
+- `backend/settings`：默认配置、往返读写、无效地址拒绝、Key 加密存储（Windows DPAPI / macOS 钥匙串）、无安全存储平台上的降级行为。
+- `backend/secret`：Windows DPAPI 往返；macOS 真实钥匙串写入/读取/覆盖隔离/幂等删除；不支持的平台返回 `ErrUnsupported`。
 - `backend/database`：v26 → v27 增量升级、已有刮削数据保留、译名跨再次迁移保留。
 - `backend/jav`：刮削后自动翻译、未配置时跳过、失败不改变刮削状态、批量去重、`pending` 覆盖、重新刮削替换旧译名、仓库层候选查询。
 

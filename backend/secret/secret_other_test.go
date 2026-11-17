@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !darwin
 
 package secret
 
@@ -16,5 +16,8 @@ func TestUnsupportedPlatformRefusesSecrets(t *testing.T) {
 	}
 	if _, err := Unprotect("ciphertext"); !errors.Is(err, ErrUnsupported) {
 		t.Errorf("Unprotect err = %v, want ErrUnsupported", err)
+	}
+	if err := Delete("ciphertext"); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("Delete err = %v, want ErrUnsupported", err)
 	}
 }

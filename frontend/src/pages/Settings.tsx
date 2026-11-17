@@ -916,7 +916,7 @@ function FC2Section() {
     <section className="max-w-[640px]">
       <h2 className="mb-1.5 text-base font-semibold">FC2CMADB</h2>
       <p className="mb-5 max-w-[560px] leading-relaxed text-[var(--muted)]">
-        FC2 文件名中的数字会自动查询 FC2CMADB 文章页。请粘贴已登录且完成年龄确认的浏览器请求中的完整 Cookie；Cookie 只在 Windows DPAPI 保护后保存，不会回显或写入普通日志。
+        FC2 文件名中的数字会自动查询 FC2CMADB 文章页。请粘贴已登录且完成年龄确认的浏览器请求中的完整 Cookie；Cookie 只在系统安全存储（Windows DPAPI / macOS 钥匙串）保护后保存，不会回显或写入普通日志。
       </p>
       {loading ? (
         <div className="flex min-h-[320px] h-full items-center justify-center text-[var(--muted)]">加载中…</div>
@@ -969,9 +969,9 @@ function FC2Section() {
 
 /**
  * 片名翻译: an OpenAI-compatible chat endpoint translates the scraped title into
- * Simplified Chinese. The key is stored with the same DPAPI protection as the
- * scraping cookies and is never echoed back, so the form only learns whether
- * one exists. Translation runs on its own queue after a scrape succeeds — a
+ * Simplified Chinese. The key is stored with the same platform secret storage
+ * as the scraping cookies (DPAPI on Windows, Keychain on macOS) and is never
+ * echoed back, so the form only learns whether one exists. Translation runs on its own queue after a scrape succeeds — a
  * provider failure never fails the scrape itself.
  *
  * 测试连接 sends the form's current values through one real translation (without
@@ -1171,7 +1171,8 @@ function LLMSection() {
             </Button>
           </div>
           <p id="llm-api-key-help" className="mt-2.5 text-[13px] leading-relaxed text-[var(--muted)]">
-            Key 只用于翻译请求，保存后以 Windows DPAPI 加密存放，页面不会回显，也不会写入日志。
+            {hasKey && "已保存 API Key（出于安全考虑不会回显）；留空保存会保留它，可点「测试连接」验证。"}
+            Key 只用于翻译请求，保存后以系统安全存储（Windows DPAPI / macOS 钥匙串）加密存放，也不会写入日志。
             Ollama 等本地服务可以随意填一个占位值。
           </p>
 
@@ -1672,7 +1673,7 @@ function CloudSection() {
 
           {!storageAvailable && (
             <p className="mt-2 rounded-[var(--radius)] border border-[#e0b64f]/40 bg-[#e0b64f]/10 px-3 py-2 text-xs leading-relaxed text-[#e0b64f]">
-              当前平台不能安全保存密码，只能使用匿名 WebDAV。Windows 版支持 DPAPI 加密保存。
+              当前平台不能安全保存密码，只能使用匿名 WebDAV。Windows（DPAPI）与 macOS（钥匙串）支持加密保存。
             </p>
           )}
 

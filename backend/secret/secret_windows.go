@@ -4,6 +4,7 @@ package secret
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"unsafe"
 
@@ -14,6 +15,9 @@ func ensureAvailable() error { return nil }
 
 // Protect seals plaintext with the current Windows user's DPAPI key.
 func Protect(plaintext string) (string, error) {
+	if plaintext == "" {
+		return "", errors.New("secret must not be empty")
+	}
 	input := []byte(plaintext)
 	defer clear(input)
 
@@ -67,3 +71,8 @@ func Unprotect(encoded string) (string, error) {
 	clear(plaintext)
 	return result, nil
 }
+
+// Delete is a no-op: a DPAPI blob lives inside the settings value itself, so
+// removing the database row removes the secret. The parameter is the encoded
+// value the macOS implementation would delete from its Keychain.
+func Delete(string) error { return nil }

@@ -14,13 +14,13 @@ https://fc2cmadb.com/articles/4970405
 
 FC2CMADB 文章页需要已完成年龄确认的登录态。设置页接收浏览器请求中的完整 `Cookie` 请求头，例如包含 `ageVerified=true`、站点 session 以及必要的 Cloudflare 会话值。
 
-- Windows 使用 DPAPI 加密后存储在 SQLite settings 表中；数据库不保存明文。
+- Windows 使用 DPAPI、macOS 使用登录钥匙串加密/托管后，在 SQLite settings 表中只保存引用；数据库不保存明文。
 - 运行时只将解密后的值保存在 FC2 Provider 实例内存中。
 - 前端只显示“已配置/未配置”，不会回显 Cookie。
 - 清除设置会同时删除密文并清空运行中的 Provider；重新复制 Cookie 后无需重启。
 - 非 Windows 构建没有明文回退，当前会报告安全存储不可用。
 
-Cookie 不写入日志、错误文本、测试 fixture 或网络测试命令行。环境变量 `MUSE_FC2_COOKIE` 仅作为启动时的临时覆盖来源，生产部署应优先使用设置页的 DPAPI 存储。
+Cookie 不写入日志、错误文本、测试 fixture 或网络测试命令行。环境变量 `MUSE_FC2_COOKIE` 仅作为启动时的临时覆盖来源，生产部署应优先使用设置页的平台安全存储。
 
 ## 站点与错误处理
 
@@ -51,7 +51,7 @@ Provider 优先解析 Inertia/JSON-LD 和 OpenGraph，再回退到标题、带�
 
 - FC2 不会回退到 JavBus/Avmoo。组合路由已按 `FC2-` 前缀选择 `fc2cmadb`；此前日志里的 `provider=javbus` 是组合 Provider 名称，诊断版已改为 `jav-router`，并额外记录 `route=fc2cmadb`。
 - 文件名提取规则已修复：支持 6～7 位数字、`FC2-PPV-<id>_1`/`-1`/`_hd`、`hhd800.com@` 前缀及 `(FC2)(<id>)`。此前数据库中 70 个 FC2 `no_code` 任务里，69 个是数字后 `_part` 导致 Go `\b` 边界失败；修复后需强制重刮这些历史任务。
-- Cookie 设置使用 Windows DPAPI，运行时 Cookie 只在 Provider 内存中保存。设置层、Provider 构造和热更新都剥离可选的 `Cookie:` 前缀。
+- Cookie 设置使用平台安全存储（Windows DPAPI / macOS 钥匙串），运行时 Cookie 只在 Provider 内存中保存。设置层、Provider 构造和热更新都剥离可选的 `Cookie:` 前缀。
 - 诊断版日志会输出但不会泄露 Cookie 值：`cookieConfigured`、`cookieSent`、`hasAgeVerified`、`hasSession`、请求 host/path、HTTP status、最终 host/path、是否重定向和页面分类。
 - FC2 请求已按浏览器请求补齐 Edge 152 相关 headers：完整 `Accept`、`Accept-Language`、`Cache-Control`、`DNT`、`Priority`、`Sec-CH-UA*`、`Sec-Fetch-*`、`Upgrade-Insecure-Requests`、Edge 152 User-Agent。
 

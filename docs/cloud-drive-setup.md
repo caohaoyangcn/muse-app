@@ -79,7 +79,7 @@ BitQiu 现在可能要求短信二次校验，流程是：
    | 名称 | 自己识别的名字，例如「比特球」 |
    | WebDAV 地址 | OpenList 的 WebDAV 地址，例如 `http://127.0.0.1:5244/dav` |
    | OpenList 网页地址 | 可选；留空时从 WebDAV 地址去掉 `/dav` 推导 |
-   | 用户名 / 密码 | 可选；匿名 WebDAV 留空。密码只在 Windows 用 DPAPI 加密保存 |
+   | 用户名 / 密码 | 可选；匿名 WebDAV 留空。密码用系统安全存储加密（Windows DPAPI / macOS 钥匙串） |
    | 根目录 | 限制浏览范围，默认 `/`。填 `/BitQiu` 就只看该目录 |
    | 校验 HTTPS 证书 | 默认开启；仅自签名证书时关闭 |
 

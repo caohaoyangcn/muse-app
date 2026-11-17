@@ -213,8 +213,9 @@ func (a *App) GetLLMSettings() (LLMSettings, error) {
 }
 
 // SetLLMSettings validates and persists the provider configuration. The key is
-// stored with the same DPAPI protection as the scraping cookies; a blank key
-// leaves the existing one untouched.
+// stored with the same platform secret storage as the scraping cookies (DPAPI
+// on Windows, Keychain on macOS); a blank key leaves the existing one
+// untouched.
 func (a *App) SetLLMSettings(input LLMSettingsInput) error {
 	if a.settings == nil {
 		return fmt.Errorf("设置存储未初始化")
@@ -864,7 +865,7 @@ func (a *App) AddCloudVideos(sourceID int64, paths []string) []video.AddVideoRes
 }
 
 // CloudStorageAvailable reports whether a password can be protected on this
-// platform (DPAPI on Windows).
+// platform (DPAPI on Windows, Keychain on macOS).
 func (a *App) CloudStorageAvailable() bool { return a.lib.CloudStorageAvailable() }
 
 // OpenCloudPage opens a remote favorite's OpenList/web management page. Muse

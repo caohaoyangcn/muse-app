@@ -25,7 +25,7 @@ type Service struct {
 	log  *slog.Logger
 
 	// protect/unprotect are seams so the password lifecycle can be tested on a
-	// platform without DPAPI. Production always uses backend/secret.
+	// platform without secure storage. Production always uses backend/secret.
 	protect   func(string) (string, error)
 	unprotect func(string) (string, error)
 

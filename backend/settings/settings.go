@@ -217,7 +217,8 @@ func (s *Store) SetLLMConfig(cfg llm.Config) error {
 }
 
 // SetLLMAPIKey securely persists the bearer token used by the translation
-// provider. There is intentionally no plaintext fallback.
+// provider with the platform secret store (DPAPI on Windows, the login
+// Keychain on macOS). There is intentionally no plaintext fallback.
 func (s *Store) SetLLMAPIKey(apiKey string) error {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
@@ -232,11 +233,21 @@ func (s *Store) SetLLMAPIKey(apiKey string) error {
 	if err := secret.Available(); err != nil {
 		return fmt.Errorf("当前平台不支持安全保存 API Key：%w", err)
 	}
+	previous, err := s.get(keyLLMAPIKey)
+	if err != nil {
+		return err
+	}
 	protected, err := secret.Protect(apiKey)
 	if err != nil {
 		return fmt.Errorf("protect LLM API key: %w", err)
 	}
-	return s.set(keyLLMAPIKey, protected)
+	if err := s.set(keyLLMAPIKey, protected); err != nil {
+		return err
+	}
+	if previous != "" {
+		_ = secret.Delete(previous)
+	}
+	return nil
 }
 
 // HasLLMAPIKey reports whether an API key is stored. A platform without
@@ -261,8 +272,15 @@ func (s *Store) ClearLLMAPIKey() error {
 	if err := secret.Available(); err != nil {
 		return fmt.Errorf("当前平台不支持安全保存 API Key：%w", err)
 	}
+	previous, err := s.get(keyLLMAPIKey)
+	if err != nil {
+		return err
+	}
 	if _, err := s.db.Exec(`DELETE FROM settings WHERE key = ?`, keyLLMAPIKey); err != nil {
 		return fmt.Errorf("clear LLM API key: %w", err)
+	}
+	if previous != "" {
+		_ = secret.Delete(previous)
 	}
 	return nil
 }
@@ -369,8 +387,8 @@ func (s *Store) MarkTourSeen() error {
 }
 
 // GetJavBusCookie returns the decrypted JavBus Cookie, or an empty string when
-// no Cookie has been configured. The database contains only DPAPI-protected,
-// base64-encoded data on supported platforms.
+// no Cookie has been configured. The database contains only a platform secret
+// reference (a DPAPI blob on Windows, a Keychain item reference on macOS).
 func (s *Store) GetJavBusCookie() (string, error) {
 	return s.getSecretCookie(keyJavBusCookie, "JavBus")
 }
@@ -439,11 +457,23 @@ func (s *Store) setSecretCookie(key, name, cookie string, maxLength int) error {
 	if err := secret.Available(); err != nil {
 		return err
 	}
+	previous, err := s.get(key)
+	if err != nil {
+		return err
+	}
 	protected, err := secret.Protect(cookie)
 	if err != nil {
 		return fmt.Errorf("protect %s Cookie: %w", name, err)
 	}
-	return s.set(key, protected)
+	if err := s.set(key, protected); err != nil {
+		return err
+	}
+	// The new value is authoritative. A failed cleanup of the previous
+	// Keychain item is an orphan, not a reason to report the save as failed.
+	if previous != "" {
+		_ = secret.Delete(previous)
+	}
+	return nil
 }
 
 func (s *Store) hasSecretCookie(key string) (bool, error) {
@@ -461,8 +491,15 @@ func (s *Store) clearSecretCookie(key, name string) error {
 	if err := secret.Available(); err != nil {
 		return err
 	}
+	previous, err := s.get(key)
+	if err != nil {
+		return err
+	}
 	if _, err := s.db.Exec(`DELETE FROM settings WHERE key = ?`, key); err != nil {
 		return fmt.Errorf("clear %s Cookie: %w", name, err)
+	}
+	if previous != "" {
+		_ = secret.Delete(previous)
 	}
 	return nil
 }

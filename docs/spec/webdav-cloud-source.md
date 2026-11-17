@@ -66,7 +66,7 @@ backend/cloud/
 
 新增 `backend/secret`（从 `backend/settings/secret_*.go` 抽出）：
 
-- `Protect/Unprotect/Available`；Windows DPAPI，非 Windows 返回 `ErrUnsupported`。
+- `Protect/Unprotect/Delete/Available`；Windows DPAPI、macOS 登录钥匙串，其余平台返回 `ErrUnsupported`。
 - `settings` 改为调用 `secret`，现有 cookie 存储行为不变。
 
 ### 3.2 数据模型（schema v24）
@@ -418,7 +418,7 @@ OpenVideo(id)
 ## 9. 风险与开放问题
 
 - **比特球私有 API 稳定性**：由 OpenList fork 承担；Muse 只依赖 WebDAV，驱动失效不影响本地功能。
-- **DPAPI 仅 Windows**：macOS 开发端无法保存密码；非 Windows 只支持匿名 WebDAV。是否要 macOS Keychain 支持，留到有实际需求时。
+- **平台安全存储**：Windows 用 DPAPI，macOS 用登录钥匙串；其他平台只支持匿名 WebDAV。
 - **不保存视频内容**：Muse 只保留记录/封面/元数据；播放和文件管理归 OpenList。
 - **大文件预览**：依赖 OpenList Range；不支持时退化完整流，UI 提示可能较慢。
 - **远程批量检测**：v1 不做；如果用户需要「云端 200 个文件是否还在」，后续单独设计，避免启动时几百个 PROPFIND。

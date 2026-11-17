@@ -7,12 +7,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
 
 	"muse-app/backend/database"
+	"muse-app/backend/secret"
 )
 
 func newCloudService(t *testing.T) (*Service, Repository, *sql.DB, *[]string) {
@@ -44,8 +44,8 @@ func baseInput(endpoint string) ConnectionInput {
 
 func TestServiceSavePasswordLifecycle(t *testing.T) {
 	svc, repo, db, _ := newCloudService(t)
-	// A reversible fake stands in for DPAPI; the production code path is the
-	// same, only the platform primitive differs.
+	// A reversible fake stands in for the platform secret store; the production
+	// code path is the same, only the platform primitive differs.
 	svc.protect = func(s string) (string, error) { return "enc:" + s, nil }
 	svc.unprotect = func(s string) (string, error) {
 		if !strings.HasPrefix(s, "enc:") {
@@ -94,7 +94,7 @@ func TestServiceSavePasswordLifecycle(t *testing.T) {
 	}
 
 	// A password typed on a platform without secret storage is refused.
-	if runtime.GOOS != "windows" {
+	if err := secret.Available(); err != nil {
 		plain := NewService(repo, nil, nil)
 		in.ClearPassword = false
 		in.Password = "cannot-store"
