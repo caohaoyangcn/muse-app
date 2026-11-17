@@ -980,6 +980,7 @@ function FC2Section() {
  */
 function LLMSection() {
   const [enabled, setEnabled] = useState(true);
+  const [resumeMissing, setResumeMissing] = useState(false);
   const [baseURL, setBaseURL] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -1002,6 +1003,7 @@ function LLMSection() {
     try {
       const settings = await getLLMSettings();
       setEnabled(settings.enabled);
+      setResumeMissing(settings.resumeMissing);
       setBaseURL(settings.baseUrl);
       setModel(settings.model);
       setHasKey(settings.hasApiKey);
@@ -1023,6 +1025,7 @@ function LLMSection() {
     try {
       await setLLMSettings({
         enabled,
+        resumeMissing,
         baseUrl: baseURL.trim(),
         model: model.trim(),
         apiKey: apiKey.trim(),
@@ -1047,6 +1050,7 @@ function LLMSection() {
       // the stored one, so retesting an endpoint does not require the secret.
       const sample = await testLLMSettings({
         enabled,
+        resumeMissing,
         baseUrl: baseURL.trim(),
         model: model.trim(),
         apiKey: apiKey.trim(),
@@ -1185,6 +1189,18 @@ function LLMSection() {
                 clearFeedback();
               }}
               value={enabled}
+            />
+          </div>
+
+          <div className="mt-2">
+            <CheckboxInput
+              label="启动时自动补齐缺失的译名"
+              description="打开 App 时把仍未翻译的片名重新排队，之前失败的也会重试；关闭后需要手动点「翻译缺少译名的片名」。"
+              onChange={(checked) => {
+                setResumeMissing(checked);
+                clearFeedback();
+              }}
+              value={resumeMissing}
             />
           </div>
 

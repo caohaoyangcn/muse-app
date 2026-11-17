@@ -656,6 +656,7 @@ export namespace main {
 	    baseUrl: string;
 	    model: string;
 	    hasApiKey: boolean;
+	    resumeMissing: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new LLMSettings(source);
@@ -667,6 +668,7 @@ export namespace main {
 	        this.baseUrl = source["baseUrl"];
 	        this.model = source["model"];
 	        this.hasApiKey = source["hasApiKey"];
+	        this.resumeMissing = source["resumeMissing"];
 	    }
 	}
 	export class LLMSettingsInput {
@@ -674,6 +676,7 @@ export namespace main {
 	    baseUrl: string;
 	    model: string;
 	    apiKey: string;
+	    resumeMissing: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new LLMSettingsInput(source);
@@ -685,6 +688,7 @@ export namespace main {
 	        this.baseUrl = source["baseUrl"];
 	        this.model = source["model"];
 	        this.apiKey = source["apiKey"];
+	        this.resumeMissing = source["resumeMissing"];
 	    }
 	}
 

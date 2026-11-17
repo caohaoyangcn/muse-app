@@ -32,22 +32,25 @@ type FC2CookieStatus struct {
 
 // LLMSettings is the 片名翻译 configuration the settings page edits. The API
 // key is never returned to the client; HasAPIKey only reports whether one is
-// stored (and therefore whether translation can run).
+// stored (and therefore whether translation can run). ResumeMissing is the
+// startup backfill switch: re-queue untranslated titles whenever the app opens.
 type LLMSettings struct {
-	Enabled   bool   `json:"enabled"`
-	BaseURL   string `json:"baseUrl"`
-	Model     string `json:"model"`
-	HasAPIKey bool   `json:"hasApiKey"`
+	Enabled       bool   `json:"enabled"`
+	BaseURL       string `json:"baseUrl"`
+	Model         string `json:"model"`
+	HasAPIKey     bool   `json:"hasApiKey"`
+	ResumeMissing bool   `json:"resumeMissing"`
 }
 
 // LLMSettingsInput is the form payload. An empty APIKey keeps the previously
 // saved key, so the endpoint and model can be edited without re-entering the
 // secret.
 type LLMSettingsInput struct {
-	Enabled bool   `json:"enabled"`
-	BaseURL string `json:"baseUrl"`
-	Model   string `json:"model"`
-	APIKey  string `json:"apiKey"`
+	Enabled       bool   `json:"enabled"`
+	BaseURL       string `json:"baseUrl"`
+	Model         string `json:"model"`
+	APIKey        string `json:"apiKey"`
+	ResumeMissing bool   `json:"resumeMissing"`
 }
 
 type javCookieProvider interface {
@@ -204,11 +207,16 @@ func (a *App) GetLLMSettings() (LLMSettings, error) {
 	if err != nil {
 		return LLMSettings{}, err
 	}
+	resume, err := a.settings.LLMResumeMissingTitles()
+	if err != nil {
+		return LLMSettings{}, err
+	}
 	return LLMSettings{
-		Enabled:   cfg.Enabled,
-		BaseURL:   cfg.BaseURL,
-		Model:     cfg.Model,
-		HasAPIKey: cfg.APIKey != "",
+		Enabled:       cfg.Enabled,
+		BaseURL:       cfg.BaseURL,
+		Model:         cfg.Model,
+		HasAPIKey:     cfg.APIKey != "",
+		ResumeMissing: resume,
 	}, nil
 }
 
@@ -220,12 +228,15 @@ func (a *App) SetLLMSettings(input LLMSettingsInput) error {
 	if a.settings == nil {
 		return fmt.Errorf("设置存储未初始化")
 	}
-	return a.settings.SetLLMConfig(llm.Config{
+	if err := a.settings.SetLLMConfig(llm.Config{
 		Enabled: input.Enabled,
 		BaseURL: input.BaseURL,
 		Model:   input.Model,
 		APIKey:  input.APIKey,
-	})
+	}); err != nil {
+		return err
+	}
+	return a.settings.SetLLMResumeMissingTitles(input.ResumeMissing)
 }
 
 // setLLMClient wires the provider client used by the settings smoke test. The
