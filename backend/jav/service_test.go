@@ -1074,6 +1074,68 @@ func TestServiceBulkTranslatesMissingTitles(t *testing.T) {
 	}
 }
 
+// TestServiceResumesMissingTitlesOnStart verifies the opt-in startup backfill:
+// a favorite scraped while translation was paused is queued again when Start
+// runs, so a batch interrupted by a quit picks up without a manual click.
+func TestServiceResumesMissingTitlesOnStart(t *testing.T) {
+	s, _, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{result: "邻家的人妻"}
+	s.SetTitleTranslator(translator)
+
+	// Scraped while translation was off, so the work has no translation yet.
+	s.Enqueue(id)
+	waitForDetail(t, s, id, func(d *Detail) bool { return d.ScrapeStatus == StatusSucceeded })
+
+	translator.configured.Store(true)
+	s.SetTitleResumeOnStart(func() (bool, error) { return true, nil })
+	s.Start()
+	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZhStatus == TitleZhSucceeded })
+	if d.TitleZh != "邻家的人妻" {
+		t.Fatalf("titleZh = %q, want 邻家的人妻", d.TitleZh)
+	}
+}
+
+// TestServiceStartSkipsResumeWhenSwitchOff keeps the default quiet: with the
+// switch off, opening the app must not spend a provider request.
+func TestServiceStartSkipsResumeWhenSwitchOff(t *testing.T) {
+	s, _, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{result: "不应出现"}
+	s.SetTitleTranslator(translator)
+
+	s.Enqueue(id)
+	waitForDetail(t, s, id, func(d *Detail) bool { return d.ScrapeStatus == StatusSucceeded })
+
+	// Configure the provider only after the scrape, so the scrape-time trigger
+	// cannot be the one calling the translator.
+	translator.configured.Store(true)
+	s.SetTitleResumeOnStart(func() (bool, error) { return false, nil })
+	s.Start()
+	// Give a stray worker a moment to (incorrectly) run before asserting.
+	time.Sleep(20 * time.Millisecond)
+	if got := translator.translatedTitles(); len(got) != 0 {
+		t.Fatalf("translator was called with the switch off: %#v", got)
+	}
+}
+
+// TestServiceStartToleratesResumeCheckFailure keeps startup independent of the
+// settings table: an unreadable preference is logged and treated as off.
+func TestServiceStartToleratesResumeCheckFailure(t *testing.T) {
+	s, _, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	translator := &fakeTitleTranslator{result: "不应出现"}
+	s.SetTitleTranslator(translator)
+
+	s.Enqueue(id)
+	waitForDetail(t, s, id, func(d *Detail) bool { return d.ScrapeStatus == StatusSucceeded })
+
+	translator.configured.Store(true)
+	s.SetTitleResumeOnStart(func() (bool, error) { return false, errors.New("settings unavailable") })
+	s.Start()
+	time.Sleep(20 * time.Millisecond)
+	if got := translator.translatedTitles(); len(got) != 0 {
+		t.Fatalf("translator was called after a failed settings read: %#v", got)
+	}
+}
+
 func TestServiceReportsPendingTranslationInDetail(t *testing.T) {
 	s, _, _, id := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
 	translator := &fakeTitleTranslator{

@@ -80,6 +80,41 @@ func (s *Service) TranslateMissingTitles() (int, error) {
 	return queued, nil
 }
 
+// SetTitleResumeOnStart wires the startup backfill switch. It must be called
+// during wiring, before Start, and is read lazily so a preference edited in the
+// settings page applies to the next launch. A settings read error counts as
+// "off": an unreadable preference must never block startup.
+func (s *Service) SetTitleResumeOnStart(enabled func() (bool, error)) {
+	s.titleResume = enabled
+}
+
+// resumeMissingTitles runs the startup backfill once. It is fire-and-forget:
+// the worker drains the queue in the background, so a slow provider never
+// delays the window. Titles that failed before are included, exactly like the
+// manual bulk action, because that action doubles as the retry path after a
+// provider fix.
+func (s *Service) resumeMissingTitles() {
+	if s.titleResume == nil {
+		return
+	}
+	enabled, err := s.titleResume()
+	if err != nil {
+		s.log.Warn("jav title translation resume check failed", "errorCode", ErrorDatabase, "err", err)
+		return
+	}
+	if !enabled {
+		return
+	}
+	queued, err := s.TranslateMissingTitles()
+	if err != nil {
+		s.log.Warn("jav title translation resume skipped", "errorCode", ErrorTitleTranslation, "err", err)
+		return
+	}
+	if queued > 0 {
+		s.log.Info("jav title translations resumed", "queued", queued)
+	}
+}
+
 // enqueueTitleTranslation adds one video to the translation queue. notify
 // emits the pending state immediately, which the detail panel needs for a
 // user-initiated single translation; bulk enqueueing suppresses it.

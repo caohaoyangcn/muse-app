@@ -38,6 +38,7 @@ const (
 	keyLLMBaseURL      = "llm_base_url"
 	keyLLMModel        = "llm_model"
 	keyLLMEnabled      = "llm_enabled"
+	keyLLMResumeTitles = "llm_resume_missing_titles"
 	keyLLMAPIKey       = "llm_api_key_dpapi"
 	// Cookie headers are normally much smaller than this. The limit prevents
 	// accidentally persisting an unbounded paste while allowing complete
@@ -214,6 +215,28 @@ func (s *Store) SetLLMConfig(cfg llm.Config) error {
 		enabled = "0"
 	}
 	return s.set(keyLLMEnabled, enabled)
+}
+
+// LLMResumeMissingTitles reports whether opening the app should re-queue every
+// scraped favorite that still has no Chinese title. It defaults to false: each
+// translation costs a provider request, so resuming a batch interrupted by a
+// quit (the queue is in memory only) is an explicit opt-in instead of a side
+// effect of every launch.
+func (s *Store) LLMResumeMissingTitles() (bool, error) {
+	raw, err := s.get(keyLLMResumeTitles)
+	if err != nil {
+		return false, err
+	}
+	return raw == "1", nil
+}
+
+// SetLLMResumeMissingTitles persists the startup backfill switch.
+func (s *Store) SetLLMResumeMissingTitles(enabled bool) error {
+	value := "0"
+	if enabled {
+		value = "1"
+	}
+	return s.set(keyLLMResumeTitles, value)
 }
 
 // SetLLMAPIKey securely persists the bearer token used by the translation

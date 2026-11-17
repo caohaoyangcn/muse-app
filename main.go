@@ -274,6 +274,12 @@ func main() {
 	// scraping proxy route so an LLM behind the same proxy works too.
 	llmClient := llm.NewClient(settingsStore.LLMConfig, &http.Client{Transport: proxyCfg.Transport()})
 	javSvc.SetTitleTranslator(llmClient)
+	// The in-memory translation queue dies with the process, so a batch cut
+	// short by a quit or crash does not resume by itself. This switch (default
+	// off, because every translation costs a provider request) lets Start queue
+	// whatever is still untranslated; the manual 「翻译缺少译名的片名」 action
+	// stays the fallback either way.
+	javSvc.SetTitleResumeOnStart(settingsStore.LLMResumeMissingTitles)
 	app.setLLMClient(llmClient)
 	lib.SetJavService(javSvc)
 	javSvc.Start()

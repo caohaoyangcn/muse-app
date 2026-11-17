@@ -66,10 +66,12 @@ type Service struct {
 	fillOnce sync.Once
 
 	// 中文译名 translation: translator is wiring-time, titleJobs is a
-	// single-worker queue, titlePending dedupes ids already queued or running.
+	// single-worker queue, titlePending dedupes ids already queued or running,
+	// titleResume is the startup switch read by Start.
 	translator   TitleTranslator
 	titleJobs    *workQueue[int64]
 	titlePending map[int64]struct{}
+	titleResume  func() (bool, error)
 	titleMu      sync.Mutex
 }
 
@@ -167,6 +169,11 @@ func (s *Service) Start() {
 		s.startActorFillWorker()
 		s.wakeActorFill()
 		go s.scanLoop()
+		// The translation queue only lives in memory, so a quit or crash in the
+		// middle of a batch leaves the remaining titles untranslated. When the
+		// user opted into it, queue them again here; the check runs off the
+		// startup path so a slow or unconfigured provider never delays the app.
+		go s.resumeMissingTitles()
 	})
 }
 

@@ -504,6 +504,44 @@ func TestLLMConfigRejectsInvalidEndpoint(t *testing.T) {
 	}
 }
 
+// TestLLMResumeMissingDefaultsOff verifies the startup backfill is opt-in: an
+// untouched install must not spend a provider request on every launch.
+func TestLLMResumeMissingDefaultsOff(t *testing.T) {
+	s := newStore(t)
+	enabled, err := s.LLMResumeMissingTitles()
+	if err != nil {
+		t.Fatalf("read startup backfill switch: %v", err)
+	}
+	if enabled {
+		t.Error("startup backfill must default to off")
+	}
+}
+
+func TestLLMResumeMissingRoundTrip(t *testing.T) {
+	s := newStore(t)
+	if err := s.SetLLMResumeMissingTitles(true); err != nil {
+		t.Fatalf("enable startup backfill: %v", err)
+	}
+	if enabled, err := s.LLMResumeMissingTitles(); err != nil || !enabled {
+		t.Fatalf("switch after enable = %v, %v; want true", enabled, err)
+	}
+	if err := s.SetLLMResumeMissingTitles(false); err != nil {
+		t.Fatalf("disable startup backfill: %v", err)
+	}
+	if enabled, err := s.LLMResumeMissingTitles(); err != nil || enabled {
+		t.Fatalf("switch after disable = %v, %v; want false", enabled, err)
+	}
+	// The switch is independent of the provider configuration: pausing the
+	// startup backfill must not change the auto-translate setting.
+	cfg, err := s.LLMConfig()
+	if err != nil {
+		t.Fatalf("read llm config: %v", err)
+	}
+	if !cfg.Enabled {
+		t.Error("toggling the startup backfill must not pause auto-translation")
+	}
+}
+
 func TestLLMAPIKeyStorage(t *testing.T) {
 	if err := secret.Available(); err != nil {
 		t.Skipf("secure storage is unavailable: %v", err)
