@@ -1,6 +1,6 @@
 # 相似影片推荐（详情页底部）技术设计
 
-**Status:** 里程碑 1（打分内核）已实现；标题 embedding 与前端展示待做
+**Status:** 里程碑 1（打分内核）与里程碑 3（两端展示）已实现；里程碑 2（标题 embedding）待做
 **Scope:** 影片详情页底部增加「类似影片」推荐栏，综合系列、风格标签、演员、厂牌、发行时间与片名 embedding
 **Target:** Windows/macOS Wails Desktop App + 局域网移动端
 **Version:** v1
@@ -218,19 +218,25 @@ type SimilarVideo struct {
 func (l *Library) SimilarVideos(videoID int64, limit int) ([]SimilarVideo, error)
 ```
 
-桌面与局域网共用这一个门面（`api.Library` 是唯一业务入口）。
+桌面与局域网共用这一个门面（`api.Library` 是唯一业务入口）：
+
+| 传输 | 形状 |
+| --- | --- |
+| Wails | `App.SimilarVideos(videoID, limit)` → 生成的 `frontend/wailsjs` 绑定 |
+| HTTP | `GET /api/videos/{id}/similar?limit=N`；`limit` 缺失或非法时用默认条数，未知/未刮削收藏返回 200 + `[]` |
 
 前端：
 
 ```text
-views/videos/useSimilarVideos.ts   // 共享取数与状态（两端复用）
-components/SimilarVideos.tsx       // 桌面：横向卡片排
-mobile/components/SimilarVideos.tsx // 移动：同样的数据，小一号卡片
+views/similar/useSimilarVideos.ts   // 共享取数与状态（两端复用）
+components/SimilarVideos.tsx        // 桌面：横向卡片排，末尾的独立 section
+mobile/components/SimilarVideos.tsx // 移动：同一份数据，小一号卡片
 ```
 
-- 取数走 `useLiveQuery(fetch, `similar:${videoId}`)`。
-- `invalidate()` 时机：刮削成功、译名更新、embedding 补齐完成、分组变化不触发（分组不参与打分）。
-- 卡片点击复用现有 `openDetail` 打开新标签页；不新增导航路径。
+- 取数走 `useLiveQuery(fetch, `similar:${videoId}:${limit}`)`：条数进查询键，换条数就是换一个问题。
+- 读失败与首屏都归一成空数组：推荐是附属信息，不为它弹错误。
+- `invalidate()` 后自然重读（刮削成功、译名更新）；分组变化不触发（分组不参与打分）。
+- 卡片点击复用现有导航：桌面端 `openDetail` 开新标签页，移动端 `openVideo` 压栈；不新增路由。
 
 ## 6. 性能与阈值
 
@@ -284,11 +290,18 @@ mobile/components/SimilarVideos.tsx // 移动：同样的数据，小一号卡�
 
 `text_hash` / 重嵌相关测试随里程碑 2 补。
 
-前端（Vitest，`views/videos/useSimilarVideos.test.ts`）：
+`backend/server/similar_test.go`（HTTP 路由，3 条）
 
-- 空结果渲染空态而不是骨架屏卡住
-- 理由 chip 最多 2 条、按权重降序
-- 点击卡片打开对应详情
+- 路由返回与 Wails 绑定同形的行（含 `javCode` 读模型投影与「同演员」理由）
+- 未知收藏 → 200 + `[]`（不是 `null`，也不是错误页）
+- `limit` 非法 → 忽略并回落到默认条数
+
+前端（Vitest，`views/similar/useSimilarVideos.test.tsx`，4 条）
+
+- 首屏给空数组而不是 `null`（展示层可以直接跳过渲染）
+- 读失败后仍是空数组：详情页不因推荐报错
+- 读到的结果原样交给展示层
+- 条数进查询键：改条数会重新取值
 
 ## 9. 里程碑
 
@@ -296,7 +309,7 @@ mobile/components/SimilarVideos.tsx // 移动：同样的数据，小一号卡�
 
 1. **打分内核（无 embedding）** —— ✅ 已完成：`backend/similar` + `jav.SimilarFeatures` + `Library.SimilarVideos` + 16 条测试，`golangci-lint` 无告警。
 2. **标题 embedding**：Migration v28 + 独立设置项 + 能力探测 + 队列 + 内存索引 + 降级路径，把标题通道接进内核。
-3. **前端**：共享 hook + 桌面/移动两个展示组件 + 测试。
+3. **前端与传输层** —— ✅ 已完成：`App.SimilarVideos` + `GET /api/videos/{id}/similar` + 共享 `useSimilarVideos` + 桌面/移动横排 + 3 条路由测试 + 4 条 Vitest；`npm run lint` / `build` / `test` 与 `wails build` 均通过。
 
 ## 10. 未决问题
 
