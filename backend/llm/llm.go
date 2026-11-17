@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -30,9 +32,12 @@ const (
 	// short translation per scrape, and good at Japanese → Chinese titles.
 	DefaultModel = "deepseek-chat"
 
-	// requestTimeout bounds one translation. A scrape never waits on this: the
-	// translation runs on its own queue.
+	// requestTimeout bounds one single-title translation. A scrape never waits
+	// on this: the translation runs on its own queue.
 	requestTimeout = 60 * time.Second
+	// batchRequestTimeout gives a packed request room for several answers.
+	// It stays below the jav service's 2-minute outer guard.
+	batchRequestTimeout = 90 * time.Second
 	// maxTitleRunes bounds what is sent to the model. Titles are far shorter;
 	// the cap protects the request from a pathological scrape result.
 	maxTitleRunes = 400
@@ -162,6 +167,85 @@ func (c *Client) TranslateTitle(ctx context.Context, title string) (string, erro
 	return c.translate(ctx, cfg, title)
 }
 
+// TranslateTitles returns one Simplified-Chinese title per input, in the same
+// order. Both returned slices have the same length as titles: translations[i]
+// is empty when errs[i] explains why that one title could not be translated.
+//
+// The worker packs a bulk pass into a few titles per request, so the large
+// system prompt is paid once per pack instead of once per title. Titles the
+// model skipped (a garbled line, a missing number) are retried individually;
+// an error that fails the whole request fills every slot, because retrying each
+// title would only repeat the same provider failure.
+func (c *Client) TranslateTitles(ctx context.Context, titles []string) ([]string, []error) {
+	translations := make([]string, len(titles))
+	errs := make([]error, len(titles))
+	if len(titles) == 0 {
+		return translations, errs
+	}
+
+	cfg, err := c.loadConfig()
+	if err != nil {
+		wrapped := fmt.Errorf("读取片名翻译设置失败：%w", err)
+		for i := range errs {
+			errs[i] = wrapped
+		}
+		return translations, errs
+	}
+	if !cfg.Usable() {
+		for i := range errs {
+			errs[i] = ErrNotConfigured
+		}
+		return translations, errs
+	}
+	if len(titles) == 1 {
+		translations[0], errs[0] = c.translate(ctx, cfg, titles[0])
+		return translations, errs
+	}
+
+	// Drop empty slots before packing, but keep their positions so the caller
+	// can report a per-item error.
+	batchTitles := make([]string, 0, len(titles))
+	batchIndexes := make([]int, 0, len(titles))
+	for i, title := range titles {
+		title = sanitizeTitle(title)
+		if title == "" {
+			errs[i] = errors.New("标题为空，无法翻译")
+			continue
+		}
+		batchTitles = append(batchTitles, title)
+		batchIndexes = append(batchIndexes, i)
+	}
+	if len(batchTitles) == 0 {
+		return translations, errs
+	}
+	if len(batchTitles) == 1 {
+		idx := batchIndexes[0]
+		translations[idx], errs[idx] = c.translate(ctx, cfg, batchTitles[0])
+		return translations, errs
+	}
+
+	raw, err := c.translateBatch(ctx, cfg, batchTitles)
+	if err != nil {
+		for _, idx := range batchIndexes {
+			errs[idx] = err
+		}
+		return translations, errs
+	}
+
+	parsed := parseBatchTranslations(raw, len(batchTitles))
+	for i, idx := range batchIndexes {
+		if parsed[i] != "" {
+			translations[idx] = parsed[i]
+			continue
+		}
+		// The pack came back short or with an unusable line. Ask for this one
+		// title alone; guessing a neighbouring translation would silently put
+		// the wrong Chinese name on the favorite.
+		translations[idx], errs[idx] = c.translate(ctx, cfg, batchTitles[i])
+	}
+	return translations, errs
+}
+
 // checkSampleTitle is the short Japanese title used by Check. It has kana and
 // kanji but no番号, so it exercises the real translation prompt without
 // depending on any scraped record.
@@ -193,27 +277,50 @@ func (c *Client) Check(ctx context.Context, cfg Config) (string, error) {
 // configuration. Both the production path (TranslateTitle) and the settings
 // smoke test (Check) share it, so the test exercises exactly what a scrape does.
 func (c *Client) translate(ctx context.Context, cfg Config, title string) (string, error) {
-	title = strings.TrimSpace(title)
+	title = sanitizeTitle(title)
 	if title == "" {
 		return "", errors.New("标题为空，无法翻译")
 	}
-	if utf8.RuneCountInString(title) > maxTitleRunes {
-		title = string([]rune(title)[:maxTitleRunes])
+
+	raw, err := c.complete(ctx, cfg, []openai.ChatCompletionMessage{
+		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
+		{Role: openai.ChatMessageRoleUser, Content: "原标题：" + title},
+	}, requestTimeout)
+	if err != nil {
+		return "", err
 	}
 
+	translated := cleanTranslation(raw)
+	if translated == "" {
+		return "", errors.New("LLM 返回了空的翻译结果")
+	}
+	return truncateTranslation(translated), nil
+}
+
+// translateBatch asks for several titles in one request and returns the raw
+// reply. Parsing decides which numbered rows arrived; a gap is retried alone by
+// TranslateTitles.
+func (c *Client) translateBatch(ctx context.Context, cfg Config, titles []string) (string, error) {
+	return c.complete(ctx, cfg, []openai.ChatCompletionMessage{
+		{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
+		{Role: openai.ChatMessageRoleUser, Content: batchPrompt(titles)},
+	}, batchRequestTimeout)
+}
+
+// complete performs the shared chat-completions call and returns the first
+// choice's raw text. Error mapping happens here so every caller shows the same
+// actionable Chinese message.
+func (c *Client) complete(ctx context.Context, cfg Config, messages []openai.ChatCompletionMessage, timeout time.Duration) (string, error) {
 	clientConfig := openai.DefaultConfig(cfg.APIKey)
 	clientConfig.BaseURL = cfg.BaseURL
 	clientConfig.HTTPClient = c.httpClient
 	client := openai.NewClientWithConfig(clientConfig)
 
-	requestCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+	requestCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	response, err := client.CreateChatCompletion(requestCtx, openai.ChatCompletionRequest{
-		Model: cfg.Model,
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-			{Role: openai.ChatMessageRoleUser, Content: "原标题：" + title},
-		},
+		Model:       cfg.Model,
+		Messages:    messages,
 		Temperature: 0.2,
 	})
 	if err != nil {
@@ -222,15 +329,102 @@ func (c *Client) translate(ctx context.Context, cfg Config, title string) (strin
 	if len(response.Choices) == 0 {
 		return "", errors.New("LLM 没有返回翻译结果")
 	}
+	return response.Choices[0].Message.Content, nil
+}
 
-	translated := cleanTranslation(response.Choices[0].Message.Content)
-	if translated == "" {
-		return "", errors.New("LLM 返回了空的翻译结果")
+// batchPrompt numbers each title so the reply can be unpacked by index. Titles
+// never contain a newline (sanitizeTitle flattens them), which keeps one line
+// per input.
+func batchPrompt(titles []string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "请把下面 %d 条日文标题分别翻译成简体中文。\n", len(titles))
+	b.WriteString("严格按编号逐行输出，每条译文占一行，格式为「编号. 译文」，编号必须与输入一致；")
+	b.WriteString("不要输出原文、解释、空行或前言。\n\n")
+	for i, title := range titles {
+		fmt.Fprintf(&b, "%d. %s\n", i+1, title)
 	}
+	return b.String()
+}
+
+// numberedTranslationLine matches the requested "1. 译文" format, tolerating
+// list bullets and the punctuation models use instead of a period.
+var numberedTranslationLine = regexp.MustCompile(`^\s*(?:[-+•]\s*)?(\d+)\s*[.、:：)）．。]\s*(.+?)\s*$`)
+
+// parseBatchTranslations maps a numbered reply back onto the input order. An
+// empty string means the model did not return a usable line for that index, so
+// the caller can retry it alone. If the model ignored the numbering and
+// returned exactly one line per title, positional order is used as a fallback.
+func parseBatchTranslations(raw string, count int) []string {
+	out := make([]string, count)
+	lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
+	numbered := 0
+	for _, line := range lines {
+		// Models often bold the number; the decoration is not part of the
+		// translation, and stripping it lets the same parser read both.
+		line = strings.TrimSpace(strings.Trim(strings.TrimSpace(line), "*"))
+		match := numberedTranslationLine.FindStringSubmatch(line)
+		if match == nil {
+			continue
+		}
+		index, err := strconv.Atoi(match[1])
+		if err != nil || index < 1 || index > count || out[index-1] != "" {
+			continue
+		}
+		translated := cleanTranslation(match[2])
+		if translated == "" {
+			continue
+		}
+		out[index-1] = truncateTranslation(translated)
+		numbered++
+	}
+	if numbered > 0 {
+		return out
+	}
+
+	plain := make([]string, 0, count)
+	for _, line := range lines {
+		line = trimListBullet(line)
+		if line == "" || strings.HasPrefix(line, "```") {
+			continue
+		}
+		if translated := cleanTranslation(line); translated != "" {
+			plain = append(plain, truncateTranslation(translated))
+		}
+	}
+	if len(plain) == count {
+		copy(out, plain)
+	}
+	return out
+}
+
+// trimListBullet removes a Markdown-style list marker from an unnumbered reply
+// line; without it the positional fallback would store "- 译名".
+func trimListBullet(line string) string {
+	line = strings.TrimSpace(line)
+	for _, prefix := range []string{"- ", "* ", "+ ", "• "} {
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		}
+	}
+	return line
+}
+
+// sanitizeTitle flattens a title onto one line and bounds its length. A newline
+// would otherwise shift every following number in a packed request.
+func sanitizeTitle(title string) string {
+	title = strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ").Replace(title)
+	title = strings.TrimSpace(title)
+	if utf8.RuneCountInString(title) > maxTitleRunes {
+		title = string([]rune(title)[:maxTitleRunes])
+	}
+	return title
+}
+
+func truncateTranslation(translated string) string {
 	if utf8.RuneCountInString(translated) > maxTranslationRunes {
-		translated = string([]rune(translated)[:maxTranslationRunes])
+		return string([]rune(translated)[:maxTranslationRunes])
 	}
-	return translated, nil
+	return translated
 }
 
 const systemPrompt = `# System Prompt：日文成人向文本专业翻译器（日译中）

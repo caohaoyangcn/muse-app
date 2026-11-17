@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -149,6 +150,179 @@ func TestTranslateTitleCleansModelOutput(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Fatalf("TranslateTitle = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTranslateTitlesPacksTitlesAndUnpacksNumbering(t *testing.T) {
+	server, body := chatServer(t, http.StatusOK, "1. 甲\n2. 乙\n3. 丙")
+	client := NewClient(func() (Config, error) {
+		return Config{Enabled: true, BaseURL: server.URL + "/v1", Model: "deepseek-chat", APIKey: "test-key"}, nil
+	}, server.Client())
+
+	translations, errs := client.TranslateTitles(context.Background(), []string{"一", "二", "三"})
+	if len(translations) != 3 || len(errs) != 3 {
+		t.Fatalf("result lengths = %d, %d; want 3, 3", len(translations), len(errs))
+	}
+	for i := range errs {
+		if errs[i] != nil {
+			t.Fatalf("errs[%d] = %v, want nil", i, errs[i])
+		}
+	}
+	want := []string{"甲", "乙", "丙"}
+	for i := range want {
+		if translations[i] != want[i] {
+			t.Fatalf("translations[%d] = %q, want %q", i, translations[i], want[i])
+		}
+	}
+
+	request := body.Load().(string)
+	for _, fragment := range []string{"请把下面 3 条", "1. 一", "2. 二", "3. 三"} {
+		if !strings.Contains(request, fragment) {
+			t.Fatalf("batch request missing %q: %s", fragment, request)
+		}
+	}
+	// The packed path must not reuse the one-title user message.
+	if strings.Contains(request, "原标题：") {
+		t.Fatalf("batch request used the single-title prompt: %s", request)
+	}
+}
+
+func TestTranslateTitlesRetriesMissingRowsIndividually(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		call := calls.Add(1)
+		reply := "1. 甲\n3. 丙" // row 2 is missing from the packed reply
+		if call > 1 {
+			reply = "乙"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"id":"1","object":"chat.completion","created":1,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":%q},"finish_reason":"stop"}]}`, reply)
+	}))
+	t.Cleanup(server.Close)
+
+	client := NewClient(func() (Config, error) {
+		return Config{Enabled: true, BaseURL: server.URL + "/v1", Model: "m", APIKey: "test-key"}, nil
+	}, server.Client())
+	translations, errs := client.TranslateTitles(context.Background(), []string{"一", "二", "三"})
+	for i := range errs {
+		if errs[i] != nil {
+			t.Fatalf("errs[%d] = %v, want nil", i, errs[i])
+		}
+	}
+	want := []string{"甲", "乙", "丙"}
+	for i := range want {
+		if translations[i] != want[i] {
+			t.Fatalf("translations = %#v, want %#v", translations, want)
+		}
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("provider calls = %d, want one packed request plus one retry", got)
+	}
+}
+
+func TestTranslateTitlesReportsProviderFailureForEveryTitle(t *testing.T) {
+	server, _ := chatServer(t, http.StatusUnauthorized, "")
+	client := NewClient(func() (Config, error) {
+		return Config{Enabled: true, BaseURL: server.URL + "/v1", Model: "m", APIKey: "test-key"}, nil
+	}, server.Client())
+
+	translations, errs := client.TranslateTitles(context.Background(), []string{"一", "二"})
+	if len(translations) != 2 || len(errs) != 2 {
+		t.Fatalf("result lengths = %d, %d; want 2, 2", len(translations), len(errs))
+	}
+	for i := range errs {
+		if errs[i] == nil || !strings.Contains(errs[i].Error(), "API Key") {
+			t.Fatalf("errs[%d] = %v, want the actionable API-key error", i, errs[i])
+		}
+	}
+}
+
+func TestTranslateTitlesEmptyInputSkipsTheProvider(t *testing.T) {
+	client := NewClient(func() (Config, error) {
+		t.Fatal("empty input must not read the provider settings")
+		return Config{}, nil
+	}, nil)
+	translations, errs := client.TranslateTitles(context.Background(), nil)
+	if len(translations) != 0 || len(errs) != 0 {
+		t.Fatalf("empty input returned %d translations, %d errors; want none", len(translations), len(errs))
+	}
+}
+
+func TestParseBatchTranslations(t *testing.T) {
+	tests := []struct {
+		name  string
+		raw   string
+		count int
+		want  []string
+	}{
+		{
+			name:  "numbered lines",
+			raw:   "1. 甲\n2. 乙\n3. 丙",
+			count: 3,
+			want:  []string{"甲", "乙", "丙"},
+		},
+		{
+			name:  "numbering punctuation and labels",
+			raw:   "1、中文译名：「甲」\n2：乙",
+			count: 2,
+			want:  []string{"甲", "乙"},
+		},
+		{
+			name:  "fullwidth punctuation and bold numbers",
+			raw:   "**1．甲**\n**2。乙**",
+			count: 2,
+			want:  []string{"甲", "乙"},
+		},
+		{
+			name:  "list bullets before numbers",
+			raw:   "- 1. 甲\n- 2. 乙",
+			count: 2,
+			want:  []string{"甲", "乙"},
+		},
+		{
+			name:  "list bullets without numbers",
+			raw:   "- 甲\n- 乙",
+			count: 2,
+			want:  []string{"甲", "乙"},
+		},
+		{
+			name:  "a missing row stays empty",
+			raw:   "1. 甲\n3. 丙",
+			count: 3,
+			want:  []string{"甲", "", "丙"},
+		},
+		{
+			name:  "unnumbered lines use positional order",
+			raw:   "甲\n乙",
+			count: 2,
+			want:  []string{"甲", "乙"},
+		},
+		{
+			name:  "code fences and prose are ignored",
+			raw:   "以下是译文：\n```\n1. 甲\n2. 乙\n```",
+			count: 2,
+			want:  []string{"甲", "乙"},
+		},
+		{
+			name:  "a duplicate number keeps the first line",
+			raw:   "1. 甲\n1. 乙\n2. 丙",
+			count: 2,
+			want:  []string{"甲", "丙"},
+		},
+		{
+			name:  "an out-of-range number is ignored",
+			raw:   "1. 甲\n9. 多余\n2. 乙",
+			count: 2,
+			want:  []string{"甲", "乙"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseBatchTranslations(tt.raw, tt.count)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("parseBatchTranslations(%q) = %#v, want %#v", tt.raw, got, tt.want)
 			}
 		})
 	}

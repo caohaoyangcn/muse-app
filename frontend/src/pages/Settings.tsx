@@ -1125,6 +1125,7 @@ function LLMSection() {
       <p className="mb-5 max-w-[560px] leading-relaxed text-[var(--muted)]">
         刮削成功后，使用 OpenAI 兼容接口把原标题翻译成简体中文，详情页会多显示一栏「中文译名」。
         支持 DeepSeek、OpenAI、Ollama、LM Studio 等；翻译在后台排队执行，失败只影响译名，不会改变刮削结果。
+        批量任务会把多条标题打包进同一次请求，避免重复发送整段提示词。
       </p>
 
       {loading ? (
@@ -1244,7 +1245,7 @@ function LLMSection() {
             <h3 className="text-sm font-semibold">批量翻译</h3>
             <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--muted)]">
               为所有已成功刮削、但还没有中文译名的影片排队翻译；之前翻译失败的也会重试。
-              任务在后台逐条执行，不会影响正在进行的刮削。
+              任务在后台分批打包执行，不会影响正在进行的刮削。
             </p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--muted)]">
               调整提示词或更换模型后，可用「重新翻译全部译名」整库刷新：已有译名也会重新排队，

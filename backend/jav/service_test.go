@@ -945,8 +945,9 @@ func TestRepositorySkipsExhaustedRetryableTasksInRecovery(t *testing.T) {
 }
 
 // fakeTitleTranslator is a controllable TitleTranslator: configured gates the
-// scrape-time trigger, started/release let a test hold a translation in flight,
-// and result/err describe the provider's answer.
+// scrape-time trigger, started/release let a test hold a request in flight, and
+// result/err describe the provider's answer. batches records every packed call
+// so a test can assert that bulk work is amortized instead of sent one by one.
 type fakeTitleTranslator struct {
 	configured atomic.Bool
 	started    chan struct{}
@@ -954,6 +955,7 @@ type fakeTitleTranslator struct {
 	once       sync.Once
 	mu         sync.Mutex
 	titles     []string
+	batches    [][]string
 	result     string
 	err        error
 }
@@ -963,27 +965,57 @@ func (f *fakeTitleTranslator) Configured() bool { return f.configured.Load() }
 func (f *fakeTitleTranslator) Available() bool { return f.configured.Load() }
 
 func (f *fakeTitleTranslator) TranslateTitle(ctx context.Context, title string) (string, error) {
+	results, errs := f.translate(ctx, []string{title})
+	return results[0], errs[0]
+}
+
+func (f *fakeTitleTranslator) TranslateTitles(ctx context.Context, titles []string) ([]string, []error) {
+	return f.translate(ctx, titles)
+}
+
+func (f *fakeTitleTranslator) translate(ctx context.Context, titles []string) ([]string, []error) {
 	f.mu.Lock()
-	f.titles = append(f.titles, title)
+	f.titles = append(f.titles, titles...)
+	f.batches = append(f.batches, append([]string(nil), titles...))
+	result, err := f.result, f.err
 	f.mu.Unlock()
+
 	if f.started != nil && f.release != nil {
 		f.once.Do(func() { close(f.started) })
 		select {
 		case <-f.release:
 		case <-ctx.Done():
-			return "", ctx.Err()
+			results := make([]string, len(titles))
+			errs := make([]error, len(titles))
+			for i := range errs {
+				errs[i] = ctx.Err()
+			}
+			return results, errs
 		}
 	}
-	if f.err != nil {
-		return "", f.err
+	results := make([]string, len(titles))
+	errs := make([]error, len(titles))
+	for i := range titles {
+		results[i] = result
+		errs[i] = err
 	}
-	return f.result, nil
+	return results, errs
 }
 
 func (f *fakeTitleTranslator) translatedTitles() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.titles...)
+}
+
+func (f *fakeTitleTranslator) translatedBatches() [][]string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([][]string, len(f.batches))
+	for i, batch := range f.batches {
+		out[i] = append([]string(nil), batch...)
+	}
+	return out
 }
 
 func TestServiceTranslatesTitleAfterScrape(t *testing.T) {
@@ -1071,6 +1103,68 @@ func TestServiceBulkTranslatesMissingTitles(t *testing.T) {
 	d := waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZhStatus == TitleZhSucceeded })
 	if d.TitleZh != "邻家的人妻" {
 		t.Fatalf("titleZh = %q, want 邻家的人妻", d.TitleZh)
+	}
+}
+
+// TestServicePacksQueuedTitlesIntoOneRequest proves a bulk pass is amortized:
+// three queued favorites reach the translator as one request instead of three
+// requests that each pay the full system prompt.
+func TestServicePacksQueuedTitlesIntoOneRequest(t *testing.T) {
+	s, db, vr, first := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	repo := NewSQLiteRepository(db)
+	seed := func(id int64, code, title string) {
+		t.Helper()
+		if err := repo.PrepareTask(id, false); err != nil {
+			t.Fatalf("prepare task %s: %v", code, err)
+		}
+		if err := repo.SaveSuccess(id, Metadata{Code: code, Title: title}, "filename", 2); err != nil {
+			t.Fatalf("save success %s: %v", code, err)
+		}
+		if err := repo.SetTaskStatus(id, "", StatusSucceeded, "", "", nil); err != nil {
+			t.Fatalf("set task status %s: %v", code, err)
+		}
+	}
+	ids := []int64{first}
+	seed(first, "IPX-633", "一つ目")
+	for _, item := range []struct{ name, code, title string }{
+		{"ABW-180.mp4", "ABW-180", "二つ目"},
+		{"SONE-364.mp4", "SONE-364", "三つ目"},
+	} {
+		v := &video.Video{
+			Path:      filepath.Join(t.TempDir(), item.name),
+			FileName:  item.name,
+			FileSize:  1,
+			Status:    video.StatusAvailable,
+			CreatedAt: 1,
+			UpdatedAt: 1,
+		}
+		if err := vr.Create(v); err != nil {
+			t.Fatalf("create favorite %q: %v", item.name, err)
+		}
+		seed(v.ID, item.code, item.title)
+		ids = append(ids, v.ID)
+	}
+
+	translator := &fakeTitleTranslator{result: "译名"}
+	translator.configured.Store(true)
+	s.SetTitleTranslator(translator)
+
+	queued, err := s.RetranslateAllTitles()
+	if err != nil {
+		t.Fatalf("retranslate all: %v", err)
+	}
+	if queued != len(ids) {
+		t.Fatalf("queued = %d, want %d", queued, len(ids))
+	}
+	for _, id := range ids {
+		waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZh == "译名" })
+	}
+	batches := translator.translatedBatches()
+	if len(batches) != 1 {
+		t.Fatalf("translator calls = %d, want one packed request: %#v", len(batches), batches)
+	}
+	if len(batches[0]) != len(ids) {
+		t.Fatalf("packed titles = %d, want %d", len(batches[0]), len(ids))
 	}
 }
 

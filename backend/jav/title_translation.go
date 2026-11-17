@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// TitleTranslator turns one scraped title into a Simplified-Chinese title.
+// TitleTranslator turns scraped titles into Simplified-Chinese titles.
 //
 // Configured reports whether a *newly scraped* title should be translated
 // automatically (provider complete, auto-translate not paused). Available
@@ -15,19 +15,31 @@ import (
 // automatic translation is paused; the scrape flow uses Configured, the detail
 // button and the bulk action use Available.
 //
+// TranslateTitles is the packed path: the worker amortizes the large system
+// prompt over several titles in one request. Both returned slices have the same
+// length as titles; a slot's error means that one title failed. TranslateTitle
+// stays for the single-title smoke test and any one-off caller.
+//
 // The implementation lives outside this package (backend/llm) and is wired once
 // during startup; it reads the settings on every call, so editing the provider
 // takes effect without restarting the scrape worker.
 type TitleTranslator interface {
 	TranslateTitle(ctx context.Context, title string) (string, error)
+	TranslateTitles(ctx context.Context, titles []string) ([]string, []error)
 	Configured() bool
 	Available() bool
 }
 
-// titleTranslationTimeout bounds one queued translation. The provider client
-// has its own shorter request timeout; this is the outer guard for a
-// misbehaving implementation, and it is never on the scrape's critical path.
+// titleTranslationTimeout bounds one queued request. The provider client has
+// its own shorter request timeout; this is the outer guard for a misbehaving
+// implementation, and it is never on the scrape's critical path.
 const titleTranslationTimeout = 2 * time.Minute
+
+// titleTranslationBatchSize is how many titles one request packs. Ten keeps the
+// model's numbered output stable and cuts the per-title system-prompt overhead
+// by an order of magnitude; a larger pack risks a truncated reply and a long
+// retry tail.
+const titleTranslationBatchSize = 10
 
 // SetTitleTranslator wires 中文译名 translation. It must be called during
 // wiring, before Start. Without a translator the feature simply stays off:
@@ -77,8 +89,8 @@ func (s *Service) TranslateMissingTitles() (int, error) {
 // user can refresh the whole library without clearing the column by hand.
 //
 // The stored translation stays visible until the replacement lands, and a
-// failed refresh keeps it (see translateTitle), so one bad batch never wipes a
-// readable library.
+// failed refresh keeps it (see translateTitleBatch), so one bad batch never
+// wipes a readable library.
 func (s *Service) RetranslateAllTitles() (int, error) {
 	if s.translator == nil || !s.translator.Available() {
 		return 0, fmt.Errorf("尚未配置 LLM 片名翻译，请先在「设置 → 片名翻译」中填写接口地址、模型与 API Key")
@@ -90,18 +102,42 @@ func (s *Service) RetranslateAllTitles() (int, error) {
 	return s.enqueueTitleTranslations(ids), nil
 }
 
-// enqueueTitleTranslations adds a batch to the queue and returns how many were
-// newly accepted. notify stays false: a library-wide action would otherwise
-// emit one read invalidating event per row before a single translation
-// completed. The worker emits when each result lands.
+// enqueueTitleTranslations packs a bulk pass into fixed-size requests and
+// returns how many ids were newly accepted. Every id is reserved before any
+// chunk is pushed, so the pending overlay is truthful while the producer is
+// still handing work to the worker.
 func (s *Service) enqueueTitleTranslations(ids []int64) int {
-	queued := 0
+	s.titleMu.Lock()
+	accepted := make([]int64, 0, len(ids))
 	for _, id := range ids {
-		if s.enqueueTitleTranslation(id, false) {
-			queued++
+		if _, exists := s.titlePending[id]; exists {
+			continue
 		}
+		s.titlePending[id] = struct{}{}
+		accepted = append(accepted, id)
 	}
-	return queued
+	s.titleMu.Unlock()
+
+	pushed := 0
+	for start := 0; start < len(accepted); start += titleTranslationBatchSize {
+		end := start + titleTranslationBatchSize
+		if end > len(accepted) {
+			end = len(accepted)
+		}
+		chunk := append([]int64(nil), accepted[start:end]...)
+		if !s.titleJobs.push(chunk) {
+			// The queue only closes during shutdown. Roll back every id that
+			// will never be processed so a later Get cannot report 翻译中….
+			s.titleMu.Lock()
+			for _, id := range accepted[start:] {
+				delete(s.titlePending, id)
+			}
+			s.titleMu.Unlock()
+			return pushed
+		}
+		pushed += len(chunk)
+	}
+	return pushed
 }
 
 // SetTitleResumeOnStart wires the startup backfill switch. It must be called
@@ -139,9 +175,10 @@ func (s *Service) resumeMissingTitles() {
 	}
 }
 
-// enqueueTitleTranslation adds one video to the translation queue. notify
-// emits the pending state immediately, which the detail panel needs for a
-// user-initiated single translation; bulk enqueueing suppresses it.
+// enqueueTitleTranslation adds one video to the translation queue as a
+// one-item batch. notify emits the pending state immediately, which the detail
+// panel needs for a user-initiated single translation; bulk enqueueing
+// suppresses it.
 func (s *Service) enqueueTitleTranslation(videoID int64, notify bool) bool {
 	s.titleMu.Lock()
 	if _, exists := s.titlePending[videoID]; exists {
@@ -151,7 +188,7 @@ func (s *Service) enqueueTitleTranslation(videoID int64, notify bool) bool {
 	s.titlePending[videoID] = struct{}{}
 	s.titleMu.Unlock()
 
-	if !s.titleJobs.push(videoID) {
+	if !s.titleJobs.push([]int64{videoID}) {
 		s.titleMu.Lock()
 		delete(s.titlePending, videoID)
 		s.titleMu.Unlock()
@@ -173,56 +210,120 @@ func (s *Service) titleTranslationPending(videoID int64) bool {
 	return pending
 }
 
-// titleWorker consumes the translation queue one at a time: providers are rate
-// limited, and a title translation is a small, non-urgent background task.
+// titleWorker consumes packed batches one request at a time: providers are rate
+// limited, and a packed request already amortizes the system prompt. Keeping a
+// single request in flight avoids bursts against the provider.
 func (s *Service) titleWorker() {
 	defer s.wg.Done()
 	for {
-		videoID, ok := s.titleJobs.pop()
+		videoIDs, ok := s.titleJobs.pop()
 		if !ok {
 			return
 		}
-		s.translateTitle(videoID)
-		s.titleMu.Lock()
-		delete(s.titlePending, videoID)
-		s.titleMu.Unlock()
+		s.translateTitleBatch(videoIDs)
 	}
 }
 
-func (s *Service) translateTitle(videoID int64) {
-	d, err := s.repo.Get(videoID)
-	if err != nil {
-		s.log.Warn("jav title translation skipped", "videoId", videoID, "errorCode", ErrorTitleTranslation, "err", err)
-		return
+// translateTitleBatch translates one packed batch. Each row is re-read just
+// before the request, so a re-scrape that cleared a translation is not
+// overwritten with a stale title; the previous translation is remembered so a
+// failed refresh can keep it.
+func (s *Service) translateTitleBatch(videoIDs []int64) {
+	type titleJob struct {
+		videoID    int64
+		title      string
+		previousZh string
 	}
-	title := strings.TrimSpace(d.Title)
-	if title == "" {
-		s.finishTitleTranslation(videoID, "", "标题为空，无法翻译")
+	jobs := make([]titleJob, 0, len(videoIDs))
+	for _, videoID := range videoIDs {
+		d, err := s.repo.Get(videoID)
+		if err != nil {
+			s.log.Warn("jav title translation skipped", "videoId", videoID, "errorCode", ErrorTitleTranslation, "err", err)
+			s.dropTitleTranslation(videoID)
+			continue
+		}
+		title := strings.TrimSpace(d.Title)
+		if title == "" {
+			s.finishTitleTranslation(videoID, "", "标题为空，无法翻译")
+			continue
+		}
+		jobs = append(jobs, titleJob{
+			videoID:    videoID,
+			title:      title,
+			previousZh: strings.TrimSpace(d.TitleZh),
+		})
+	}
+	if len(jobs) == 0 {
 		return
 	}
 	if s.translator == nil {
-		s.finishTitleTranslation(videoID, "", "片名翻译未配置")
+		for _, job := range jobs {
+			s.finishTitleTranslation(job.videoID, "", "片名翻译未配置")
+		}
 		return
 	}
 
+	titles := make([]string, len(jobs))
+	for i, job := range jobs {
+		titles[i] = job.title
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), titleTranslationTimeout)
 	defer cancel()
-	previousZh := strings.TrimSpace(d.TitleZh)
-	translated, err := s.translator.TranslateTitle(ctx, title)
+	translations, errs := s.translator.TranslateTitles(ctx, titles)
+	if len(translations) != len(jobs) || len(errs) != len(jobs) {
+		// A broken translator must not leave every row stuck in 翻译中….
+		for _, job := range jobs {
+			s.finishTitleTranslationFailure(job.videoID, "片名翻译返回了长度不匹配的结果")
+		}
+		return
+	}
+
+	translated := 0
+	for i := range jobs {
+		if errs[i] == nil && strings.TrimSpace(translations[i]) != "" {
+			translated++
+		}
+	}
+	s.log.Info("jav title batch finished", "requested", len(jobs), "translated", translated)
+	for i, job := range jobs {
+		s.finishOneTitleTranslation(job.videoID, translations[i], errs[i], job.previousZh)
+	}
+}
+
+// finishOneTitleTranslation stores one slot of a packed reply. A failed refresh
+// keeps the old readable title and records the error next to it; a first-time
+// failure leaves title_zh empty and the error explains why.
+func (s *Service) finishOneTitleTranslation(videoID int64, translated string, err error, previousZh string) {
 	if err != nil {
 		s.log.Warn("jav title translation failed", "videoId", videoID, "errorCode", ErrorTitleTranslation, "err", err)
 		if previousZh != "" {
-			// A refresh (重新翻译) failed: keep the readable translation the row
-			// already had, but record why the refresh failed so the detail panel
-			// can show the error next to the kept title.
 			s.finishTitleTranslationFailure(videoID, err.Error())
 			return
 		}
 		s.finishTitleTranslation(videoID, "", err.Error())
 		return
 	}
+	translated = strings.TrimSpace(translated)
+	if translated == "" {
+		s.log.Warn("jav title translation failed", "videoId", videoID, "errorCode", ErrorTitleTranslation, "err", "LLM 返回了空的翻译结果")
+		if previousZh != "" {
+			s.finishTitleTranslationFailure(videoID, "LLM 返回了空的翻译结果")
+			return
+		}
+		s.finishTitleTranslation(videoID, "", "LLM 返回了空的翻译结果")
+		return
+	}
 	s.log.Info("jav title translated", "videoId", videoID, "titleZh", translated)
 	s.finishTitleTranslation(videoID, translated, "")
+}
+
+// dropTitleTranslation clears the pending overlay for a row that cannot be
+// read anymore, so it does not stay 翻译中… until the next event.
+func (s *Service) dropTitleTranslation(videoID int64) {
+	s.titleMu.Lock()
+	delete(s.titlePending, videoID)
+	s.titleMu.Unlock()
+	s.emitUpdate(videoID)
 }
 
 // finishTitleTranslationFailure ends one failed refresh without clearing the

@@ -66,10 +66,10 @@ type Service struct {
 	fillOnce sync.Once
 
 	// 中文译名 translation: translator is wiring-time, titleJobs is a
-	// single-worker queue, titlePending dedupes ids already queued or running,
-	// titleResume is the startup switch read by Start.
+	// single-worker queue of packed batches, titlePending dedupes ids already
+	// queued or running, titleResume is the startup switch read by Start.
 	translator   TitleTranslator
-	titleJobs    *workQueue[int64]
+	titleJobs    *workQueue[[]int64]
 	titlePending map[int64]struct{}
 	titleResume  func() (bool, error)
 	titleMu      sync.Mutex
@@ -138,7 +138,7 @@ func NewService(repo Repository, videos video.VideoRepository, provider Provider
 	if log == nil {
 		log = slog.Default()
 	}
-	s := &Service{repo: repo, videos: videos, provider: provider, coverDir: coverDir, emit: emit, log: log, jobs: newJobQueue(), pending: make(map[int64]struct{}), titleJobs: newWorkQueue[int64](), titlePending: make(map[int64]struct{}), stop: make(chan struct{}), stopped: make(chan struct{}), scannerStarted: make(chan struct{}), fillWake: make(chan struct{}, 1)}
+	s := &Service{repo: repo, videos: videos, provider: provider, coverDir: coverDir, emit: emit, log: log, jobs: newJobQueue(), pending: make(map[int64]struct{}), titleJobs: newWorkQueue[[]int64](), titlePending: make(map[int64]struct{}), stop: make(chan struct{}), stopped: make(chan struct{}), scannerStarted: make(chan struct{}), fillWake: make(chan struct{}, 1)}
 	for i := 0; i < workers; i++ {
 		s.wg.Add(1)
 		go s.worker()
