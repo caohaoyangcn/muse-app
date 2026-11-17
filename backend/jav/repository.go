@@ -14,6 +14,10 @@ type Repository interface {
 	Get(videoID int64) (*Detail, error)
 	GetTask(videoID int64) (*Task, error)
 	ListTaskOverviews() ([]TaskOverview, error)
+	// ScrapeTaskCounts returns the queue depth per worker state for the
+	// 后台任务 dashboard. It is a cheap GROUP BY, unlike ListTaskOverviews,
+	// which materializes one row per favorite.
+	ScrapeTaskCounts() (ScrapeTaskCounts, error)
 	// ListCodes returns every saved 番号 keyed by favorite id. It feeds the
 	// shared video read model, which shows a favorite under its authoritative
 	// code once a scrape has produced one.
@@ -162,6 +166,49 @@ func (r *SQLiteRepository) ListTaskOverviews() ([]TaskOverview, error) {
 		return nil, fmt.Errorf("iterate jav task overviews: %w", err)
 	}
 	return out, nil
+}
+
+// ScrapeTaskCounts aggregates the queue by worker state. Trashed favorites are
+// excluded exactly like the board, so the dashboard cannot count work the user
+// can no longer see.
+func (r *SQLiteRepository) ScrapeTaskCounts() (ScrapeTaskCounts, error) {
+	rows, err := r.db.Query(`
+		SELECT t.status, COUNT(*), COALESCE(MAX(t.finished_at), 0)
+		FROM jav_scrape_tasks t
+		JOIN videos v ON v.id = t.video_id AND v.deleted_at IS NULL
+		GROUP BY t.status`)
+	if err != nil {
+		return ScrapeTaskCounts{}, fmt.Errorf("count jav tasks: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out ScrapeTaskCounts
+	for rows.Next() {
+		var status string
+		var count int
+		var finishedAt int64
+		if err := rows.Scan(&status, &count, &finishedAt); err != nil {
+			return ScrapeTaskCounts{}, fmt.Errorf("scan jav task count: %w", err)
+		}
+		switch status {
+		case StatusQueued:
+			out.Queued += count
+		case StatusRunning:
+			out.Running += count
+		case StatusRetryable:
+			out.Retryable += count
+		case StatusSucceeded:
+			out.Succeeded += count
+		default:
+			// Any terminal state we do not model is a failure here on
+			// purpose: the dashboard must not hide rows the board shows.
+			out.Failed += count
+		}
+		if finishedAt > out.LastFinishedAt {
+			out.LastFinishedAt = finishedAt
+		}
+	}
+	return out, rows.Err()
 }
 
 // ListCodes returns the authoritative 番号 recorded for every favorite,

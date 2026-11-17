@@ -263,3 +263,18 @@ func TaskCategory(status string) string {
 		return TaskCategoryFailed
 	}
 }
+
+// ScrapeTaskCounts is the dashboard's cheap aggregate of the scrape queue: how
+// many tasks sit in each worker state, and when the last one reached a terminal
+// state. Unlike TaskOverview it carries no video rows, so it can be read on
+// every progress tick.
+type ScrapeTaskCounts struct {
+	Queued    int
+	Running   int
+	Retryable int
+	Failed    int
+	Succeeded int
+	// LastFinishedAt is the newest finished_at across terminal tasks, in unix
+	// milliseconds; zero when none has finished.
+	LastFinishedAt int64
+}

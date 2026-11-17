@@ -162,12 +162,16 @@ func (s *Service) RetranslateAllTitles() (int, error) {
 func (s *Service) enqueueTitleTranslations(ids []int64) int {
 	s.titleMu.Lock()
 	accepted := make([]int64, 0, len(ids))
+	idle := len(s.titlePending) == 0
 	for _, id := range ids {
 		if _, exists := s.titlePending[id]; exists {
 			continue
 		}
 		s.titlePending[id] = struct{}{}
 		accepted = append(accepted, id)
+	}
+	if len(accepted) > 0 {
+		s.noteTitleBatchLocked(idle, len(accepted))
 	}
 	s.titleMu.Unlock()
 
@@ -185,10 +189,15 @@ func (s *Service) enqueueTitleTranslations(ids []int64) int {
 			for _, id := range accepted[start:] {
 				delete(s.titlePending, id)
 			}
+			s.rollbackTitleBatchLocked(len(accepted) - start)
 			s.titleMu.Unlock()
+			s.scheduleTasksUpdate()
 			return pushed
 		}
 		pushed += len(chunk)
+	}
+	if pushed > 0 {
+		s.scheduleTasksUpdate()
 	}
 	return pushed
 }
@@ -238,15 +247,20 @@ func (s *Service) enqueueTitleTranslation(videoID int64, notify bool) bool {
 		s.titleMu.Unlock()
 		return false
 	}
+	idle := len(s.titlePending) == 0
 	s.titlePending[videoID] = struct{}{}
+	s.noteTitleBatchLocked(idle, 1)
 	s.titleMu.Unlock()
 
 	if !s.titleJobs.push([]int64{videoID}) {
 		s.titleMu.Lock()
 		delete(s.titlePending, videoID)
+		s.rollbackTitleBatchLocked(1)
 		s.titleMu.Unlock()
+		s.scheduleTasksUpdate()
 		return false
 	}
+	s.scheduleTasksUpdate()
 	if notify {
 		s.emitUpdate(videoID)
 	}
@@ -284,6 +298,7 @@ func (s *Service) titleWorker() {
 func (s *Service) translateTitleBatch(videoIDs []int64) {
 	type titleJob struct {
 		videoID    int64
+		code       string
 		title      string
 		previousZh string
 	}
@@ -302,6 +317,7 @@ func (s *Service) translateTitleBatch(videoIDs []int64) {
 		}
 		jobs = append(jobs, titleJob{
 			videoID:    videoID,
+			code:       d.Code,
 			title:      title,
 			previousZh: strings.TrimSpace(d.TitleZh),
 		})
@@ -339,6 +355,8 @@ func (s *Service) translateTitleBatch(videoIDs []int64) {
 		}
 	}
 
+	s.beginTitleRequest(titleRequestLabel(jobs[0].code, jobs[0].title, len(jobs)))
+	defer s.endTitleRequest()
 	ctx, cancel := context.WithTimeout(context.Background(), titleTranslationTimeout)
 	defer cancel()
 	translations, errs := s.translator.TranslateTitles(ctx, titles)
@@ -394,7 +412,9 @@ func (s *Service) finishOneTitleTranslation(videoID int64, translated, version s
 func (s *Service) dropTitleTranslation(videoID int64) {
 	s.titleMu.Lock()
 	delete(s.titlePending, videoID)
+	s.finishTitleRunLocked(false)
 	s.titleMu.Unlock()
+	s.scheduleTasksUpdate()
 	s.emitUpdate(videoID)
 }
 
@@ -408,7 +428,9 @@ func (s *Service) finishTitleTranslationFailure(videoID int64, failure string) {
 	}
 	s.titleMu.Lock()
 	delete(s.titlePending, videoID)
+	s.finishTitleRunLocked(false)
 	s.titleMu.Unlock()
+	s.scheduleTasksUpdate()
 	s.emitUpdate(videoID)
 }
 
@@ -427,6 +449,8 @@ func (s *Service) finishTitleTranslation(videoID int64, titleZh, version, failur
 	}
 	s.titleMu.Lock()
 	delete(s.titlePending, videoID)
+	s.finishTitleRunLocked(strings.TrimSpace(titleZh) != "")
 	s.titleMu.Unlock()
+	s.scheduleTasksUpdate()
 	s.emitUpdate(videoID)
 }

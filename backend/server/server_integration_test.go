@@ -875,6 +875,39 @@ func (r *stubJavRepo) ListTaskOverviews() ([]jav.TaskOverview, error) {
 	}
 	return []jav.TaskOverview{{Task: *r.task, Category: jav.TaskCategory(r.task.Status)}}, nil
 }
+func (r *stubJavRepo) ScrapeTaskCounts() (jav.ScrapeTaskCounts, error) {
+	if r.task == nil {
+		return jav.ScrapeTaskCounts{}, nil
+	}
+	var counts jav.ScrapeTaskCounts
+	switch r.task.Status {
+	case jav.StatusQueued:
+		counts.Queued = 1
+	case jav.StatusRunning:
+		counts.Running = 1
+	case jav.StatusRetryable:
+		counts.Retryable = 1
+	case jav.StatusSucceeded:
+		counts.Succeeded = 1
+	default:
+		counts.Failed = 1
+	}
+	return counts, nil
+}
+
+// The translation reads answer empty here: the LAN tests never run the bulk
+// actions, but jav.Repository has to be complete to wire the service.
+func (r *stubJavRepo) ListTitles() (map[int64]jav.ScrapedTitle, error)  { return nil, nil }
+func (r *stubJavRepo) SearchTitleIDs(string) ([]int64, error)           { return nil, nil }
+func (r *stubJavRepo) ListTitleTranslationCandidates() ([]int64, error) { return nil, nil }
+func (r *stubJavRepo) ListTitleRetranslationCandidates() ([]jav.TitleTranslationCandidate, error) {
+	return nil, nil
+}
+func (r *stubJavRepo) SetTitleTranslation(int64, string, string) error { return nil }
+func (r *stubJavRepo) SetTitleTranslationVersion(int64, string, string, string) error {
+	return nil
+}
+func (r *stubJavRepo) SetTitleTranslationFailure(int64, string) error { return nil }
 func (r *stubJavRepo) ListCodes() (map[int64]string, error) {
 	codes := make(map[int64]string)
 	for id, d := range r.details {
@@ -1109,6 +1142,7 @@ func TestAPIJavTasks(t *testing.T) {
 		t.Errorf("overviews = %+v", overviews)
 	}
 }
+
 
 func TestAPIActorsAndFilms(t *testing.T) {
 	repo := &stubJavRepo{

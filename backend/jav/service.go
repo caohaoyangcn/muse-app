@@ -67,12 +67,15 @@ type Service struct {
 
 	// 中文译名 translation: translator is wiring-time, titleJobs is a
 	// single-worker queue of packed batches, titlePending dedupes ids already
-	// queued or running, titleResume is the startup switch read by Start.
-	translator   TitleTranslator
-	titleJobs    *workQueue[[]int64]
-	titlePending map[int64]struct{}
-	titleResume  func() (bool, error)
-	titleMu      sync.Mutex
+	// queued or running, titleResume is the startup switch read by Start, and
+	// titleRun is the in-memory progress behind the 后台任务 dashboard.
+	translator         TitleTranslator
+	titleJobs          *workQueue[[]int64]
+	titlePending       map[int64]struct{}
+	titleResume        func() (bool, error)
+	titleRun           titleRunState
+	tasksEmitScheduled bool
+	titleMu            sync.Mutex
 }
 
 type job struct {
@@ -240,6 +243,9 @@ func (s *Service) Get(videoID int64) (*Detail, error) {
 }
 func (s *Service) GetTask(videoID int64) (*Task, error)       { return s.repo.GetTask(videoID) }
 func (s *Service) ListTaskOverviews() ([]TaskOverview, error) { return s.repo.ListTaskOverviews() }
+
+// ScrapeTaskCounts forwards the dashboard's cheap queue aggregate.
+func (s *Service) ScrapeTaskCounts() (ScrapeTaskCounts, error) { return s.repo.ScrapeTaskCounts() }
 
 // Codes returns the authoritative 番号 per favorite for the shared video read
 // model. A favorite with no saved code is absent from the map.
