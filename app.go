@@ -18,6 +18,7 @@ import (
 	"muse-app/backend/platform"
 	"muse-app/backend/server"
 	"muse-app/backend/settings"
+	"muse-app/backend/tasks"
 	"muse-app/backend/video"
 	"muse-app/backend/watch"
 )
@@ -298,6 +299,16 @@ func (a *App) TranslateMissingTitles() (int, error) {
 		return 0, fmt.Errorf("library not initialized")
 	}
 	return a.lib.TranslateMissingJavTitles()
+}
+
+// BackgroundTasks returns the read-only 后台任务 snapshot the dashboard draws:
+// translation, scrape, both library scans and the actor backfill, each as the
+// owning service reports it.
+func (a *App) BackgroundTasks() (tasks.Snapshot, error) {
+	if a.lib == nil {
+		return tasks.Snapshot{}, fmt.Errorf("library not initialized")
+	}
+	return a.lib.BackgroundTasks(), nil
 }
 
 // RetranslateAllTitles queues every successfully scraped favorite for a fresh

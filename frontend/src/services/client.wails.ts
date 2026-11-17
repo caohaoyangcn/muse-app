@@ -17,6 +17,7 @@ export const wailsClient: MuseClient = {
   videoJav: (id) => api.videoJav(id),
   videoJavTask: (id) => api.videoJavTask(id),
   listJavTaskOverviews: () => api.listJavTaskOverviews(),
+  backgroundTasks: () => api.backgroundTasks(),
 
   listJavDuplicates: (includeIgnored) => api.listJavDuplicates(includeIgnored),
   listContentDuplicates: (includeIgnored) => api.listContentDuplicates(includeIgnored),

@@ -16,6 +16,7 @@
 import type {
   ActorProfile,
   ActorSummary,
+  BackgroundTasks,
   ContentDuplicateGroup,
   ContentScanStatus,
   Group,
@@ -41,6 +42,10 @@ export interface MuseClient {
   videoJav(id: number): Promise<JavDetail | null>;
   videoJavTask(id: number): Promise<JavTask | null>;
   listJavTaskOverviews(): Promise<JavTaskOverview[]>;
+
+  // ---- background work ----
+  /** 后台任务看板：刮削、片名翻译、内容扫描等任务的进度（只读）。 */
+  backgroundTasks(): Promise<BackgroundTasks>;
 
   // ---- duplicate reads ----
   listJavDuplicates(includeIgnored?: boolean): Promise<JavDuplicateGroup[]>;
@@ -101,6 +106,7 @@ export const client: MuseClient = {
   videoJav: (id) => bound().videoJav(id),
   videoJavTask: (id) => bound().videoJavTask(id),
   listJavTaskOverviews: () => bound().listJavTaskOverviews(),
+  backgroundTasks: () => bound().backgroundTasks(),
 
   listJavDuplicates: (includeIgnored) => bound().listJavDuplicates(includeIgnored),
   listContentDuplicates: (includeIgnored) => bound().listContentDuplicates(includeIgnored),

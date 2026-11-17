@@ -11,6 +11,7 @@
 // (media URLs, `getVideo`) or platform-specific playback bookkeeping.
 import type {
   ActorSummary,
+  BackgroundTasks,
   ContentDuplicateGroup,
   ContentScanStatus,
   Group,
@@ -89,6 +90,11 @@ export function javTask(id: number): Promise<JavTask | null> {
 
 export function listJavTasks(): Promise<JavTaskOverview[]> {
   return request<JavTaskOverview[]>(`${API}/jav/tasks`);
+}
+
+/** 后台任务看板：刮削、片名翻译、内容扫描等任务的只读进度快照。 */
+export function backgroundTasks(): Promise<BackgroundTasks> {
+  return request<BackgroundTasks>(`${API}/tasks`);
 }
 
 export function listActors(): Promise<ActorSummary[]> {

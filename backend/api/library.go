@@ -21,6 +21,7 @@ import (
 	"muse-app/backend/cloud"
 	"muse-app/backend/group"
 	"muse-app/backend/jav"
+	"muse-app/backend/tasks"
 	"muse-app/backend/video"
 	"muse-app/backend/watch"
 )
@@ -1149,6 +1150,218 @@ func (l *Library) RetranslateAllJavTitles() (int, error) {
 		return 0, fmt.Errorf("jav service not configured")
 	}
 	return l.jav.RetranslateAllTitles()
+}
+
+// BackgroundTasks returns the 后台任务 dashboard: one row per task owner that
+// has something to report. Each row is a projection of that service's own
+// status — the dashboard never starts, pauses or retries work — and a source
+// that cannot be read is skipped instead of failing the whole screen.
+func (l *Library) BackgroundTasks() tasks.Snapshot {
+	list := make([]tasks.Task, 0, 5)
+	if l.jav != nil {
+		list = append(list, l.titleTranslationTask()...)
+		list = append(list, l.scrapeTask()...)
+		list = append(list, l.actorFillTask()...)
+	}
+	if l.videos != nil {
+		list = append(list, l.contentScanTask()...)
+		list = append(list, l.fileScanTask()...)
+	}
+	tasks.Sort(list)
+	return tasks.Snapshot{Tasks: list}
+}
+
+// titleTranslationTask reports the in-memory 中文译名 run. A finished run stays
+// on the dashboard until the next one starts, which is how "上次补齐" needs no
+// table.
+func (l *Library) titleTranslationTask() []tasks.Task {
+	st := l.jav.TitleTranslationStatus()
+	if st.Total == 0 && !st.Active {
+		return nil
+	}
+	state := tasks.StateDone
+	message := ""
+	if st.Active {
+		state = tasks.StateRunning
+		if st.InFlight > 1 {
+			message = fmt.Sprintf("%d 个请求并发", st.InFlight)
+		}
+	}
+	return []tasks.Task{{
+		ID:        "title-translation",
+		Title:     "片名翻译",
+		Kind:      tasks.KindBatch,
+		State:     state,
+		Done:      st.Done,
+		Total:     st.Total,
+		Failed:    st.Failed,
+		Unit:      "条",
+		Current:   st.Current,
+		Message:   message,
+		StartedAt: st.StartedAt,
+		UpdatedAt: st.UpdatedAt,
+	}}
+}
+
+// scrapeTask reports the queue depth of the scrape workers. It deliberately
+// carries no percentage: a scrape pass has no batch boundary (the candidate set
+// can grow while it runs), so a denominator would move under the user. The
+// board behind Detail is the per-work detail view.
+func (l *Library) scrapeTask() []tasks.Task {
+	counts, err := l.jav.ScrapeTaskCounts()
+	if err != nil {
+		if l.log != nil {
+			l.log.Warn("background tasks: read scrape counts", "err", err)
+		}
+		return nil
+	}
+	active := counts.Queued + counts.Running + counts.Retryable
+	if active == 0 && counts.LastFinishedAt == 0 {
+		return nil
+	}
+	t := tasks.Task{
+		ID:        "scrape",
+		Title:     "刮削任务",
+		Kind:      tasks.KindBatch,
+		State:     tasks.StateDone,
+		Unit:      "部",
+		Detail:    "scrapeTasks",
+		UpdatedAt: counts.LastFinishedAt,
+	}
+	if active == 0 {
+		return []tasks.Task{t}
+	}
+	t.State = tasks.StateRunning
+	parts := make([]string, 0, 3)
+	if counts.Running > 0 {
+		parts = append(parts, fmt.Sprintf("刮削中 %d", counts.Running))
+	}
+	if counts.Queued > 0 {
+		parts = append(parts, fmt.Sprintf("排队 %d", counts.Queued))
+	}
+	if counts.Retryable > 0 {
+		parts = append(parts, fmt.Sprintf("待重试 %d", counts.Retryable))
+	}
+	t.Message = strings.Join(parts, " · ")
+	return []tasks.Task{t}
+}
+
+// contentScanTask reports the 内容查重 fingerprint pass. The two phases keep
+// their own counters: only the running phase's numbers mean anything, and the
+// comparing phase's total does not exist until examining ends.
+func (l *Library) contentScanTask() []tasks.Task {
+	st := l.videos.ContentScanStatus()
+	if st.StartedAt == 0 {
+		return nil
+	}
+	updated := st.FinishedAt
+	if updated == 0 {
+		updated = st.StartedAt
+	}
+	t := tasks.Task{
+		ID:        "content-scan",
+		Title:     "内容查重扫描",
+		Kind:      tasks.KindScan,
+		Unit:      "个文件",
+		Detail:    "duplicates",
+		StartedAt: st.StartedAt,
+		UpdatedAt: updated,
+	}
+	if st.Running {
+		t.State = tasks.StateRunning
+		if st.Phase == video.PhaseExamining {
+			t.Done, t.Total, t.Message = st.Examined, st.ExamineTotal, "正在检查文件大小"
+		} else {
+			t.Done, t.Total, t.Message = st.Done, st.Total, "正在计算内容指纹"
+		}
+		return []tasks.Task{t}
+	}
+	t.State = tasks.StateDone
+	if st.Total > 0 {
+		t.Done, t.Total = st.Done, st.Total
+	} else {
+		t.Done, t.Total = st.Examined, st.ExamineTotal
+	}
+	return []tasks.Task{t}
+}
+
+// fileScanTask reports the 文件检测 pass. Removed rows are results, not
+// failures (they went to the recycle bin and can be restored), so the failure
+// count here only reflects a pass that could not read the library at all.
+func (l *Library) fileScanTask() []tasks.Task {
+	st := l.videos.FileScanStatus()
+	if st.StartedAt == 0 {
+		return nil
+	}
+	updated := st.FinishedAt
+	if updated == 0 {
+		updated = st.StartedAt
+	}
+	t := tasks.Task{
+		ID:        "file-scan",
+		Title:     "文件检测",
+		Kind:      tasks.KindScan,
+		Unit:      "个文件",
+		Done:      st.Checked,
+		Total:     st.Total,
+		StartedAt: st.StartedAt,
+		UpdatedAt: updated,
+	}
+	if st.Running {
+		t.State = tasks.StateRunning
+		if st.Offline > 0 {
+			t.Message = fmt.Sprintf("未接入 %d", st.Offline)
+		}
+		return []tasks.Task{t}
+	}
+	if st.Error != "" {
+		t.State = tasks.StateFailed
+		t.Error = st.Error
+		return []tasks.Task{t}
+	}
+	t.State = tasks.StateDone
+	parts := make([]string, 0, 3)
+	if st.Removed > 0 {
+		parts = append(parts, fmt.Sprintf("移入回收站 %d", st.Removed))
+	}
+	if st.Revived > 0 {
+		parts = append(parts, fmt.Sprintf("恢复 %d", st.Revived))
+	}
+	if st.Skipped > 0 {
+		parts = append(parts, fmt.Sprintf("跳过 %d", st.Skipped))
+	}
+	t.Message = strings.Join(parts, " · ")
+	return []tasks.Task{t}
+}
+
+// actorFillTask reports the 演员资料补齐 backfill.
+func (l *Library) actorFillTask() []tasks.Task {
+	st, err := l.jav.ActorFillStatus()
+	if err != nil {
+		if l.log != nil {
+			l.log.Warn("background tasks: read actor fill status", "err", err)
+		}
+		return nil
+	}
+	if st.Total == 0 && !st.Active {
+		return nil
+	}
+	state := tasks.StateDone
+	if st.Active {
+		state = tasks.StateRunning
+	}
+	return []tasks.Task{{
+		ID:      "actor-fill",
+		Title:   "演员资料补齐",
+		Kind:    tasks.KindBatch,
+		State:   state,
+		Done:    st.Succeeded + st.NotFound + st.Failed,
+		Total:   st.Total,
+		Failed:  st.Failed,
+		Unit:    "位演员",
+		Current: st.Current,
+		Detail:  "actors",
+	}}
 }
 
 // CreateGroup makes a new empty group.

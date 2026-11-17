@@ -21,9 +21,10 @@ const contentExaminedProgressEvery = 32
 // Scan phases. A pass reads every favorite's size first and only then knows
 // which files need their content compared, so the two phases keep their own
 // counters and the second phase's total does not exist until the first ends.
+// They are exported because the 后台任务 dashboard reports the running phase.
 const (
-	scanPhaseExamining = "examining"
-	scanPhaseComparing = "comparing"
+	PhaseExamining = "examining"
+	PhaseComparing = "comparing"
 )
 
 // ContentScanStatus reports the library-wide fingerprint pass (内容重复扫描).
@@ -174,7 +175,7 @@ func (s *Service) runContentScan() {
 // beginExamining announces the size phase and how many favorites it covers.
 func (s *Service) beginExamining(total int) {
 	s.scan.mu.Lock()
-	s.scan.status.Phase = scanPhaseExamining
+	s.scan.status.Phase = PhaseExamining
 	s.scan.status.Examined = 0
 	s.scan.status.ExamineTotal = total
 	status := s.scan.status
@@ -201,7 +202,7 @@ func (s *Service) countExamined() {
 // known now that every size has been read.
 func (s *Service) beginComparing(total, unreadable int) {
 	s.scan.mu.Lock()
-	s.scan.status.Phase = scanPhaseComparing
+	s.scan.status.Phase = PhaseComparing
 	s.scan.status.Total = total
 	s.scan.status.Done = 0
 	s.scan.status.Failed = unreadable

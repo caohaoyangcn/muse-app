@@ -23,6 +23,7 @@ export const httpClient: MuseClient = {
   videoJav: (id) => http.javDetail(id),
   videoJavTask: (id) => http.javTask(id),
   listJavTaskOverviews: () => http.listJavTasks(),
+  backgroundTasks: () => http.backgroundTasks(),
 
   listJavDuplicates: (includeIgnored) => http.listJavDuplicates(includeIgnored),
   listContentDuplicates: (includeIgnored) => http.listContentDuplicates(includeIgnored),

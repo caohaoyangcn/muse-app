@@ -34,6 +34,10 @@ export function ArchiveCloudConnection(arg1) {
   return window['go']['main']['App']['ArchiveCloudConnection'](arg1);
 }
 
+export function BackgroundTasks() {
+  return window['go']['main']['App']['BackgroundTasks']();
+}
+
 export function BrowseCloud(arg1, arg2) {
   return window['go']['main']['App']['BrowseCloud'](arg1, arg2);
 }

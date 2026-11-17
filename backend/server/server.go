@@ -203,6 +203,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/groups", s.handleListGroups)
 	mux.HandleFunc("GET /api/groups/{id}/videos", s.handleVideosInGroup)
 	mux.HandleFunc("GET /api/jav/tasks", s.handleJavTasks)
+	// 后台任务 dashboard: read-only aggregation of the tasks that own progress
+	// state. The phone polls it while something is running.
+	mux.HandleFunc("GET /api/tasks", s.handleBackgroundTasks)
 	mux.HandleFunc("GET /api/jav/duplicates", s.handleJavDuplicates)
 	mux.HandleFunc("GET /api/duplicates/content", s.handleContentDuplicates)
 	mux.HandleFunc("GET /api/duplicates/content/scan", s.handleContentScanStatus)
@@ -366,6 +369,12 @@ func (s *Server) handleJavTasks(w http.ResponseWriter, r *http.Request) {
 		overviews = []jav.TaskOverview{}
 	}
 	writeJSON(w, overviews)
+}
+
+// handleBackgroundTasks returns the read-only 后台任务 snapshot. The dashboard
+// owns no actions: stopping or starting a task stays where that task lives.
+func (s *Server) handleBackgroundTasks(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, s.lib.BackgroundTasks())
 }
 
 // handleJavDuplicates returns the recognized works (番号) the library holds more

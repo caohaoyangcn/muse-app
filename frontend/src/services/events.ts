@@ -13,6 +13,7 @@ import { invalidate } from "./live";
 const EVENTS = [
   "thumbnail:generated", // a cover was written
   "jav:scrape:updated", // metadata or the scraped cover changed
+  "tasks:updated", // a background task advanced (translation row finished, …)
   "jav:actors:updated", // a performer's profile was saved, or the backfill advanced
   "video:status:changed", // a file was found missing / present again
   "video:relinked", // a known file was found at a new path

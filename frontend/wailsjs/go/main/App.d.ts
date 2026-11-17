@@ -3,6 +3,7 @@
 import {jav} from '../models';
 import {video} from '../models';
 import {watch} from '../models';
+import {tasks} from '../models';
 import {cloud} from '../models';
 import {group} from '../models';
 import {context} from '../models';
@@ -26,6 +27,8 @@ export function AddVideos(arg1:Array<string>):Promise<Array<video.AddVideoResult
 export function AddWatchDir(arg1:string):Promise<watch.WatchedDir>;
 
 export function ArchiveCloudConnection(arg1:number):Promise<number>;
+
+export function BackgroundTasks():Promise<tasks.Snapshot>;
 
 export function BrowseCloud(arg1:number,arg2:string):Promise<Array<cloud.Entry>>;
 

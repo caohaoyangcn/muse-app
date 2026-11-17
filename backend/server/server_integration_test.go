@@ -21,6 +21,7 @@ import (
 	"muse-app/backend/api"
 	"muse-app/backend/group"
 	"muse-app/backend/jav"
+	"muse-app/backend/tasks"
 	"muse-app/backend/video"
 )
 
@@ -1143,6 +1144,41 @@ func TestAPIJavTasks(t *testing.T) {
 	}
 }
 
+// The 后台任务 dashboard endpoint is read-only and must answer a JSON object
+// even when nothing is running, so the phone can render an empty screen.
+func TestAPIBackgroundTasks(t *testing.T) {
+	repo := &stubJavRepo{task: &jav.Task{ID: 5, VideoID: 1, Status: jav.StatusQueued}}
+	base := newJavTestServer(t, repo)
+
+	res, err := http.Get(base + "/api/tasks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", res.StatusCode)
+	}
+	var snapshot tasks.Snapshot
+	if err := json.NewDecoder(res.Body).Decode(&snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Tasks == nil {
+		t.Fatal("tasks = nil, want an array")
+	}
+	found := false
+	for _, task := range snapshot.Tasks {
+		if task.ID != "scrape" {
+			continue
+		}
+		found = true
+		if task.State != tasks.StateRunning || task.Message == "" {
+			t.Errorf("scrape row = %+v, want a running queue with a breakdown", task)
+		}
+	}
+	if !found {
+		t.Fatalf("snapshot = %+v, want a scrape row", snapshot)
+	}
+}
 
 func TestAPIActorsAndFilms(t *testing.T) {
 	repo := &stubJavRepo{

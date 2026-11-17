@@ -78,6 +78,7 @@ import {
   ConfirmContentDuplicate,
   ScanContentDuplicates,
   ContentScanStatus as ContentScanStatusBinding,
+  BackgroundTasks as BackgroundTasksBinding,
   ScanFileStatuses,
   FileScanStatus as FileScanStatusBinding,
   ScrapeVideoJav,
@@ -104,6 +105,7 @@ import type {
   ActorFillStatus,
   ActorProfile,
   ActorSummary,
+  BackgroundTasks,
   Group,
   ServerStartInfo,
   Video,
@@ -270,6 +272,9 @@ export const scanContentDuplicates = (): Promise<ContentScanStatus> =>
 /** 内容指纹扫描的当前（或最近一次）状态。 */
 export const contentScanStatus = (): Promise<ContentScanStatus> =>
   ContentScanStatusBinding();
+
+/** 后台任务看板：刮削、片名翻译、内容扫描等任务的只读进度快照。 */
+export const backgroundTasks = (): Promise<BackgroundTasks> => BackgroundTasksBinding();
 export const scrapeVideoJav = (id: number, force = false): Promise<void> => ScrapeVideoJav(id, force);
 export const scrapeVideosJav = (force = false): Promise<number> => ScrapeVideosJav(force);
 export const setVideoJavOverride = (id: number, mode: string, code: string): Promise<void> =>

@@ -79,7 +79,7 @@ func TestContentScanReportsPhaseProgress(t *testing.T) {
 	if len(got) == 0 {
 		t.Fatal("no progress events were emitted")
 	}
-	if got[0].Phase != scanPhaseExamining || got[0].Examined != 0 || got[0].ExamineTotal != 4 {
+	if got[0].Phase != PhaseExamining || got[0].Examined != 0 || got[0].ExamineTotal != 4 {
 		t.Errorf("first event = %+v, want the size phase starting over 4 files", got[0])
 	}
 	var sawExaminedAll, sawComparing bool
@@ -88,11 +88,11 @@ func TestContentScanReportsPhaseProgress(t *testing.T) {
 			t.Errorf("examined %d of %d: the counter ran past its total (%+v)", e.Examined, e.ExamineTotal, e)
 		}
 		switch e.Phase {
-		case scanPhaseExamining:
+		case PhaseExamining:
 			if e.Examined == 4 && e.ExamineTotal == 4 {
 				sawExaminedAll = true
 			}
-		case scanPhaseComparing:
+		case PhaseComparing:
 			sawComparing = true
 			if e.Total != 4 {
 				t.Errorf("comparing event = %+v, want 4 files to compare", e)

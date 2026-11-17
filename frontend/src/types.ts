@@ -1,6 +1,6 @@
 // Types re-export the Wails-generated models so the bindings stay the single
 // source of truth for backend shapes.
-import { api, cloud, group, jav, main, server, video, watch } from "../wailsjs/go/models";
+import { api, cloud, group, jav, main, server, tasks, video, watch } from "../wailsjs/go/models";
 
 export type Video = video.Video;
 export type AddVideoResult = video.AddVideoResult;
@@ -39,6 +39,10 @@ export type VolumeChange = video.VolumeChange;
 
 export type JavTaskOverview = jav.TaskOverview;
 
+/** 后台任务看板：刮削、片名翻译、内容扫描等任务的只读进度快照。 */
+export type BackgroundTasks = tasks.Snapshot;
+export type BackgroundTask = tasks.Task;
+
 export type JavBusCookieStatus = {
   configured: boolean;
 };
@@ -58,14 +62,15 @@ export const STATUS_AVAILABLE: VideoStatus = "available";
 export const STATUS_MISSING: VideoStatus = "missing";
 
 // A library view is either all favorites, a single group, the scrape-task
-// board, the aggregated actor index, the 查重 (duplicate) worklist, the
-// recently-played history, or the search results. An individual actor's film
-// list is not a filter — it opens as its own workspace tab.
+// board, the 后台任务 dashboard, the aggregated actor index, the 查重 (duplicate)
+// worklist, the recently-played history, or the search results. An individual
+// actor's film list is not a filter — it opens as its own workspace tab.
 export type ViewFilter =
   | { kind: "all" }
   | { kind: "recent" }
   | { kind: "group"; id: number }
   | { kind: "scrapeTasks"; status: "queued" | "succeeded" | "failed" }
+  | { kind: "tasks" }
   | { kind: "actors" }
   | { kind: "duplicates" }
   | { kind: "trash" };
