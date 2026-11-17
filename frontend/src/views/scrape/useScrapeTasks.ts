@@ -34,7 +34,15 @@ export function scrapeStatusLabel(status: string): string {
 }
 
 function searchText(task: JavTaskOverview): string {
-  return [task.video.fileName, task.video.javCode, task.video.title]
+  // Mirrors the label the board draws (【番号】译名), so typing either half of
+  // what is on screen finds the task.
+  return [
+    task.video.fileName,
+    task.video.javCode,
+    task.video.javTitle,
+    task.video.javTitleZh,
+    task.video.title,
+  ]
     .join(" ")
     .toLocaleLowerCase();
 }

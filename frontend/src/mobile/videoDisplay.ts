@@ -5,8 +5,8 @@ import { videoDisplayName } from "../utils/videoName";
 // Small display helpers shared across the mobile views. Kept out of the
 // component files so React Fast Refresh can treat those as component-only.
 
-/** The display name: the user's custom title, else the authoritative 番号, else
- *  the file name (the same rule the desktop uses). */
+/** The display name, shared with the desktop: the user's custom title, else
+ *  【番号】译名 for a scraped work, else the file name. */
 export function videoName(v: Video): string {
   return videoDisplayName(v);
 }
