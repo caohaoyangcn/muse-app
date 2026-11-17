@@ -41,6 +41,12 @@ const titleTranslationTimeout = 2 * time.Minute
 // retry tail.
 const titleTranslationBatchSize = 10
 
+// titleTranslationConcurrency is how many packed requests may be in flight at
+// once. Five keeps a bulk pass moving while staying far below the burst a
+// provider would throttle; the single worker used to leave most of the window
+// idle because each request spends its time waiting on the model.
+const titleTranslationConcurrency = 5
+
 // SetTitleTranslator wires 中文译名 translation. It must be called during
 // wiring, before Start. Without a translator the feature simply stays off:
 // scrapes succeed, and only the bulk/detail actions report that no provider is
@@ -210,9 +216,9 @@ func (s *Service) titleTranslationPending(videoID int64) bool {
 	return pending
 }
 
-// titleWorker consumes packed batches one request at a time: providers are rate
-// limited, and a packed request already amortizes the system prompt. Keeping a
-// single request in flight avoids bursts against the provider.
+// titleWorker consumes packed batches. Several workers share the queue so the
+// provider wait time overlaps; each worker still processes one request at a
+// time, capping the service at titleTranslationConcurrency in-flight requests.
 func (s *Service) titleWorker() {
 	defer s.wg.Done()
 	for {

@@ -143,8 +143,10 @@ func NewService(repo Repository, videos video.VideoRepository, provider Provider
 		s.wg.Add(1)
 		go s.worker()
 	}
-	s.wg.Add(1)
-	go s.titleWorker()
+	for i := 0; i < titleTranslationConcurrency; i++ {
+		s.wg.Add(1)
+		go s.titleWorker()
+	}
 	return s
 }
 

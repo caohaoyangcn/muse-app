@@ -14,7 +14,7 @@
 ```text
 刮削成功（task = succeeded）
         |
-        +--> 入队「中文译名」翻译（独立队列，单 worker）
+        +--> 入队「中文译名」翻译（独立队列，最多 5 个 in-flight 请求）
                 |
                 +--> LLM 返回译名
                         |
@@ -81,10 +81,11 @@
 
 ## 5. 队列与状态流转
 
-`jav.Service` 增加一条独立的单 worker 队列（与刮削 worker 分开）：
+`jav.Service` 增加一个独立的翻译工作池（与刮削 worker 分开）：5 个 worker 共享队列，最多同时有 5 个打包请求在等 provider：
 
 - 刮削成功后，若 provider 已配置且 `title` 非空，则 `enqueueTitleTranslation(id)`；`titlePending` 去重，重复入队无效。
 - 队列里装的是**批次**（`[]int64`）：单条操作入队一个单元素批次，`TranslateMissingTitles` / `RetranslateAllTitles` 先为全部 id 预留 `titlePending`，再按 10 条一组切块入队。这样 worker 每次 pop 到的就是固定大小的包，不会因为边入队边消费而退化成一条一请求。
+- worker 数量固定为 5：每个 worker 一次只处理一个包，服务因此最多有 5 个 HTTP 请求在飞，既能重叠 provider 的等待时间，又不会形成不可控的并发突刺。
 - `Get` 读取详情时，如果 id 在 `titlePending` 中，把状态覆盖成 `pending`，供详情页显示「翻译中…」。
 - worker 每个包先重新读取一次详情（防止重新刮削后还用旧标题），再调用 `TranslateTitles` 一次；每个槽位独立落库。完成后先写库、再清 `titlePending`、最后发 `jav:scrape:updated`。顺序很重要：前端收到事件会立即重读，pending 必须先清除，否则已完成的译名会继续显示成翻译中。
 - 包内某一条失败只影响那一条：首次翻译失败写入 `title_zh_error`；已有译名的刷新失败保留旧译名并记录错误（`finishTitleTranslationFailure`）。整包请求失败（鉴权、限流、网络）则包内每条都按失败处理，不再逐条重试同一错误。
@@ -134,13 +135,13 @@ Wails（仅桌面端设置/操作）：
 - `backend/settings`：默认配置、往返读写、无效地址拒绝、Key 加密存储（Windows DPAPI / macOS 钥匙串）、无安全存储平台上的降级行为。
 - `backend/secret`：Windows DPAPI 往返；macOS 真实钥匙串写入/读取/覆盖隔离/幂等删除；不支持的平台返回 `ErrUnsupported`。
 - `backend/database`：v26 → v27 增量升级、已有刮削数据保留、译名跨再次迁移保留。
-- `backend/jav`：刮削后自动翻译、未配置时跳过、失败不改变刮削状态、批量去重、多个入队条目合并成一个打包请求、整库重译替换旧译名、重译失败保留旧译名、`pending` 覆盖、重新刮削替换旧译名、仓库层候选查询（缺失 / 全部两套工作列表）；`ListTitles` / `SearchTitleIDs` 的投影、跳过与回收站边界、关键词大小写与通配符转义。
+- `backend/jav`：刮削后自动翻译、未配置时跳过、失败不改变刮削状态、批量去重、多个入队条目合并成一个打包请求、5 个请求的并发上限、整库重译替换旧译名、重译失败保留旧译名、`pending` 覆盖、重新刮削替换旧译名、仓库层候选查询（缺失 / 全部两套工作列表）；`ListTitles` / `SearchTitleIDs` 的投影、跳过与回收站边界、关键词大小写与通配符转义。
 - `backend/api`：`SearchVideos` 合并刮削字段（番号/原标题/译名）、不重复返回、并投影 `javTitle` / `javTitleZh`。
 - 前端：Astryx `Text` 的截断 tooltip 用真实浏览器验证过（hover 被截断的卡片标题后出现 `role="tooltip"`，内容为完整片名）。
 
 ## 9. 非目标
 
-- 不做并发翻译（单 worker，避免触发 provider 限流）。批量打包不是并发：一次请求仍只有一个 worker 在等结果，只是把多条标题合成一个包。
+- 不做无上限并发：固定 5 个 worker，每个一次只发一个打包请求，避免把批量任务变成 provider 的并发突刺。
 - 不做译名人工编辑（译名是 LLM 派生的只读字段；重新翻译即可）。
 - 不做翻译结果缓存/共享（同一标题的两部影片各调用一次）。
 - 不把译名写入 `videos.title` 或卡片显示名，避免覆盖用户可编辑的标题。

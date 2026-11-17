@@ -1245,7 +1245,7 @@ function LLMSection() {
             <h3 className="text-sm font-semibold">批量翻译</h3>
             <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--muted)]">
               为所有已成功刮削、但还没有中文译名的影片排队翻译；之前翻译失败的也会重试。
-              任务在后台分批打包执行，不会影响正在进行的刮削。
+              任务在后台分批打包执行，最多 5 个请求并发，不会影响正在进行的刮削。
             </p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--muted)]">
               调整提示词或更换模型后，可用「重新翻译全部译名」整库刷新：已有译名也会重新排队，

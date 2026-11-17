@@ -156,6 +156,38 @@ func waitForDetail(t *testing.T, s *Service, videoID int64, want func(*Detail) b
 	return nil
 }
 
+// seedScrapedTitle makes an existing favorite look like a successful scrape:
+// the translation candidate queries only see rows with a task in succeeded.
+func seedScrapedTitle(t *testing.T, repo *SQLiteRepository, id int64, code, title string) {
+	t.Helper()
+	if err := repo.PrepareTask(id, false); err != nil {
+		t.Fatalf("prepare task %s: %v", code, err)
+	}
+	if err := repo.SaveSuccess(id, Metadata{Code: code, Title: title}, "filename", 2); err != nil {
+		t.Fatalf("save success %s: %v", code, err)
+	}
+	if err := repo.SetTaskStatus(id, "", StatusSucceeded, "", "", nil); err != nil {
+		t.Fatalf("set task status %s: %v", code, err)
+	}
+}
+
+func createScrapedFavorite(t *testing.T, repo *SQLiteRepository, vr video.VideoRepository, name, code, title string) int64 {
+	t.Helper()
+	v := &video.Video{
+		Path:      filepath.Join(t.TempDir(), name),
+		FileName:  name,
+		FileSize:  1,
+		Status:    video.StatusAvailable,
+		CreatedAt: 1,
+		UpdatedAt: 1,
+	}
+	if err := vr.Create(v); err != nil {
+		t.Fatalf("create favorite %q: %v", name, err)
+	}
+	seedScrapedTitle(t, repo, v.ID, code, title)
+	return v.ID
+}
+
 //go:embed testdata/cover.webp
 var testWebP []byte
 
@@ -1018,6 +1050,53 @@ func (f *fakeTitleTranslator) translatedBatches() [][]string {
 	return out
 }
 
+// blockingBatchTranslator holds every packed request until release and records
+// the highest number of concurrent calls, so a test can prove the worker pool
+// is bounded at the configured in-flight limit.
+type blockingBatchTranslator struct {
+	configured atomic.Bool
+	release    chan struct{}
+	entered    chan struct{}
+	active     atomic.Int32
+	maxActive  atomic.Int32
+}
+
+func (b *blockingBatchTranslator) Configured() bool { return b.configured.Load() }
+
+func (b *blockingBatchTranslator) Available() bool { return b.configured.Load() }
+
+func (b *blockingBatchTranslator) TranslateTitle(ctx context.Context, title string) (string, error) {
+	results, errs := b.TranslateTitles(ctx, []string{title})
+	return results[0], errs[0]
+}
+
+func (b *blockingBatchTranslator) TranslateTitles(ctx context.Context, titles []string) ([]string, []error) {
+	current := b.active.Add(1)
+	for {
+		peak := b.maxActive.Load()
+		if current <= peak || b.maxActive.CompareAndSwap(peak, current) {
+			break
+		}
+	}
+	select {
+	case b.entered <- struct{}{}:
+	default:
+	}
+
+	select {
+	case <-b.release:
+	case <-ctx.Done():
+	}
+	b.active.Add(-1)
+
+	results := make([]string, len(titles))
+	errs := make([]error, len(titles))
+	for i := range titles {
+		results[i] = "译名"
+	}
+	return results, errs
+}
+
 func TestServiceTranslatesTitleAfterScrape(t *testing.T) {
 	provider := &sequenceProvider{results: map[string]sequenceResult{
 		"IPX-633": {metadata: &Metadata{Code: "IPX-633", Title: "となりの人妻"}},
@@ -1112,37 +1191,13 @@ func TestServiceBulkTranslatesMissingTitles(t *testing.T) {
 func TestServicePacksQueuedTitlesIntoOneRequest(t *testing.T) {
 	s, db, vr, first := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
 	repo := NewSQLiteRepository(db)
-	seed := func(id int64, code, title string) {
-		t.Helper()
-		if err := repo.PrepareTask(id, false); err != nil {
-			t.Fatalf("prepare task %s: %v", code, err)
-		}
-		if err := repo.SaveSuccess(id, Metadata{Code: code, Title: title}, "filename", 2); err != nil {
-			t.Fatalf("save success %s: %v", code, err)
-		}
-		if err := repo.SetTaskStatus(id, "", StatusSucceeded, "", "", nil); err != nil {
-			t.Fatalf("set task status %s: %v", code, err)
-		}
-	}
+	seedScrapedTitle(t, repo, first, "IPX-633", "一つ目")
 	ids := []int64{first}
-	seed(first, "IPX-633", "一つ目")
 	for _, item := range []struct{ name, code, title string }{
 		{"ABW-180.mp4", "ABW-180", "二つ目"},
 		{"SONE-364.mp4", "SONE-364", "三つ目"},
 	} {
-		v := &video.Video{
-			Path:      filepath.Join(t.TempDir(), item.name),
-			FileName:  item.name,
-			FileSize:  1,
-			Status:    video.StatusAvailable,
-			CreatedAt: 1,
-			UpdatedAt: 1,
-		}
-		if err := vr.Create(v); err != nil {
-			t.Fatalf("create favorite %q: %v", item.name, err)
-		}
-		seed(v.ID, item.code, item.title)
-		ids = append(ids, v.ID)
+		ids = append(ids, createScrapedFavorite(t, repo, vr, item.name, item.code, item.title))
 	}
 
 	translator := &fakeTitleTranslator{result: "译名"}
@@ -1165,6 +1220,63 @@ func TestServicePacksQueuedTitlesIntoOneRequest(t *testing.T) {
 	}
 	if len(batches[0]) != len(ids) {
 		t.Fatalf("packed titles = %d, want %d", len(batches[0]), len(ids))
+	}
+}
+
+// TestServiceKeepsFiveTranslationRequestsInFlight proves the pool overlaps
+// provider wait time without exceeding the configured bound: five packed
+// requests start, a sixth cannot, and every favorite still lands its title.
+func TestServiceKeepsFiveTranslationRequestsInFlight(t *testing.T) {
+	s, db, vr, first := newServiceFixture(t, fakeProvider{}, "", "IPX-633.mp4")
+	repo := NewSQLiteRepository(db)
+	seedScrapedTitle(t, repo, first, "IPX-633", "标题 0")
+	ids := []int64{first}
+	for i := 1; i < titleTranslationBatchSize*titleTranslationConcurrency; i++ {
+		ids = append(ids, createScrapedFavorite(
+			t, repo, vr,
+			fmt.Sprintf("batch-%02d.mp4", i),
+			fmt.Sprintf("T-%03d", i),
+			fmt.Sprintf("标题 %d", i),
+		))
+	}
+
+	probe := &blockingBatchTranslator{
+		release: make(chan struct{}),
+		entered: make(chan struct{}, titleTranslationConcurrency),
+	}
+	probe.configured.Store(true)
+	s.SetTitleTranslator(probe)
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(probe.release) }) }
+	t.Cleanup(release)
+
+	queued, err := s.RetranslateAllTitles()
+	if err != nil {
+		t.Fatalf("retranslate all: %v", err)
+	}
+	if queued != len(ids) {
+		t.Fatalf("queued = %d, want %d", queued, len(ids))
+	}
+	for i := 0; i < titleTranslationConcurrency; i++ {
+		select {
+		case <-probe.entered:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("only %d translation requests started, want %d", i, titleTranslationConcurrency)
+		}
+	}
+	if got := probe.maxActive.Load(); got != titleTranslationConcurrency {
+		t.Fatalf("in-flight requests = %d, want %d", got, titleTranslationConcurrency)
+	}
+	// All five workers are blocked, so a sixth request cannot be in flight.
+	select {
+	case <-probe.entered:
+		t.Fatal("a sixth translation request started")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	release()
+	for _, id := range ids {
+		waitForDetail(t, s, id, func(d *Detail) bool { return d.TitleZh == "译名" })
 	}
 }
 

@@ -272,7 +272,11 @@ func main() {
 	// task has already succeeded. It re-reads the settings on every call, so
 	// editing the provider takes effect without a restart, and it shares the
 	// scraping proxy route so an LLM behind the same proxy works too.
-	llmClient := llm.NewClient(settingsStore.LLMConfig, &http.Client{Transport: proxyCfg.Transport()})
+	// Several translation workers share this transport; the default idle pool
+	// of two connections per host would make each burst reopen connections.
+	llmTransport := proxyCfg.Transport()
+	llmTransport.MaxIdleConnsPerHost = 8
+	llmClient := llm.NewClient(settingsStore.LLMConfig, &http.Client{Transport: llmTransport})
 	javSvc.SetTitleTranslator(llmClient)
 	// The in-memory translation queue dies with the process, so a batch cut
 	// short by a quit or crash does not resume by itself. This switch (default
