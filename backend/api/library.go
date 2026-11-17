@@ -21,6 +21,7 @@ import (
 	"muse-app/backend/cloud"
 	"muse-app/backend/group"
 	"muse-app/backend/jav"
+	"muse-app/backend/similar"
 	"muse-app/backend/tasks"
 	"muse-app/backend/video"
 	"muse-app/backend/watch"
@@ -322,6 +323,77 @@ func (l *Library) SearchVideos(keyword string) ([]video.Video, error) {
 	}
 	l.attachReadModel(videos)
 	return videos, nil
+}
+
+// ---- Similar videos (详情页底部推荐栏) ----
+
+// SimilarVideo is one recommendation for the 类似影片 row: the favorite itself,
+// the score that ordered it (for tests and diagnostics, not for display) and
+// the human-readable reasons behind it.
+type SimilarVideo struct {
+	Video   video.Video `json:"video"`
+	Score   float64     `json:"score"`
+	Reasons []string    `json:"reasons"`
+}
+
+const (
+	defaultSimilarLimit = 8
+	maxSimilarLimit     = 40
+)
+
+// SimilarVideos returns up to limit favorites that look like videoID, best
+// first. It is a read-only neighbour query over the scrape results — series,
+// style tags, cast, label and release date — scored by backend/similar. Titles
+// do not participate yet; the embedding pass is a separate milestone, so a
+// library with sparse scrape results simply yields a shorter row.
+//
+// A favorite with no scrape result, a library smaller than the row and a
+// videoID that no longer exists all return an empty slice: 「no neighbours」 is a
+// state, not an error.
+func (l *Library) SimilarVideos(videoID int64, limit int) ([]SimilarVideo, error) {
+	out := make([]SimilarVideo, 0)
+	if l.jav == nil || l.videos == nil {
+		return out, nil
+	}
+	if limit <= 0 {
+		limit = defaultSimilarLimit
+	}
+	if limit > maxSimilarLimit {
+		limit = maxSimilarLimit
+	}
+
+	features, err := l.jav.SimilarFeatures()
+	if err != nil {
+		return nil, fmt.Errorf("load similar features: %w", err)
+	}
+	ranked := similar.NewCorpus(features).Rank(videoID, limit)
+	if len(ranked) == 0 {
+		return out, nil
+	}
+
+	// Hydrate through the shared read model, once for the whole row: the cards
+	// need the same 番号/译名/演员 projection as every other list.
+	videos := make([]video.Video, 0, len(ranked))
+	scores := make([]similar.Result, 0, len(ranked))
+	for _, r := range ranked {
+		v, err := l.videos.Get(r.VideoID)
+		if err != nil || v == nil {
+			// The favorite was removed between the feature read and this one;
+			// the rest of the row is still valid.
+			continue
+		}
+		videos = append(videos, *v)
+		scores = append(scores, r)
+	}
+	l.attachReadModel(videos)
+	for i := range videos {
+		out = append(out, SimilarVideo{
+			Video:   videos[i],
+			Score:   scores[i].Score,
+			Reasons: scores[i].Reasons,
+		})
+	}
+	return out, nil
 }
 
 // ListGroups returns all groups in sidebar order, with member counts.
