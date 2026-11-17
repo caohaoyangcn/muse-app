@@ -8,6 +8,7 @@ import {
   MetadataListItem,
   Section,
   Spinner,
+  Text,
   Toolbar,
 } from "../../ui/astryx";
 
@@ -319,7 +320,9 @@ function DetailHeader({
     <Toolbar
       centerContent={
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm font-medium">{title}</span>
+          <span className="min-w-0 text-sm font-medium">
+            <Text color="inherit" maxLines={1} type="inherit">{title}</Text>
+          </span>
           {badge}
         </div>
       }

@@ -10,6 +10,7 @@ import {
   ClickableCard,
   HoverCard,
   Spinner,
+  Text,
   compactBadgeClass,
 } from "../ui/astryx";
 import { Button } from "../ui/button";
@@ -129,7 +130,11 @@ export default function VideoCard({
       </AspectRatio>
       <div className="px-3 pb-3 pt-2.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <div className="truncate font-medium">{videoDisplayName(video)}</div>
+          {/* Text truncates and shows the full name on hover, so a long 译名 is
+              never lost just because the card is narrow. */}
+          <div className="min-w-0 font-medium">
+            <Text color="inherit" maxLines={1} type="inherit">{videoDisplayName(video)}</Text>
+          </div>
           {video.mosaicRestored ? (
             <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" />
           ) : null}

@@ -12,6 +12,7 @@ import {
   ClickableCard,
   IconButton,
   Spinner,
+  Text,
   compactBadgeClass,
 } from "../ui/astryx";
 import { Icon } from "../ui/icon";
@@ -174,8 +175,8 @@ export default function VideoList({
                   className="flex min-w-0 flex-1 items-center gap-2"
                   title={remote ? `${v.sourceName} · ${v.remotePath}` : v.path}
                 >
-                  <span className="truncate font-medium" style={{ fontSize: `${titleSize.toFixed(1)}px` }}>
-                    {videoDisplayName(v)}
+                  <span className="min-w-0 font-medium" style={{ fontSize: `${titleSize.toFixed(1)}px` }}>
+                    <Text color="inherit" maxLines={1} type="inherit">{videoDisplayName(v)}</Text>
                   </span>
                   {v.mosaicRestored ? (
                     <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" />

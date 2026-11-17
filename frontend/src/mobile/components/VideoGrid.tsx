@@ -5,6 +5,7 @@ import {
   ClickableCard,
   Grid,
   MoreMenu,
+  Text,
   compactBadgeClass,
 } from "../../ui/astryx";
 import { Icon } from "../../ui/icon";
@@ -66,8 +67,10 @@ function OverlayMeta({ v }: { v: Video }) {
           {v.backedUp ? <Badge className={compactBadgeClass} label="已备份" variant="success" /> : null}
         </div>
       ) : null}
-      <div className="line-clamp-2 text-[13px] font-semibold leading-[1.25] text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.55)]">
-        {videoName(v)}
+      {/* Text owns the clamp so a long 译名 ellipsizes and reveals itself on
+          hover instead of being silently cut. */}
+      <div className="text-[13px] font-semibold leading-[1.25] text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.55)]">
+        <Text color="inherit" maxLines={2} type="inherit">{videoName(v)}</Text>
       </div>
       <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10.5px] leading-none text-white/65">
         <span className="truncate">{meta}</span>
@@ -209,7 +212,9 @@ export function VideoList({
                   <StatusBadges v={v} />
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium">{videoName(v)}</span>
+                  <span className="min-w-0 text-sm font-medium">
+                    <Text color="inherit" maxLines={1} type="inherit">{videoName(v)}</Text>
+                  </span>
                   <span className="mt-1 flex h-4 min-w-0 items-center gap-1 text-[11px] text-[var(--muted)]">
                     <span className="truncate">{meta}</span>
                     {v.mosaicRestored ? <Badge className={compactBadgeClass} label="马赛克破解" variant="purple" /> : null}
