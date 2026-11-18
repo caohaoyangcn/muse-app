@@ -124,7 +124,11 @@ export function VideoGrid({
       <Grid columns={{ minWidth: MIN_POSTER_PX, max: MAX_COLUMNS }} gap={2}>
         {videos.slice(paging.startIndex, paging.endIndex).map((v) => (
           <ClickableCard
-            className="relative overflow-hidden border border-white/[0.07] bg-[#101013]"
+            // `isolate` keeps the card's own stacking context: the z-20 menu
+            // trigger must stay above the artwork, yet must not paint over the
+            // sticky pager of the next row's cards (the pager is z-6 in the
+            // same scroll pane).
+            className="relative isolate overflow-hidden border border-white/[0.07] bg-[#101013]"
             key={v.id}
             label={videoName(v)}
             onClick={() => onOpen(v)}

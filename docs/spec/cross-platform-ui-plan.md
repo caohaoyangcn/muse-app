@@ -253,6 +253,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 
 | 日期 | 变更 |
 |---|---|
+| 2026-11-19 | 修手机端贴底页脚被卡片「更多」按钮遮挡：`mobile/components/VideoGrid.tsx` 的海报卡加 `isolate` 形成独立层叠上下文。此前卡内 z-20 的菜单触发器逃逸出卡片，压过同一滚动区里 z-6 的 `ui/pagination.tsx` 页脚——下一行的卡片滚到页脚下方时，它的「更多」按钮会浮在「第 X / Y 页」上并弹出自带提示，既挡住页码也拦截点击。已在宽浏览器窗口用命中测试复现并验证修复（重叠处 `elementFromPoint` 从触发器变回页脚） |
 | 2026-11-18 | **筛选层两端统一**：新增共享 `utils/libraryFilter.ts`（标签 / 演员 / 硬盘，栏内并集、栏间 AND）与 `views/library/FilterSections.tsx`、`FilterChips.tsx`；桌面端补上「筛选」对话框与侧栏标签快捷入口，手机端筛选面板改用共享分区。用户自定义分组连同 `backend/group`、`/api/groups*`、分组拖拽与「添加到分组」一起移除；「马赛克破解」Badge 改读 `videos.mosaic_restored`（v29 从旧分组与文件名规则回填，v30 删除分组表）。排序字段/默认方向统一到 `utils/sortOptions.ts`，修正手机端文件名总按降序的问题。manifest 删除「分组结构编辑」gap |
 | 2026-11-17 | 分页器补上页码快捷跳转：第 1 页、当前页前后各 5 页、最后一页（当前 10/21 时为 1、5–15、21），跳空处用 `…` 标记，当前页高亮；窄屏页码条横向滚动并居中当前页。页脚改为贴住滚动区底边的通栏条（`main:has(nav[aria-label="分页"])` / `.scroll-area:has(...)` 去掉容器底部内边距，回收站页脚移到说明文字之后），不再在下方留空。新增 `utils/pagination.test.ts` 9 条页号窗口与跳空标记测试（前端共 54 条） |
 | 2026-11-17 | **两端列表统一改为按页替换**：新增共享 `hooks/usePagedList.ts`（页深按列表身份记忆、数据未到时不覆盖页深、上下页夹取、键盘选中跨页跟随）与 `ui/pagination.tsx`（上一页 / 第 X / Y 页 / 下一页，sticky 底部），桌面主列表、最近播放、演员作品、演员索引、刮削任务、回收站/归档、番号/内容查重，以及手机端对应列表全部接入；桌面视频 60 条/页、手机 24 条/页、工具行 50、查重组 20。删除 `useVirtualRows` 与 `mobile/useLoadMore`/`LoadMoreFooter`：不再有窗口化测量、绝对定位或自动追加，DOM 只保留当前页。回归测试改为 `usePagedList` 的 9 条页契约（共 45 条测试）；`AGENTS.md`、`mobile-web-design.md` 同步更新 |
