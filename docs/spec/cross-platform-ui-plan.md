@@ -71,6 +71,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 | `src/mobile/**` 不得 import `src/components/**` | 防止反向依赖桌面实现 |
 | `src/components/**` 视为桌面专属 | 需要共享的一律下沉到 `ui/` 或 `views/` |
 | 新组件必须先考虑 `src/ui/` | 禁止在业务文件里手搭基元 |
+| 带框封面一律经 `src/ui/cover.tsx` 的 `CoverImage`（`portrait` 竖版右半封面 / `landscape` 横版完整封面+封底） | 裁切规则散落就会再次切出半张封面；裸封面 `<img>` 只留详情大图、查看器、编辑预览 |
 | 壳只经门面取数：`components/`、`pages/`、`App.tsx` 只能 import `services/desktop`，`mobile/` 只能 import `services/web` | 直接 import `services/api.ts` / `http.ts` 只允许出现在 `services/` 内部 |
 
 ### 允许分叉的清单

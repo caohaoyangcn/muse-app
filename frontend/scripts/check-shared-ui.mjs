@@ -244,6 +244,46 @@ if (nativeFormCount > NATIVE_FORM_CEILING) {
   notes.push(`裸表单控件：${nativeFormCount} / 上限 ${NATIVE_FORM_CEILING}`);
 }
 
+// 带框封面必须经 ui/cover 的 CoverImage：竖版（右半封面）与横版（完整封面+
+// 封底）是产品规则，散落成手写 <img> 就会有人再居中裁一刀、切出半张封面。
+// 按原比例展示整张图的场景（详情大图、封面查看器、编辑预览）没有框，也没有
+// 裁切决策，所以显式列白名单；新增一处裸封面 <img> 必须改动这份清单，让评审
+// 看见"这里为什么不用 CoverImage"。
+const RAW_COVER_ALLOWLIST = {
+  "src/components/VideoDetailPanel.tsx": 2,
+  "src/components/EditVideoDialog.tsx": 1,
+  "src/mobile/components/VideoDetailView.tsx": 2,
+};
+const COVER_SRC = /videoCoverURL\(|coverURL\(|\/thumbnails\/|\/covers\//;
+const rawCoverCounts = new Map();
+for (const file of files) {
+  if (!file.rel.endsWith(".tsx") || file.rel.startsWith("src/ui/")) continue;
+  const count = [...file.source.matchAll(/<img\b[\s\S]*?\/>/g)].filter((tag) =>
+    COVER_SRC.test(tag[0]),
+  ).length;
+  if (count > 0) rawCoverCounts.set(file.rel, count);
+}
+for (const [rel, count] of rawCoverCounts) {
+  const allowed = RAW_COVER_ALLOWLIST[rel] ?? 0;
+  if (count > allowed) {
+    problems.push(
+      `${rel}: 裸封面 <img> ${count} 处，超过允许的 ${allowed} 处` +
+        `（新封面请用 ui/cover 的 CoverImage：portrait 竖版右半封面 / landscape 横版完整封面+封底）`,
+    );
+  } else if (count < allowed) {
+    problems.push(
+      `${rel}: 裸封面 <img> 只剩 ${count} 处，白名单记的是 ${allowed} 处；请同步这份清单`,
+    );
+  }
+}
+for (const rel of Object.keys(RAW_COVER_ALLOWLIST)) {
+  if (!rawCoverCounts.has(rel)) {
+    problems.push(`封面白名单 ${rel} 已没有裸封面 <img>，请从 check-shared-ui.mjs 删除这项`);
+  }
+}
+const rawCoverTotal = [...rawCoverCounts.values()].reduce((sum, n) => sum + n, 0);
+notes.push(`裸封面 <img>：${rawCoverTotal} 处（仅详情大图 / 查看器 / 编辑预览）`);
+
 notes.push(`共享视图模型：${models.length} 个（两端均已引用）`);
 
 for (const note of notes) console.log(`  ${note}`);
