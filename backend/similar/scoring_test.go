@@ -134,20 +134,16 @@ func TestRankKeepsCensoredAndUncensoredApart(t *testing.T) {
 	}
 }
 
-// The per-actor cap keeps one performer from filling the row: once four films
-// of the query's actress are in, the next slots go to the other candidates
-// even though they score lower.
+// The per-actor cap decides membership: with more clones than slots, the row
+// still finds room for the films that are not about the same performer.
 func TestRowLetsOtherCandidatesInAfterFourFilmsOfOneActress(t *testing.T) {
 	query := Feature{
 		VideoID: 1, Code: "AAA-001", Series: "群", Actors: []string{"甲"}, Tags: []string{"x", "y"},
 	}
 	features := []Feature{query}
-	clones := make([]int64, 0, 8)
 	for i := 0; i < 8; i++ {
-		id := int64(10 + i)
-		clones = append(clones, id)
 		features = append(features, Feature{
-			VideoID: id, Code: "BBB-00" + string(rune('1'+i)),
+			VideoID: int64(10 + i), Code: "BBB-00" + string(rune('1'+i)),
 			Actors: []string{"甲"}, Tags: []string{"x", "y"},
 		})
 	}
@@ -162,18 +158,11 @@ func TestRowLetsOtherCandidatesInAfterFourFilmsOfOneActress(t *testing.T) {
 	if len(got) != 8 {
 		t.Fatalf("row = %v, want 8 entries", got)
 	}
-	// The cap is a preference that yields to a full row, so the clones do come
-	// back at the end — but only after both other candidates were used.
-	seen := 0
-	for i, id := range got {
-		if contains(clones, id) {
-			seen++
-			if seen > maxSameActor && indexOf(got, other[0]) > i {
-				t.Fatalf("row = %v, want the other candidates before clone %d", got, seen)
-			}
-			if seen > maxSameActor && indexOf(got, other[1]) > i {
-				t.Fatalf("row = %v, want the other candidates before clone %d", got, seen)
-			}
+	// Without the cap the top 8 by score would be eight clones and neither of
+	// the other candidates would appear.
+	for _, id := range other {
+		if !contains(got, id) {
+			t.Fatalf("row = %v, want the other candidate %d in it", got, id)
 		}
 	}
 }
@@ -188,22 +177,40 @@ func contains(set []int64, value int64) bool {
 }
 
 // Among equally relevant films, one that repeats what is already in the row
-// loses to one that adds something new.
+// loses its slot to one that adds something new — the repeat is left out
+// entirely rather than merely sorted lower.
 func TestRowPrefersANewSubjectOverARepeat(t *testing.T) {
 	query := Feature{VideoID: 1, Code: "AAA-001", Tags: []string{"x", "y"}}
-	first := Feature{VideoID: 2, Code: "BBB-001", Tags: []string{"x"}}
-	repeat := Feature{VideoID: 3, Code: "CCC-001", Tags: []string{"x"}}
-	fresh := Feature{VideoID: 4, Code: "DDD-001", Tags: []string{"y"}}
-	// A second "y" film keeps both tags equally common, so only the repetition
-	// can decide the order.
-	otherFresh := Feature{VideoID: 5, Code: "EEE-001", Tags: []string{"y"}}
+	first := Feature{VideoID: 2, Code: "BBB-001", Tags: []string{"x", "y"}}
+	repeat := Feature{VideoID: 3, Code: "CCC-001", Tags: []string{"x", "y"}}
+	fresh := Feature{VideoID: 4, Code: "DDD-001", Tags: []string{"x"}}
 
-	got := ids(NewCorpus([]Feature{query, first, repeat, fresh, otherFresh}).Rank(1, 8))
-	if got[0] != 2 {
-		t.Fatalf("row = %v, want the first pick to be 2", got)
+	// Two slots, three candidates: the clone of the first pick must lose the
+	// second slot to the film that brings a different signal.
+	got := ids(NewCorpus([]Feature{query, first, repeat, fresh}).Rank(1, 2))
+	if len(got) != 2 || got[0] != 2 || got[1] != 4 {
+		t.Fatalf("row = %v, want [2 4]: the repeat (3) gives up its slot", got)
 	}
-	if indexOf(got, 4) > indexOf(got, 3) {
-		t.Fatalf("row = %v, want the new subject (4) before the repeat (3)", got)
+	if contains(got, 3) {
+		t.Fatalf("row = %v, want the repeat left out", got)
+	}
+}
+
+// The row is displayed strongest first: diversity chose the set, relevance
+// decides the order the reader sees.
+func TestRowIsShownInScoreOrder(t *testing.T) {
+	query := Feature{
+		VideoID: 1, Code: "AAA-001", Series: "群", Actors: []string{"甲"}, Tags: []string{"x", "y"},
+	}
+	strong := Feature{
+		VideoID: 2, Code: "BBB-001", Actors: []string{"甲"}, Tags: []string{"x", "y"},
+	}
+	weak := Feature{VideoID: 3, Code: "CCC-001", Studio: "L1"}
+	query.Studio = "L1"
+
+	got := ids(NewCorpus([]Feature{query, strong, weak}).Rank(1, 8))
+	if len(got) != 2 || got[0] != 2 || got[1] != 3 {
+		t.Fatalf("row = %v, want the stronger match first", got)
 	}
 }
 

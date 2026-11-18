@@ -251,8 +251,10 @@ func (c *Corpus) Rank(queryID int64, limit int) []Result {
 	actorLoad := make(map[string]int, maxSameActor*2)
 	seriesLoad := make(map[string]int, maxSameSeries*2)
 
-	// Greedy maximum-marginal-relevance pass: score minus how much the film
-	// repeats something already in the row.
+	// Greedy maximum-marginal-relevance pass. It decides WHO gets a slot, not
+	// the order they are shown in: the point is to stop one performer or one
+	// series from taking the row, and a reader expects the first card to be the
+	// strongest match, not the most "diverse" one.
 	for len(selected) < limit {
 		best, bestValue := -1, math.Inf(-1)
 		for i := range primary {
@@ -289,7 +291,7 @@ func (c *Corpus) Rank(queryID int64, limit int) []Result {
 	// gets a full row.
 	for i := range primary {
 		if len(selected) >= limit {
-			return selected
+			break
 		}
 		if picked[i] {
 			continue
@@ -304,6 +306,16 @@ func (c *Corpus) Rank(queryID int64, limit int) []Result {
 		}
 		selected = append(selected, result(query, secondary[i]))
 	}
+
+	// Display in relevance order. Diversity has already done its job by
+	// choosing the set; leaving the row in MMR order put a 0.586 film behind a
+	// 0.245 one, which reads as a bug to anyone looking at the row.
+	sort.SliceStable(selected, func(i, j int) bool {
+		if selected[i].Score != selected[j].Score {
+			return selected[i].Score > selected[j].Score
+		}
+		return selected[i].VideoID < selected[j].VideoID
+	})
 	return selected
 }
 
