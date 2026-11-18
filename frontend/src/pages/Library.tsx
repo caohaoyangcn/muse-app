@@ -29,7 +29,7 @@ import VideoList from "../components/VideoList";
 import VideoDetailPanel from "../components/VideoDetailPanel";
 import RecentlyPlayedView from "../components/RecentlyPlayedView";
 import WorkspaceTabs, { type WorkspaceTabItem } from "../components/WorkspaceTabs";
-import { client, addVideos, addWatchDir, copyPath, listCloudConnections, openContainingFolder, openCloudPage, openVideo, pickVideoFiles, pickWatchDir, refreshStatus, refreshVolumes } from "../services/desktop";
+import { client, addVideos, addWatchDir, copyPath, getHiddenTags, listCloudConnections, openContainingFolder, openCloudPage, openVideo, pickVideoFiles, pickWatchDir, refreshStatus, refreshVolumes, setHiddenTags as saveHiddenTags } from "../services/desktop";
 import { invalidate } from "../services/live";
 import { useLiveQuery } from "../hooks/useLiveQuery";
 import type {
@@ -62,7 +62,7 @@ import {
   type LibraryFilters,
 } from "../utils/libraryFilter";
 import { groupRecentlyPlayed } from "../utils/recent";
-import { readHiddenTags, toggleHiddenTag, writeHiddenTags } from "../utils/hiddenTags";
+import { toggleHiddenTag } from "../utils/hiddenTags";
 import { compareLastOpened } from "../utils/sortVideos";
 import { planVideoTabGroups } from "../utils/tabGroups";
 import { videoDisplayName } from "../utils/videoName";
@@ -98,6 +98,7 @@ const MAX_OPEN_TABS = 12;
 // Stable identities for the empty answers, so the memos below do not recompute
 // on every render before the first read lands.
 const NO_VIDEOS: Video[] = [];
+const NO_HIDDEN_TAGS: string[] = [];
 
 export default function Library({
   onOpenSettings,
@@ -115,9 +116,8 @@ export default function Library({
   // localStorage) because they describe the current view, not a display
   // preference; a user switching views starts from the unfiltered list.
   const [filters, setFilters] = useState<LibraryFilters>(NO_FILTERS);
-  // Tags removed from the sidebar shortcut. A display preference, persisted per
-  // device; the full filter dialog still offers every tag.
-  const [hiddenTags, setHiddenTags] = useState<string[]>(readHiddenTags);
+  // Tags removed from the sidebar shortcut. A display preference persisted in
+  // the app database; the full filter dialog still offers every tag.
   const [filterOpen, setFilterOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [reports, setReports] = useState<ReportItem[]>([]);
@@ -255,6 +255,15 @@ export default function Library({
   // backend never touches the network here), so it is cheap enough to keep
   // mounted and refresh after cloud:status invalidations.
   const cloudQuery = useLiveQuery(listCloudConnections, "cloud-connections");
+
+  // The sidebar shortcut preference lives in the settings table, not
+  // localStorage: a rebuild or a reset webview profile must not lose it.
+  const hiddenTagsQuery = useLiveQuery(getHiddenTags, "hidden-tags", {
+    onError: (e) =>
+      pushNotice({ kind: "error", message: "加载隐藏标签失败", details: [String(e)] }),
+  });
+  const hiddenTags = hiddenTagsQuery.data ?? NO_HIDDEN_TAGS;
+  const { mutate: mutateHiddenTags, reload: reloadHiddenTags } = hiddenTagsQuery;
 
   const videos = library.data ?? NO_VIDEOS;
   const loading = library.loading;
@@ -658,19 +667,39 @@ export default function Library({
   }, []);
 
   // Persist the shortcut preference once per change; the setter stays pure.
-  useEffect(() => {
-    writeHiddenTags(hiddenTags);
-  }, [hiddenTags]);
+  // Optimistic write: the sidebar reacts immediately, then the settings row is
+  // persisted. A failure restores the authoritative list instead of leaving a
+  // preference that only exists on screen.
+  const persistHiddenTags = useCallback(
+    async (next: string[]) => {
+      mutateHiddenTags(next);
+      try {
+        await saveHiddenTags(next);
+      } catch (e) {
+        reloadHiddenTags();
+        pushNotice({ kind: "error", message: "保存隐藏标签失败", details: [String(e)] });
+      }
+    },
+    [mutateHiddenTags, reloadHiddenTags, pushNotice],
+  );
 
-  const hideTag = useCallback((tag: string) => {
-    setHiddenTags((prev) => toggleHiddenTag(prev, tag));
-  }, []);
+  const hideTag = useCallback(
+    (tag: string) => {
+      void persistHiddenTags(toggleHiddenTag(hiddenTags, tag));
+    },
+    [hiddenTags, persistHiddenTags],
+  );
 
-  const unhideTag = useCallback((tag: string) => {
-    setHiddenTags((prev) => prev.filter((name) => name !== tag));
-  }, []);
+  const unhideTag = useCallback(
+    (tag: string) => {
+      void persistHiddenTags(hiddenTags.filter((name) => name !== tag));
+    },
+    [hiddenTags, persistHiddenTags],
+  );
 
-  const clearHiddenTags = useCallback(() => setHiddenTags([]), []);
+  const clearHiddenTags = useCallback(() => {
+    void persistHiddenTags([]);
+  }, [persistHiddenTags]);
 
   const clearViewFilters = useCallback(() => setFilters(NO_FILTERS), []);
 

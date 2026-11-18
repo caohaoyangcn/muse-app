@@ -67,6 +67,8 @@ export function FileScanStatus():Promise<video.FileScanStatus>;
 
 export function GetFC2CookieStatus():Promise<main.FC2CookieStatus>;
 
+export function GetHiddenTags():Promise<Array<string>>;
+
 export function GetJavBusCookieStatus():Promise<main.JavBusCookieStatus>;
 
 export function GetLLMSettings():Promise<main.LLMSettings>;
@@ -150,6 +152,8 @@ export function SearchVideos(arg1:string):Promise<Array<video.Video>>;
 export function ServerStatus():Promise<server.StartInfo>;
 
 export function SetFC2Cookie(arg1:string):Promise<void>;
+
+export function SetHiddenTags(arg1:Array<string>):Promise<void>;
 
 export function SetJavBusCookie(arg1:string):Promise<void>;
 

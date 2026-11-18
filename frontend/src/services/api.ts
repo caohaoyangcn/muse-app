@@ -14,6 +14,7 @@ import {
   GetTrashRetentionDays,
   GetServerPort,
   GetScrapeProxy,
+  GetHiddenTags,
   GetTourSeen,
   ListCloudConnections,
   ListArchived,
@@ -42,6 +43,7 @@ import {
   ServerStatus,
   SetServerPort,
   SetScrapeProxy,
+  SetHiddenTags,
   SetTourSeen,
   SetVideoCover,
   StartServer,
@@ -383,6 +385,11 @@ export const checkJavCodes = (codes: string[]): Promise<JavCodeCheck[]> =>
 export const getTourSeen = (): Promise<boolean> => GetTourSeen();
 
 export const setTourSeen = (): Promise<void> => SetTourSeen();
+
+/** 侧栏快捷标签里被隐藏的标签；存在数据库里，重建程序后仍然保留。 */
+export const getHiddenTags = (): Promise<string[]> => GetHiddenTags();
+
+export const setHiddenTags = (tags: string[]): Promise<void> => SetHiddenTags(tags);
 
 // ---- Folder watch (目录监控) ----
 

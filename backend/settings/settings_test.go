@@ -3,6 +3,7 @@ package settings
 import (
 	"database/sql"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -34,6 +35,66 @@ func TestTourSeenDefault(t *testing.T) {
 	}
 	if seen {
 		t.Error("fresh install should not report the tour as seen")
+	}
+}
+
+// TestHiddenTagsDefaultAndPersistence covers the sidebar shortcut preference:
+// a fresh store has no hidden tags, and the list survives a new store over the
+// same database (a rebuilt executable must not reset it).
+func TestHiddenTagsDefaultAndPersistence(t *testing.T) {
+	db, err := sql.Open(database.DriverName, "file:"+t.TempDir()+"/app.db")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := database.Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	fresh, err := New(db).HiddenTags()
+	if err != nil {
+		t.Fatalf("read fresh hidden tags: %v", err)
+	}
+	if len(fresh) != 0 {
+		t.Errorf("fresh hidden tags = %v, want empty", fresh)
+	}
+
+	if err := New(db).SetHiddenTags([]string{" 剧情 ", "剧情", "", "巨乳"}); err != nil {
+		t.Fatalf("set hidden tags: %v", err)
+	}
+	got, err := New(db).HiddenTags()
+	if err != nil {
+		t.Fatalf("read hidden tags: %v", err)
+	}
+	if want := []string{"剧情", "巨乳"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("hidden tags = %v, want %v", got, want)
+	}
+
+	if err := New(db).SetHiddenTags(nil); err != nil {
+		t.Fatalf("clear hidden tags: %v", err)
+	}
+	cleared, err := New(db).HiddenTags()
+	if err != nil {
+		t.Fatalf("read cleared hidden tags: %v", err)
+	}
+	if len(cleared) != 0 {
+		t.Errorf("cleared hidden tags = %v, want empty", cleared)
+	}
+}
+
+// A corrupt value must not break the library: the shortcut simply shows every
+// tag again.
+func TestHiddenTagsCorruptValueReadsEmpty(t *testing.T) {
+	s := newStore(t)
+	if err := s.set(keyHiddenTags, "{not json"); err != nil {
+		t.Fatalf("seed corrupt value: %v", err)
+	}
+	got, err := s.HiddenTags()
+	if err != nil {
+		t.Fatalf("read hidden tags: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("corrupt hidden tags = %v, want empty", got)
 	}
 }
 

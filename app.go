@@ -870,3 +870,21 @@ func (a *App) SetTourSeen() error {
 	}
 	return a.settings.MarkTourSeen()
 }
+
+// GetHiddenTags returns the tags the user removed from the sidebar shortcut.
+// It is database state like the tour flag: a rebuilt executable or a reset
+// webview profile must not bring every hidden tag back.
+func (a *App) GetHiddenTags() ([]string, error) {
+	if a.settings == nil {
+		return []string{}, nil
+	}
+	return a.settings.HiddenTags()
+}
+
+// SetHiddenTags persists the sidebar shortcut's hidden list.
+func (a *App) SetHiddenTags(tags []string) error {
+	if a.settings == nil {
+		return fmt.Errorf("设置存储未初始化")
+	}
+	return a.settings.SetHiddenTags(tags)
+}

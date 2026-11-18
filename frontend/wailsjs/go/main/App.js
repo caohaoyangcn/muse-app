@@ -114,6 +114,10 @@ export function GetFC2CookieStatus() {
   return window['go']['main']['App']['GetFC2CookieStatus']();
 }
 
+export function GetHiddenTags() {
+  return window['go']['main']['App']['GetHiddenTags']();
+}
+
 export function GetJavBusCookieStatus() {
   return window['go']['main']['App']['GetJavBusCookieStatus']();
 }
@@ -280,6 +284,10 @@ export function ServerStatus() {
 
 export function SetFC2Cookie(arg1) {
   return window['go']['main']['App']['SetFC2Cookie'](arg1);
+}
+
+export function SetHiddenTags(arg1) {
+  return window['go']['main']['App']['SetHiddenTags'](arg1);
 }
 
 export function SetJavBusCookie(arg1) {

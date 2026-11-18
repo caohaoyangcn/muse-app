@@ -34,6 +34,7 @@ const (
 	keyFC2Cookie       = "fc2cmadb_cookie_dpapi"
 	keyWindowPlacement = "window_placement"
 	keyTourSeen        = "tour_seen"
+	keyHiddenTags      = "hidden_quick_tags"
 	keyTrashRetention  = "trash_retention_days"
 	keyLLMBaseURL      = "llm_base_url"
 	keyLLMModel        = "llm_model"
@@ -48,6 +49,10 @@ const (
 	// An API key is a short bearer token; the limit only exists to stop a
 	// broken paste from reaching the encrypted settings blob.
 	maxLLMAPIKeyLength = 16 * 1024
+	// A hidden-tag list is a UI preference; these bounds keep a broken client
+	// from writing an unbounded JSON blob into the settings table.
+	maxHiddenTags      = 5000
+	maxHiddenTagLength = 256
 )
 
 // ErrSecretStorageUnsupported indicates that this build cannot persist
@@ -407,6 +412,68 @@ func (s *Store) TourSeen() (bool, error) {
 // It is written for every way of leaving the tour (finished, skipped, Esc).
 func (s *Store) MarkTourSeen() error {
 	return s.set(keyTourSeen, "1")
+}
+
+// HiddenTags returns the scraped tags the user removed from the sidebar's
+// quick list. Like the tour flag this lives in the database instead of the
+// webview's localStorage: a rebuilt executable or a disposable webview profile
+// must not silently bring every hidden tag back.
+//
+// A corrupt value reads as an empty list (the shortcut simply shows everything
+// again) rather than breaking the library.
+func (s *Store) HiddenTags() ([]string, error) {
+	raw, err := s.get(keyHiddenTags)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(raw) == "" {
+		return []string{}, nil
+	}
+	var tags []string
+	if err := json.Unmarshal([]byte(raw), &tags); err != nil {
+		return []string{}, nil
+	}
+	return normalizeHiddenTags(tags), nil
+}
+
+// SetHiddenTags persists the shortcut's hidden list. Values are trimmed,
+// deduplicated and stored as a JSON array; an empty selection stores [] rather
+// than deleting the row so a later read is deterministic.
+func (s *Store) SetHiddenTags(tags []string) error {
+	normalized := normalizeHiddenTags(tags)
+	if len(normalized) > maxHiddenTags {
+		return fmt.Errorf("隐藏标签过多（最多 %d 个）", maxHiddenTags)
+	}
+	for _, tag := range normalized {
+		if len([]rune(tag)) > maxHiddenTagLength {
+			return fmt.Errorf("标签名过长（最多 %d 个字符）", maxHiddenTagLength)
+		}
+	}
+	encoded, err := json.Marshal(normalized)
+	if err != nil {
+		return fmt.Errorf("encode hidden tags: %w", err)
+	}
+	return s.set(keyHiddenTags, string(encoded))
+}
+
+// normalizeHiddenTags trims, drops blanks and deduplicates while preserving the
+// order the user hid the tags in. It never returns nil, so the stored JSON is
+// always an array.
+func normalizeHiddenTags(tags []string) []string {
+	seen := make(map[string]struct{}, len(tags))
+	out := make([]string, 0, len(tags))
+	for _, raw := range tags {
+		tag := strings.TrimSpace(raw)
+		if tag == "" {
+			continue
+		}
+		if _, dup := seen[tag]; dup {
+			continue
+		}
+		seen[tag] = struct{}{}
+		out = append(out, tag)
+	}
+	return out
 }
 
 // GetJavBusCookie returns the decrypted JavBus Cookie, or an empty string when

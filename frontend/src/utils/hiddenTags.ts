@@ -5,23 +5,10 @@ import type { ValueOption } from "./libraryFilter";
  * preference, not a library fact: hiding a tag never changes which videos it
  * belongs to, and the tag stays available in the full filter dialog.
  *
- * Stored as a JSON string array in localStorage so a blocked/full store only
- * loses the preference, never the library.
+ * The list itself is persisted by the backend settings store (not localStorage),
+ * so rebuilding the executable or resetting a webview profile cannot bring
+ * every hidden tag back.
  */
-const HIDDEN_TAGS_STORAGE = "muse.hiddenTags";
-
-/** Trim, drop blanks and deduplicate while keeping the first-seen order. */
-export function normalizeHiddenTags(values: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const value of values) {
-    const tag = value.trim();
-    if (tag === "" || seen.has(tag)) continue;
-    seen.add(tag);
-    out.push(tag);
-  }
-  return out;
-}
 
 /** Add a tag to the hidden set, or remove it again. */
 export function toggleHiddenTag(hidden: readonly string[], tag: string): string[] {
@@ -41,24 +28,4 @@ export function withoutHiddenTags(
   if (hidden.length === 0) return [...options];
   const hiddenSet = new Set(hidden);
   return options.filter((option) => !hiddenSet.has(option.name));
-}
-
-export function readHiddenTags(): string[] {
-  try {
-    const raw = localStorage.getItem(HIDDEN_TAGS_STORAGE);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return normalizeHiddenTags(parsed.filter((value): value is string => typeof value === "string"));
-  } catch {
-    return [];
-  }
-}
-
-export function writeHiddenTags(hidden: readonly string[]): void {
-  try {
-    localStorage.setItem(HIDDEN_TAGS_STORAGE, JSON.stringify(normalizeHiddenTags(hidden)));
-  } catch {
-    // Private mode / storage disabled: the choice simply isn't persisted.
-  }
 }
