@@ -410,6 +410,94 @@ func TestV22AddsContentFingerprintStorage(t *testing.T) {
 	}
 }
 
+// TestV29BackfillsMosaicRestoredMarker verifies the badge survives the
+// retirement of user-defined groups: the new videos.mosaic_restored column is
+// filled from the file-name rule and from membership in 马赛克破解, including
+// its child groups, while unrelated favorites stay unmarked.
+func TestV29BackfillsMosaicRestoredMarker(t *testing.T) {
+	db := openMigrated(t)
+	if _, err := db.Exec(schemaV1); err != nil {
+		t.Fatalf("exec v1: %v", err)
+	}
+	if _, err := db.Exec(schemaV2); err != nil {
+		t.Fatalf("exec v2: %v", err)
+	}
+	if err := addColumnIfMissing(db, "video_groups", "parent_id", schemaV6); err != nil {
+		t.Fatalf("exec v6: %v", err)
+	}
+	if _, err := db.Exec(`PRAGMA user_version = 28`); err != nil {
+		t.Fatalf("stamp v28: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO video_groups (id, name, position, created_at, updated_at, parent_id)
+		VALUES (1, '马赛克破解', 0, 1, 1, NULL), (2, '子分组', 1, 1, 1, 1)`); err != nil {
+		t.Fatalf("seed groups: %v", err)
+	}
+	for _, row := range []struct {
+		name string
+	}{{"file-name.mp4"}, {"restored-name.mp4"}, {"group-member.mp4"}, {"child-member.mp4"}, {"plain.mp4"}} {
+		if _, err := db.Exec(
+			`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status)
+			 VALUES (?, ?, 1, 1, 1, 'available')`,
+			`C:\v\`+row.name, row.name,
+		); err != nil {
+			t.Fatalf("insert %s: %v", row.name, err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO video_group_members (video_id, group_id) VALUES (3, 1), (4, 2)`); err != nil {
+		t.Fatalf("seed members: %v", err)
+	}
+	// Rename the second row through the database so the file-name rule is what
+	// the migration sees.
+	if _, err := db.Exec(`UPDATE videos SET file_name = 'Movie.Restored.mkv' WHERE file_name = 'restored-name.mp4'`); err != nil {
+		t.Fatalf("rename restored row: %v", err)
+	}
+
+	res, err := Migrate(db)
+	if err != nil {
+		t.Fatalf("migrate v28 -> v29: %v", err)
+	}
+	if res.SchemaVersion != currentSchemaVersion {
+		t.Errorf("schema version = %d, want %d", res.SchemaVersion, currentSchemaVersion)
+	}
+	want := map[string]bool{
+		"file-name.mp4":      false,
+		"Movie.Restored.mkv": true,
+		"group-member.mp4":   true,
+		"child-member.mp4":   true,
+		"plain.mp4":          false,
+	}
+	for name, expected := range want {
+		var got bool
+		if err := db.QueryRow(`SELECT mosaic_restored FROM videos WHERE file_name = ?`, name).Scan(&got); err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if got != expected {
+			t.Errorf("%s mosaic_restored = %v, want %v", name, got, expected)
+		}
+	}
+
+	// Re-running must keep the backfilled values and not fail.
+	if _, err := Migrate(db); err != nil {
+		t.Fatalf("re-migrate: %v", err)
+	}
+
+	// A fresh database starts with the column and no group tables needed.
+	fresh := openMigrated(t)
+	if _, err := Migrate(fresh); err != nil {
+		t.Fatalf("migrate fresh: %v", err)
+	}
+	var n int
+	if err := fresh.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='video_groups'`).Scan(&n); err != nil {
+		t.Fatalf("check fresh groups: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("fresh database group table count = %d, want 1 (still created by v2 at this schema step)", n)
+	}
+	if !hasColumn(fresh, "videos", "mosaic_restored") {
+		t.Error("fresh database lacks videos.mosaic_restored")
+	}
+}
+
 func hasColumn(db *sql.DB, table, column string) bool {
 	_, ok := declaredDefault(db, table, column)
 	return ok

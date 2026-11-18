@@ -52,6 +52,10 @@ type VideoRepository interface {
 	SetScrapedCoverAllowed(id int64, allowed bool) error
 	ApplyScrapedCoverIfAllowed(id int64, thumbnailPath string) (bool, error)
 	SetCoverSource(id int64, source string) error
+	// SetMosaicRestored records the 马赛克破解 badge marker. It is idempotent and
+	// only ever turns the marker on: the import rule is additive, so a re-added
+	// file never clears a badge the library already carried.
+	SetMosaicRestored(id int64, restored bool) error
 	UpdateLastOpened(id int64, at int64) error
 	ListNeedingMetadata() ([]int64, error) // ids with no duration_ms, frame_rate or bit_rate
 	UpdateInfo(id int64, title, notes string) error
@@ -121,13 +125,13 @@ func NewSQLiteRepository(db *sql.DB) VideoRepository {
 	return &sqliteRepository{db: db}
 }
 
-const videoColumns = "id, path, file_name, file_size, duration_ms, width, height, frame_rate, bit_rate, video_codec, audio_codec, thumbnail_path, created_at, updated_at, last_opened_at, status, title, notes, custom_cover_at, like_count, cover_source, scraped_cover_path, allow_scraped_cover, content_hash, hash_version, hash_size, hash_mtime, hash_at, hash_error, full_hash, full_hash_at, source_id, remote_path, deleted_at, delete_reason, archive_source_name"
+const videoColumns = "id, path, file_name, file_size, duration_ms, width, height, frame_rate, bit_rate, video_codec, audio_codec, thumbnail_path, created_at, updated_at, last_opened_at, status, title, notes, custom_cover_at, like_count, cover_source, scraped_cover_path, allow_scraped_cover, content_hash, hash_version, hash_size, hash_mtime, hash_at, hash_error, full_hash, full_hash_at, source_id, remote_path, deleted_at, delete_reason, archive_source_name, mosaic_restored"
 
 func scanVideo(scan func(dest ...any) error) (*Video, error) {
 	var v Video
 	var durationMs, width, height, bitrate, lastOpened, customCoverAt, allowScrapedCover sql.NullInt64
 	var hashVersion, hashSize, hashMtime, hashAt, fullHashAt sql.NullInt64
-	var deletedAt sql.NullInt64
+	var deletedAt, mosaicRestored sql.NullInt64
 	var frameRate sql.NullFloat64
 	var videoCodec, audioCodec, thumbnailPath, title, notes, coverSource, scrapedCoverPath sql.NullString
 	var contentHash, hashError, fullHash, remotePath, deleteReason, archiveSource sql.NullString
@@ -135,7 +139,7 @@ func scanVideo(scan func(dest ...any) error) (*Video, error) {
 		&frameRate, &bitrate, &videoCodec, &audioCodec, &thumbnailPath, &v.CreatedAt, &v.UpdatedAt, &lastOpened, &v.Status,
 		&title, &notes, &customCoverAt, &v.LikeCount, &coverSource, &scrapedCoverPath, &allowScrapedCover,
 		&contentHash, &hashVersion, &hashSize, &hashMtime, &hashAt, &hashError, &fullHash, &fullHashAt,
-		&v.SourceID, &remotePath, &deletedAt, &deleteReason, &archiveSource)
+		&v.SourceID, &remotePath, &deletedAt, &deleteReason, &archiveSource, &mosaicRestored)
 	if err != nil {
 		return nil, err
 	}
@@ -159,6 +163,7 @@ func scanVideo(scan func(dest ...any) error) (*Video, error) {
 	v.DeletedAt = deletedAt.Int64
 	v.DeleteReason = deleteReason.String
 	v.ArchiveSourceName = archiveSource.String
+	v.MosaicRestored = mosaicRestored.Int64 != 0
 	v.HashVersion = int(hashVersion.Int64)
 	v.HashState = FingerprintState{
 		Size:       hashSize.Int64,
@@ -496,6 +501,35 @@ func (r *sqliteRepository) ClearLikes(id int64) error {
 	}
 	if n, err := res.RowsAffected(); err == nil && n == 0 {
 		return ErrNotFound
+	}
+	return nil
+}
+
+// SetMosaicRestored turns on the 马赛克破解 badge marker. It only writes when the
+// marker is off, so a repeated import of the same file is a no-op rather than a
+// pointless row update; a false value deliberately does nothing (the rule is
+// additive and never clears a migrated badge).
+func (r *sqliteRepository) SetMosaicRestored(id int64, restored bool) error {
+	if !restored {
+		return nil
+	}
+	res, err := r.db.Exec(
+		`UPDATE videos SET mosaic_restored = 1, updated_at = ? WHERE id = ? AND mosaic_restored = 0`,
+		nowMillis(), id,
+	)
+	if err != nil {
+		return fmt.Errorf("set mosaic restored: %w", err)
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		// Either the marker was already on (fine) or the row does not exist
+		// (which callers treat as a best-effort failure).
+		var exists int
+		if err := r.db.QueryRow(`SELECT COUNT(*) FROM videos WHERE id = ?`, id).Scan(&exists); err != nil {
+			return fmt.Errorf("check video for mosaic restored: %w", err)
+		}
+		if exists == 0 {
+			return ErrNotFound
+		}
 	}
 	return nil
 }

@@ -79,10 +79,11 @@ type Video struct {
 	// from video_jav.tags_json. It is a read model, never a column on videos; the
 	// library filter uses it in place of the removed user-defined groups.
 	Tags []string `json:"tags"`
-	// MosaicRestored reports membership in the 马赛克破解 group — the collection
-	// rule that tags restored/mosaic-removed works. It is a read-model
-	// projection filled by the shared façade (transitive membership included),
-	// never a column on videos; the UI shows it as a tag beside the name.
+	// MosaicRestored reports that this favorite is a restored/mosaic-removed
+	// work. It is a persisted marker (videos.mosaic_restored) written by the
+	// import rule (file name contains "restored" or "ltx") and backfilled from
+	// the retired 马赛克破解 group during migration. The UI shows it as the
+	// 马赛克破解 badge; removing the custom-group feature must not affect it.
 	MosaicRestored bool `json:"mosaicRestored"`
 	// CustomCoverAt is the unix-milli moment the user picked a cover frame.
 	// 0 means the current cover is not a user-picked frame. A user-picked

@@ -156,6 +156,15 @@ func (r *stubVideoRepo) ApplyScrapedCoverIfAllowed(id int64, p string) (bool, er
 	return true, nil
 }
 func (r *stubVideoRepo) SetCoverSource(id int64, source string) error { return nil }
+func (r *stubVideoRepo) SetMosaicRestored(id int64, restored bool) error {
+	if !restored {
+		return nil
+	}
+	if v, ok := r.byID[id]; ok {
+		v.MosaicRestored = true
+	}
+	return nil
+}
 func (r *stubVideoRepo) UpdateLastOpened(id int64, t int64) error {
 	v, err := r.Get(id)
 	if err != nil {

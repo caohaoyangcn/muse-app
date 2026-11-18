@@ -8,7 +8,7 @@ import (
 // currentSchemaVersion is the highest applied schema version. It is tracked in
 // PRAGMA user_version. Bump it whenever a migration adds a column/table that
 // requires (or could benefit from) re-extracting data for pre-existing rows.
-const currentSchemaVersion = 28
+const currentSchemaVersion = 29
 
 // MigrationResult reports what happened during Migrate so callers can trigger
 // one-off backfills (e.g. re-probing ffprobe for videos created before a new
@@ -461,6 +461,73 @@ func Migrate(db *sql.DB) (MigrationResult, error) {
 		version = 28
 	}
 
+	if version < 29 {
+		// v29 replaces the 马赛克破解 badge's source: the user-defined group is
+		// being retired, so the badge becomes a persisted per-favorite marker.
+		// Two backfills preserve what the badge looked like before the upgrade:
+		//   - the file-name rule the importer has always used (restored / ltx);
+		//   - membership in the 马赛克破解 group, including its descendants.
+		// The group tables still exist at this point and are dropped by a later
+		// migration, once no code reads them.
+		if err := addColumnIfMissing(db, "videos", "mosaic_restored", `ALTER TABLE videos ADD COLUMN mosaic_restored INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return res, fmt.Errorf("migrate database v29 mosaic_restored: %w", err)
+		}
+		hasGroupMembers, err := tableExists(db, "video_group_members")
+		if err != nil {
+			return res, err
+		}
+		hasGroups, err := tableExists(db, "video_groups")
+		if err != nil {
+			return res, err
+		}
+		withParent := false
+		if hasGroups {
+			withParent, err = columnExists(db, "video_groups", "parent_id")
+			if err != nil {
+				return res, err
+			}
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			return res, fmt.Errorf("migrate database v29: %w", err)
+		}
+		if _, err := tx.Exec(
+			`UPDATE videos SET mosaic_restored = 1
+			 WHERE lower(file_name) LIKE '%restored%' OR lower(file_name) LIKE '%ltx%'`,
+		); err != nil {
+			_ = tx.Rollback()
+			return res, fmt.Errorf("migrate database v29 file-name backfill: %w", err)
+		}
+		if hasGroupMembers && hasGroups {
+			ids, err := mosaicRestoredGroupVideoIDs(tx, withParent)
+			if err != nil {
+				_ = tx.Rollback()
+				return res, fmt.Errorf("migrate database v29 group backfill: %w", err)
+			}
+			stmt, err := tx.Prepare(`UPDATE videos SET mosaic_restored = 1 WHERE id = ? AND mosaic_restored = 0`)
+			if err != nil {
+				_ = tx.Rollback()
+				return res, fmt.Errorf("migrate database v29 prepare backfill: %w", err)
+			}
+			for _, id := range ids {
+				if _, err := stmt.Exec(id); err != nil {
+					_ = stmt.Close()
+					_ = tx.Rollback()
+					return res, fmt.Errorf("migrate database v29 backfill video %d: %w", id, err)
+				}
+			}
+			if err := stmt.Close(); err != nil {
+				_ = tx.Rollback()
+				return res, fmt.Errorf("migrate database v29 close backfill: %w", err)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return res, fmt.Errorf("migrate database v29 commit: %w", err)
+		}
+		version = 29
+	}
+
 	res.SchemaVersion = version
 	if err := setUserVersion(db, version); err != nil {
 		return res, err
@@ -604,6 +671,84 @@ func setUserVersion(db *sql.DB, v int) error {
 		return fmt.Errorf("write user_version %d: %w", v, err)
 	}
 	return nil
+}
+
+// tableExists reports whether a table is present. Migrations that resurrect or
+// retire an old feature need it because a fresh database never created the
+// table, while an upgraded one still has it.
+func tableExists(db *sql.DB, table string) (bool, error) {
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table,
+	).Scan(&n); err != nil {
+		return false, fmt.Errorf("check table %s: %w", table, err)
+	}
+	return n > 0, nil
+}
+
+// columnExists reports whether a table already has the named column. It is the
+// read-only half of addColumnIfMissing, used when a migration must branch on an
+// old install's actual shape.
+func columnExists(db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false, fmt.Errorf("inspect columns of %s: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, ctype string
+		var dflt any
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err != nil {
+			return false, fmt.Errorf("scan column info of %s: %w", table, err)
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
+// rowsQuerier is the subset of *sql.Tx / *sql.DB used by the migration readers,
+// so a backfill can run inside the transaction that will write its result.
+type rowsQuerier interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
+// mosaicRestoredGroupVideoIDs collects the favorites visible in the retired
+// 马赛克破解 group: direct members plus, when the old schema still has the
+// parent_id column, every descendant group's members. The group feature is
+// being removed, so this is the one place that still understands its schema.
+func mosaicRestoredGroupVideoIDs(q rowsQuerier, withParent bool) ([]int64, error) {
+	query := `SELECT DISTINCT m.video_id
+		FROM video_group_members m
+		JOIN video_groups g ON g.id = m.group_id
+		WHERE TRIM(g.name) = ?`
+	if withParent {
+		query = `WITH RECURSIVE tree(id) AS (
+			SELECT id FROM video_groups WHERE TRIM(name) = ?
+			UNION ALL
+			SELECT g.id FROM video_groups g JOIN tree t ON g.parent_id = t.id
+		)
+		SELECT DISTINCT m.video_id
+		FROM video_group_members m
+		JOIN tree t ON t.id = m.group_id`
+	}
+	rows, err := q.Query(query, "马赛克破解")
+	if err != nil {
+		return nil, fmt.Errorf("query restored group members: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan restored group member: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // addColumnIfMissing runs an ALTER TABLE ADD COLUMN only when the target table

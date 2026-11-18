@@ -194,6 +194,17 @@ func (r *memVideoRepo) ClearLikes(id int64) error {
 	v.LikeCount = 0
 	return nil
 }
+func (r *memVideoRepo) SetMosaicRestored(id int64, restored bool) error {
+	if !restored {
+		return nil
+	}
+	v, err := r.GetAny(id)
+	if err != nil {
+		return err
+	}
+	v.MosaicRestored = true
+	return nil
+}
 func (r *memVideoRepo) UpdateFingerprint(id int64, hash string, version int, size, mtime, at int64) error {
 	v, err := r.Get(id)
 	if err != nil {
@@ -864,13 +875,31 @@ func TestListVideosCarriesScrapedActors(t *testing.T) {
 	}
 }
 
-// Favorites in the 马赛克破解 group carry the tag flag both clients render
-// beside the name; favorites outside it do not.
+// The import rule behind the 马赛克破解 badge is the file name alone, and it
+// only ever turns the marker on. It is applied by the single, batch and cloud
+// add paths, so testing the helper pins the behaviour they share.
+func TestMarkMosaicRestoredUsesFileNameRule(t *testing.T) {
+	lib, repo, _ := newFacade(t)
+
+	if !lib.markMosaicRestored(10, "Movie.Restored.4K.mkv") {
+		t.Fatal("a restored file name should set the marker")
+	}
+	if !lib.markMosaicRestored(20, "LTX-001.mp4") {
+		t.Fatal("an ltx file name should set the marker")
+	}
+	if lib.markMosaicRestored(10, "ordinary.mp4") {
+		t.Error("an ordinary file name must not set the marker")
+	}
+	if !repo.all[0].MosaicRestored || !repo.all[1].MosaicRestored {
+		t.Errorf("markers = [%v,%v], want both set", repo.all[0].MosaicRestored, repo.all[1].MosaicRestored)
+	}
+}
+
+// Favorites marked as mosaic-restored carry the badge both clients render
+// beside the name; favorites without the marker do not.
 func TestListVideosCarriesRestoredBadge(t *testing.T) {
-	lib, _, gr := newFacade(t)
-	restored := group.Group{ID: 7, Name: "马赛克破解"}
-	gr.groups = append(gr.groups, restored)
-	gr.members[restored.ID] = []int64{10} // only the first favorite is restored
+	lib, repo, _ := newFacade(t)
+	repo.all[0].MosaicRestored = true // only the first favorite is restored
 
 	videos, err := lib.ListVideos()
 	if err != nil {
@@ -881,10 +910,10 @@ func TestListVideosCarriesRestoredBadge(t *testing.T) {
 		byID[v.ID] = v
 	}
 	if !byID[10].MosaicRestored {
-		t.Error("favorite in 马赛克破解 should carry the badge")
+		t.Error("favorite with the marker should carry the badge")
 	}
 	if byID[20].MosaicRestored {
-		t.Error("favorite outside 马赛克破解 must not carry the badge")
+		t.Error("favorite without the marker must not carry the badge")
 	}
 
 	single, err := lib.Video(10)

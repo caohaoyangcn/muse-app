@@ -152,50 +152,28 @@ func (l *Library) scrapedTags() map[int64][]string {
 	return tags
 }
 
-// restoredVideoIDs returns the favorites in the 马赛克破解 group, including the
-// members of its child groups (group membership is transitive). It is best
-// effort, like the scrape read: a failure leaves the badge off rather than
-// failing the library.
-func (l *Library) restoredVideoIDs() map[int64]struct{} {
-	if l.groups == nil {
-		return nil
-	}
-	ids, err := l.groups.VideoIDsInNamedGroup(mosaicRestoredGroup)
-	if err != nil {
-		l.log.Warn("load restored group members failed", "err", err)
-		return nil
-	}
-	set := make(map[int64]struct{}, len(ids))
-	for _, id := range ids {
-		set[id] = struct{}{}
-	}
-	return set
-}
-
 // videoReadModel bundles the fields a Video carries only for reading. The maps
 // are loaded once per batch by loadVideoReadModel and applied to every row.
 type videoReadModel struct {
-	codes    map[int64]string
-	titles   map[int64]jav.ScrapedTitle
-	actors   map[int64][]string
-	tags     map[int64][]string
-	restored map[int64]struct{}
-	sources  map[int64]cloud.SourceState
-	backups  map[string]bool
+	codes   map[int64]string
+	titles  map[int64]jav.ScrapedTitle
+	actors  map[int64][]string
+	tags    map[int64][]string
+	sources map[int64]cloud.SourceState
+	backups map[string]bool
 }
 
 // loadVideoReadModel reads the projections a batch of favorites needs. Every
-// individual read is best effort, so a broken scrape result or group read
-// leaves a field empty instead of failing the library.
+// individual read is best effort, so a broken scrape result leaves a field
+// empty instead of failing the library.
 func (l *Library) loadVideoReadModel() videoReadModel {
 	return videoReadModel{
-		codes:    l.scrapedCodes(),
-		titles:   l.scrapedTitles(),
-		actors:   l.scrapedActors(),
-		tags:     l.scrapedTags(),
-		restored: l.restoredVideoIDs(),
-		sources:  l.cloudSources(),
-		backups:  l.backedUpKeys(),
+		codes:   l.scrapedCodes(),
+		titles:  l.scrapedTitles(),
+		actors:  l.scrapedActors(),
+		tags:    l.scrapedTags(),
+		sources: l.cloudSources(),
+		backups: l.backedUpKeys(),
 	}
 }
 
@@ -219,7 +197,6 @@ func (m videoReadModel) apply(v *video.Video) {
 		// as "no tags" and iterate it directly.
 		v.Tags = []string{}
 	}
-	_, v.MosaicRestored = m.restored[v.ID]
 	if v.DeletedAt == 0 && v.JavCode != "" {
 		v.BackedUp = m.backups[jav.DuplicateKey(v.JavCode, jav.PartForFile(v.FileName, v.JavCode))]
 	}
@@ -507,11 +484,39 @@ func (l *Library) VideoGroupIDs(videoID int64) ([]int64, error) {
 // ---- Writes (shared write model; the Web front-end simply does not expose
 // these, keeping its capability surface intentional) ----
 
+// mosaicRestoredFileName is the automatic rule behind the 马赛克破解 badge: a
+// restored/mosaic-removed work is identified by "restored" or "ltx" in its file
+// name. It deliberately lives beside the import path (not in the video domain),
+// because the batch add, single add and cloud add must all apply the same rule.
+func mosaicRestoredFileName(fileName string) bool {
+	base := strings.ToLower(filepath.Base(fileName))
+	return strings.Contains(base, "restored") || strings.Contains(base, "ltx")
+}
+
+// markMosaicRestored applies the file-name rule after a successful import. A
+// failure only logs: the favorite itself was added and the badge can be filled
+// in later by a re-add or a migration, so it must not fail the import.
+func (l *Library) markMosaicRestored(videoID int64, fileName string) bool {
+	if !mosaicRestoredFileName(fileName) {
+		return false
+	}
+	if err := l.videos.SetMosaicRestored(videoID, true); err != nil {
+		l.log.Warn("set mosaic restored marker failed", "id", videoID, "err", err)
+		return false
+	}
+	return true
+}
+
 // AddVideo adds a single favorite and schedules background metadata scraping.
 func (l *Library) AddVideo(path string) (*video.Video, error) {
 	v, err := l.videos.AddVideo(path)
 	if err != nil {
 		return nil, err
+	}
+	if l.markMosaicRestored(v.ID, v.FileName) {
+		// The flag is persisted; keep the returned object in sync so a caller
+		// that renders it immediately already shows the badge.
+		v.MosaicRestored = true
 	}
 	if l.jav != nil {
 		l.jav.Enqueue(v.ID)
@@ -525,10 +530,17 @@ func (l *Library) AddVideo(path string) (*video.Video, error) {
 func (l *Library) AddVideos(paths []string) []video.AddVideoResult {
 	results := l.videos.AddVideos(paths)
 	for _, r := range results {
-		if r.Success {
-			if l.jav != nil {
-				l.jav.Enqueue(r.VideoID)
-			}
+		if !r.Success {
+			continue
+		}
+		// A relocated file already went through these rules when it was first
+		// imported; re-applying them could mark a row the user had deliberately
+		// kept unmarked.
+		if !r.Relocated {
+			l.markMosaicRestored(r.VideoID, r.Path)
+		}
+		if l.jav != nil {
+			l.jav.Enqueue(r.VideoID)
 		}
 	}
 	return results
@@ -1641,11 +1653,14 @@ func (l *Library) AddCloudVideos(sourceID int64, paths []string) []video.AddVide
 			results = append(results, result)
 			continue
 		}
-		v, _, err := l.videos.AddRemoteVideo(sourceID, entry.Path, entry.Name, entry.Size)
+		v, created, err := l.videos.AddRemoteVideo(sourceID, entry.Path, entry.Name, entry.Size)
 		if err != nil {
 			result.Error = video.UserMessage(err)
 			results = append(results, result)
 			continue
+		}
+		if created {
+			l.markMosaicRestored(v.ID, v.FileName)
 		}
 		result.Success = true
 		result.VideoID = v.ID

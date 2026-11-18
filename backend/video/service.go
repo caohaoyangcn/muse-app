@@ -661,6 +661,19 @@ func (s *Service) UpdateInfo(id int64, title, notes string) (*Video, error) {
 	return s.repo.Get(id)
 }
 
+// SetMosaicRestored records the 马赛克破解 marker for a favorite. It is called by
+// the import orchestration, which owns the file-name rule; the video service
+// only persists the flag so both transports read the same value.
+func (s *Service) SetMosaicRestored(id int64, restored bool) error {
+	if err := s.repo.SetMosaicRestored(id, restored); err != nil {
+		return err
+	}
+	if restored {
+		s.log.Info("mosaic restored marker set", "id", id)
+	}
+	return nil
+}
+
 // LikeVideo records one like for a favorite. Likes stack — every call adds one
 // to the counter — and returns the video with the updated count.
 func (s *Service) LikeVideo(id int64) (*Video, error) {

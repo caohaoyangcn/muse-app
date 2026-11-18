@@ -222,6 +222,44 @@ func TestRepositoryLikes(t *testing.T) {
 	}
 }
 
+// TestRepositoryMosaicRestoredMarker covers the persisted badge marker: it
+// starts off, survives a read, is idempotent, and never turns back off.
+func TestRepositoryMosaicRestoredMarker(t *testing.T) {
+	repo := newTestRepo(t)
+	v := sampleVideo(`D:\V\restored.mp4`)
+	if err := repo.Create(v); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.Get(v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MosaicRestored {
+		t.Error("a new favorite must not carry the marker")
+	}
+	for i := 0; i < 2; i++ {
+		if err := repo.SetMosaicRestored(v.ID, true); err != nil {
+			t.Fatalf("set marker: %v", err)
+		}
+	}
+	got, _ = repo.Get(v.ID)
+	if !got.MosaicRestored {
+		t.Error("marker was not persisted")
+	}
+	// A false value is deliberately a no-op: the import rule never clears a
+	// badge the library already carried.
+	if err := repo.SetMosaicRestored(v.ID, false); err != nil {
+		t.Fatalf("clear marker: %v", err)
+	}
+	got, _ = repo.Get(v.ID)
+	if !got.MosaicRestored {
+		t.Error("a false write must not clear the marker")
+	}
+	if err := repo.SetMosaicRestored(999, true); err != ErrNotFound {
+		t.Errorf("set marker on missing video: err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestRepositoryRemoteCRUDAndSearch(t *testing.T) {
 	repo := newTestRepo(t)
 	local := sampleVideo(`D:\V\local.mp4`)
