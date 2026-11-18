@@ -148,7 +148,7 @@ interface AddSourceDialogProps {
 
 - 现有 `handleAdd` 改为 `openAddSource`。
 - 新增 `addSourceOpen` 状态。
-- `handleAddLocal`：关闭弹窗 → `pickVideoFiles` → `addVideos` → `showAddSummary` / `showGroupSuggestions` / `invalidate`。
+- `handleAddLocal`：关闭弹窗 → `pickVideoFiles` → `addVideos` → `showAddSummary` / `invalidate`。
 - `handleAddFolder`：关闭弹窗 → `pickWatchDir` → `addWatchDir`；成功 toast「已加入目录监控，正在扫描…」；重复时提示已在监控中；结果由 `watch:scanned` 事件处理。
 - `handleAddCloud`：关闭弹窗 → 打开 `CloudBrowserDialog`。
 - 全局拖拽 handler：如果 `addSourceOpen` 为真，先关闭弹窗再走原添加逻辑。

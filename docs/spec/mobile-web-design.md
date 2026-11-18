@@ -6,7 +6,7 @@
 
 桌面端（Wails + React）是完整的收藏管理器，但它依赖 Wails 运行时（`window.go`）、原生文件选择器、系统播放器、剪贴板与拖拽，无法直接在手机浏览器中运行。局域网服务因此需要一套独立的移动端界面。
 
-移动端的目标是**浏览对齐桌面 + 轻编辑**：让用户在手机上完成"查看与播放"，以及少量低风险的数据编辑。重操作（刮削、封面选帧、分组结构维护）保留在桌面端。
+移动端的目标是**浏览对齐桌面 + 轻编辑**：让用户在手机上完成"查看与播放"，以及少量低风险的数据编辑。重操作（刮削、封面选帧）保留在桌面端。标签、演员与硬盘筛选两端一致。
 
 ## 2. 架构
 
@@ -46,7 +46,7 @@ npm run build:mobile      # frontend/ 下
 
 | 标签 | 内容 |
 |---|---|
-| 收藏 | 双列海报网格 / 紧凑列表、搜索、多选筛选（分组 / 演员 / 硬盘）、排序与筛选 Chip |
+| 收藏 | 双列海报网格 / 紧凑列表、搜索、多选筛选（标签 / 演员 / 硬盘）、排序与筛选 Chip |
 | 演员 | 演员索引（含合并别名与刮削到的头像），点入查看该演员作品（作品列表可按关键字筛选；演员页副标题带生日/身高三围等档案，见 `actor-profiles.md`） |
 | 刮削 | 刮削任务看板（进行中 / 已完成 / 失败） |
 | 查重 | 同一番号多个版本的成组列表；保留某一个版本或保留全部（见 `duplicate-detection.md`） |
@@ -78,7 +78,7 @@ npm run build:mobile      # frontend/ 下
 |---|---|
 | 右键上下文菜单 | 卡片右上角「更多」按钮 → 底部动作面板 |
 | 悬浮 tooltip | 直接展示元信息，无悬浮态 |
-| 侧栏分组树 | 工具栏「筛选」按钮 → 底部筛选面板（分组可多选，父子分组按并集） |
+| 桌面侧栏标签 | 工具栏「筛选」按钮 → 底部筛选面板（标签可多选，按影片数排序，可搜索） |
 | Radix 模态框 | 底部 sheet（`BottomSheet`）/ 居中确认框 |
 | 快捷键 | 不提供；浏览器前进/后退、Android 返回手势与页内返回箭头共用 URL 历史 |
 | HTML5 拖拽 | 不提供 |
@@ -99,8 +99,6 @@ npm run build:mobile      # frontend/ 下
 | `GET /api/videos/{id}` | `Video` | 不存在 → 404 |
 | `GET /api/videos/{id}/jav` | `VideoJav` | 未刮削 → **200 + `null`** |
 | `GET /api/videos/{id}/jav/task` | `VideoJavTask` | 未排过队 → 200 + `null` |
-| `GET /api/groups` | `ListGroups` | |
-| `GET /api/groups/{id}/videos` | `VideosInGroup` | |
 | `GET /api/jav/tasks` | `ListJavTaskOverviews` | 刮削看板 |
 | `GET /api/jav/duplicates` | `ListJavDuplicates` | 查重；`?includeIgnored=1` 显示已忽略 |
 | `GET /api/actors` | `ListActors` | 含合并别名 |
@@ -117,8 +115,6 @@ npm run build:mobile      # frontend/ 下
 | `POST /api/videos/{id}/likes` | `LikeVideo` |
 | `DELETE /api/videos/{id}/likes` | `ClearVideoLikes` |
 | `POST /api/videos/{id}/opened` | `MarkVideoOpened`（只记最近播放时间，204） |
-| `POST /api/groups` / `PUT /api/groups/{id}` / `DELETE /api/groups/{id}` | `CreateGroup` / `RenameGroup` / `DeleteGroup` |
-| `POST /api/groups/{id}/videos` | `AddVideoToGroup` |
 | `POST /api/jav/duplicates/ignore` | `IgnoreJavDuplicate` |
 | `POST /api/trash/{id}/restore` | `RestoreVideo` |
 | `DELETE /api/trash/{id}` | `DeleteVideoPermanently` |
@@ -158,15 +154,14 @@ npm run build:mobile      # frontend/ 下
 | 发起刮削 / 覆盖番号 | ✅ | ❌ 桌面专属 |
 | 演员合并 | ✅ | ❌ 桌面专属 |
 | 封面选帧 | ✅ 输入时间后由 ffmpeg 抽帧，无内嵌视频预览 | ❌ 桌面专属 |
-| 分组增删改 / 嵌套 / 拖拽排序 | ✅ | ❌ 桌面专属 |
 | 打开系统播放器 / 定位文件 / 复制路径 | ✅ | ❌ 作用于服务器文件系统，对手机无意义 |
 | 添加收藏 / 目录监控 / 设置 | ✅ | ❌ 移动端不渲染入口（写端点仍可达） |
 
 ## 8. 数据与刷新
 
-- 默认拉全量 `GET /api/videos` + 客户端排序（与桌面端一致）；选了分组时改走 `GET /api/groups/{id}/videos`（多选取并集）。搜索始终跨全库，再与所选分组取交集。
-- **搜索与筛选的关系**：顶部「搜索」走 `?search=` 覆盖全库；若同时选了分组，结果再按所选分组的并集取交集，因此搜索结果不会绕过筛选。演员作品页仍保留自己的关键字框，只筛当前已加载的列表。搜索字段为 `title` / `javCode` / `fileName` / `path`（大小写不敏感子串）。
-- **筛选模型**：分组、演员、硬盘三栏都是多选。同一栏内取并集（任一演员命中即可），不同栏之间取交集；空选择表示不限。分组走 HTTP 分组接口（含子分组），演员与硬盘从已加载列表派生、纯客户端过滤。筛选状态放在移动壳 `App` 而不是列表组件里，打开详情再返回不会丢；底部筛选面板直接编辑这份状态，没有第二份草稿，所以点遮罩、下滑或 Android 返回键关闭面板都不会丢失已选条件。
+- 默认拉全量 `GET /api/videos` + 客户端排序（与桌面端一致）；标签、演员与硬盘都在已加载列表上过滤。搜索始终跨全库，再与所选标签/演员/硬盘取交集。
+- **搜索与筛选的关系**：顶部「搜索」走 `?search=` 覆盖全库；若同时选了标签、演员或硬盘，结果再与这些条件取交集，因此搜索结果不会绕过筛选。演员作品页仍保留自己的关键字框，只筛当前已加载的列表。搜索字段为 `title` / `javCode` / `fileName` / `path`（大小写不敏感子串）。
+- **筛选模型**：标签、演员、硬盘三栏都是多选。同一栏内取并集（任一标签命中即可），不同栏之间取交集；空选择表示不限。三栏都从已加载列表派生、纯客户端过滤；筛选状态放在移动壳 `App` 而不是列表组件里，打开详情再返回不会丢；底部筛选面板直接编辑这份状态，没有第二份草稿，所以点遮罩、下滑或 Android 返回键关闭面板都不会丢失已选条件。标签由刮削结果自动产生，用户不能新建或改名。
 - 排序字段、排序方向与网格/列表偏好存 `localStorage`（键 `muse.mobile.*`）。
 - **查重页不带筛选框**：桌面端因为顶部搜索框常驻，必须在该视图里自己提供筛选；移动端的顶部搜索框本来就只在「收藏」标签显示，查重页不会出现一个看似可用却无效的输入框，因此不需要再放一个。列表本就不长，「显示已忽略」开关已足够复查先前的决定。
 - **长列表：两端统一按页替换**：

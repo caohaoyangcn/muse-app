@@ -499,8 +499,7 @@ func (l *Library) AddVideos(paths []string) []video.AddVideoResult {
 }
 
 // RemoveVideo moves a favorite to the recycle bin. It keeps the record, its
-// generated images, group memberships and scraped metadata, so a restore is a
-// flag change.
+// generated images and scraped metadata, so a restore is a flag change.
 //
 // A record that is already gone removes cleanly rather than erroring: both
 // clients report the outcome by reloading, so a list that went stale — a
@@ -517,7 +516,7 @@ func (l *Library) trashVideo(id int64, reason string) error {
 }
 
 // RestoreVideo brings a trashed favorite back into the library. The record keeps
-// its id, groups, likes and scraped metadata; the video layer re-establishes its
+// its id, likes and scraped metadata; the video layer re-establishes its
 // file status from the disk.
 func (l *Library) RestoreVideo(id int64) error {
 	v, err := l.videos.GetAny(id)

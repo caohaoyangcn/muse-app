@@ -6,7 +6,7 @@ import (
 )
 
 // Repository isolates persistence from business logic, mirroring the other
-// domains (video, group).
+// domains (video, jav).
 type Repository interface {
 	Create(dir *WatchedDir) error
 	Get(id int64) (*WatchedDir, error)

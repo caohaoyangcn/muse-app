@@ -70,7 +70,7 @@ npm run build:all
 桌面 App（Wails 绑定）与局域网 HTTP 服务共用同一个 `api.Library` 门面，业务逻辑（校验、编排、事务）只有一份：
 
 ```text
-api.Library ──► video.Service / group.Service ──► SQLite
+api.Library ──► video.Service / jav.Service / cloud.Service ──► SQLite
   ▲                    ▲
   │                    │
   ├─ app.go (Wails)    平台专属操作（打开播放器/文件管理器/剪贴板/文件选择器）
@@ -95,7 +95,6 @@ backend/
 ├── api/        # 单一业务门面（Library）：读写编排，桌面(Wails)与 HTTP 共用
 ├── database/   # SQLite 打开 + schema 迁移
 ├── video/      # 模型 / 仓库 / 服务 / ffprobe / 后台处理队列 / 指纹与文件重连
-├── group/      # 分组（分组树、成员关系）
 ├── jav/        # 刮削：JavBus / Avmoo / FC2CMADB provider、任务队列、封面与头像
 ├── watch/      # 目录监控：递归导入 + fsnotify 事件
 ├── thumbnail/  # ffmpeg 帧提取
@@ -144,7 +143,7 @@ cd frontend
 npm run build:mobile   # 产物写入 backend/server/webui/（入库，go:embed 依赖）
 ```
 
-移动端刻意不做：发起刮削、封面选帧、演员合并、分组增删改与拖拽排序、添加收藏、目录监控与设置。这些依赖原生文件对话框、ffmpeg 交互或服务器文件系统。
+移动端刻意不做：发起刮削、封面选帧、演员合并、添加收藏、目录监控与设置。这些依赖原生文件对话框、ffmpeg 交互或服务器文件系统。标签/演员/硬盘筛选两端都有。
 
 播放由客户端完成：`GET /stream/video/{id}` 始终以 HTTP Range 传输原始文件，Muse 不做服务端转码或重封装；iPhone/iPad 可跳转 Infuse / VLC，其他设备复制播放地址。
 
@@ -158,7 +157,6 @@ npm run build:mobile   # 产物写入 backend/server/webui/（入库，go:embed 
 
 - `GET /api/videos`（支持 `?search=`）、`GET /api/videos/{id}`
 - `GET /api/videos/{id}/jav`、`GET /api/videos/{id}/jav/task`（未刮削返回 `200` + `null`）
-- `GET /api/groups`、`GET /api/groups/{id}/videos`
 - `GET /api/jav/tasks`（刮削任务看板）、`GET /api/jav/duplicates`（查重，`?includeIgnored=1` 显示已忽略）、`GET /api/actors`、`GET /api/actors/videos?name=`
 - `GET /api/duplicates/content`（内容重复，`?includeIgnored=1` 显示已忽略）
 
@@ -166,7 +164,6 @@ npm run build:mobile   # 产物写入 backend/server/webui/（入库，go:embed 
 
 - `POST /api/videos`、`DELETE /api/videos/{id}`
 - `PUT /api/videos/{id}/info`（标题/备注）、`POST|DELETE /api/videos/{id}/likes`
-- `POST /api/groups`、`PUT|DELETE /api/groups/{id}`、`POST /api/groups/{id}/videos`
 - `POST /api/jav/duplicates/ignore`（保留重复分组全部版本）
 - `POST /api/duplicates/content/ignore`、`POST /api/duplicates/content/confirm`
 

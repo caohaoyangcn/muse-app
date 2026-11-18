@@ -2,6 +2,8 @@
 
 > 状态：**已完成**（阶段 0–4 全部实施，2026-11-13）。本文是这次改造的**唯一方向锚点**：范围、分层、阶段划分与验收标准都以此为准；每完成一个阶段，更新 §7 进度看板与 §9 变更记录。
 >
+> 注：文中「分组建议」及 `Group*` 组件是 2026-11-18 之前的实现记录；用户自定义分组已移除，筛选改由共享 `utils/libraryFilter.ts` + `views/library/FilterSections.tsx` 承担（见 §9 最新变更）。
+>
 > 修订关系：本文**修正** `mobile-web-design.md` §2 的结论。该文档当时判定"不做响应式"，因此移动端独立成一个应用、只共享类型与工具函数。结论中"两套壳必须分开"仍然成立，但"UI 层完全不共享"已被证明代价过高，本文改为共享 L1-L4、保留 L5。
 
 ## 1. 问题
@@ -251,6 +253,7 @@ L1 主题（共享）           src/theme.css  唯一 token 来源
 
 | 日期 | 变更 |
 |---|---|
+| 2026-11-18 | **筛选层两端统一**：新增共享 `utils/libraryFilter.ts`（标签 / 演员 / 硬盘，栏内并集、栏间 AND）与 `views/library/FilterSections.tsx`、`FilterChips.tsx`；桌面端补上「筛选」对话框与侧栏标签快捷入口，手机端筛选面板改用共享分区。用户自定义分组连同 `backend/group`、`/api/groups*`、分组拖拽与「添加到分组」一起移除；「马赛克破解」Badge 改读 `videos.mosaic_restored`（v29 从旧分组与文件名规则回填，v30 删除分组表）。排序字段/默认方向统一到 `utils/sortOptions.ts`，修正手机端文件名总按降序的问题。manifest 删除「分组结构编辑」gap |
 | 2026-11-17 | 分页器补上页码快捷跳转：第 1 页、当前页前后各 5 页、最后一页（当前 10/21 时为 1、5–15、21），跳空处用 `…` 标记，当前页高亮；窄屏页码条横向滚动并居中当前页。页脚改为贴住滚动区底边的通栏条（`main:has(nav[aria-label="分页"])` / `.scroll-area:has(...)` 去掉容器底部内边距，回收站页脚移到说明文字之后），不再在下方留空。新增 `utils/pagination.test.ts` 9 条页号窗口与跳空标记测试（前端共 54 条） |
 | 2026-11-17 | **两端列表统一改为按页替换**：新增共享 `hooks/usePagedList.ts`（页深按列表身份记忆、数据未到时不覆盖页深、上下页夹取、键盘选中跨页跟随）与 `ui/pagination.tsx`（上一页 / 第 X / Y 页 / 下一页，sticky 底部），桌面主列表、最近播放、演员作品、演员索引、刮削任务、回收站/归档、番号/内容查重，以及手机端对应列表全部接入；桌面视频 60 条/页、手机 24 条/页、工具行 50、查重组 20。删除 `useVirtualRows` 与 `mobile/useLoadMore`/`LoadMoreFooter`：不再有窗口化测量、绝对定位或自动追加，DOM 只保留当前页。回归测试改为 `usePagedList` 的 9 条页契约（共 45 条测试）；`AGENTS.md`、`mobile-web-design.md` 同步更新 |
 | 2026-11-17 | **前端有了回归测试**：Vitest + jsdom（`frontend/vitest.config.ts`，`npm test`，约 3 秒，47 条）。钉住的是「错了不报错、界面悄悄不对」的共享逻辑：`useVirtualRows` 的测量与窗口（含 Astryx Tooltip 那种 0 高 `display:contents` 包装层、短列表全量渲染、列表收缩后的窗口夹取、滚动跟随）、`useLoadMore` 的移动端分页契约（每页条数、不越过总数、页深按列表身份记忆、页脚进入视口自动追加）、`mobile/libraryFilters` 的筛选语义、`utils/diskFilter`、`utils/sortVideos`、`utils/videoName`。为让测试能声明自己的盒模型，`useVirtualRows.test.tsx` 在文件内替换 `getBoundingClientRect` / `clientWidth` / `clientHeight`，并给出 `ResizeObserver` 与 rAF 的最小替身。顺带把 `*.test.*` 从 Tailwind 的扫描里排除（测试里的散文会让打包 CSS 多出 `.invert` 之类的无用工具类）。已用「回退到修复前」验证过：桌面 24 张卡不滚动时这组测试会失败 |

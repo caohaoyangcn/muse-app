@@ -7,7 +7,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - `main.go`、`app.go` —— 程序入口与 Wails 绑定 API（`ListVideos`、`AddVideos`、`OpenVideo` 等）
 - `backend/api/` —— 唯一的业务门面 `Library`，桌面端与局域网 HTTP 服务共用
 - `backend/database/` —— SQLite 打开与 schema 迁移
-- `backend/video/`、`backend/group/`、`backend/jav/`、`backend/watch/`、`backend/thumbnail/`、`backend/settings/` —— 各领域模型的 model/repository/service 代码，测试（`*_test.go`）与源码同目录
+- `backend/video/`、`backend/jav/`、`backend/watch/`、`backend/thumbnail/`、`backend/settings/` —— 各领域模型的 model/repository/service 代码，测试（`*_test.go`）与源码同目录
 - `backend/server/` —— 局域网 Web 服务（SPA + JSON API + Range 串流）；`webui/` 内嵌静态资源
 - `frontend/src/` —— 两种客户端共用一份源码：`ui/` 是跨平台基元层（`Button`、`Input`、`Dialog` 等），`components/` 是桌面专属业务组件，`mobile/` 是局域网移动壳；`services/client.ts` 是两端共用契约、`services/desktop.ts` / `services/web.ts` 是平台门面（壳的唯一取数入口），`types.ts`、`utils/`、`hooks/` 为共享代码；`frontend/wailsjs/` 为生成产物，勿手改
 - `browser-extension/` —— JavDB 浏览器扩展（MV3，无构建步骤）：番号只读页面渲染的 `.video-title strong`，不做正则解析；它只调用只读端点 `POST /api/extension/check`（见 `docs/spec/javdb-browser-extension.md`）。改站点匹配域名时必须同步 `backend/server/extension.go` 的来源白名单，`scripts/check-extension.mjs` 会检查
@@ -32,7 +32,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 
 ## 编码风格与命名约定
 
-- Go：遵循 `gofmt` 格式与 `go vet` 规范；包名为单个小写单词（`video`、`group`）；文件用 snake_case（`repository.go`）
+- Go：遵循 `gofmt` 格式与 `go vet` 规范；包名为单个小写单词（`video`、`jav`）；文件用 snake_case（`repository.go`）
 - 前端：组件用 PascalCase（`VideoCard.tsx`），变量/处理器用 camelCase；构建时由 `tsc` 强制类型检查
 
 ## 测试指南
@@ -40,7 +40,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - 后端：使用 Go `testing`，按行为编写表驱动测试，共享辅助代码放在 `testhelpers_test.go`
 - 集成测试（-tags integration）会使用真实 SQLite + ffmpeg，需要这些工具在 PATH 中
 - 运行 `go test ./...`；覆盖率用 `go test ./... -cover`
-- 前端：`frontend/` 下跑 `npm test`（Vitest + jsdom，约 3 秒）。测试写在源码旁的 `*.test.ts(x)`，夹具在 `src/test/fixtures.ts`。按行为断言，覆盖那些「错了也不会报错、只是界面悄悄不对」的逻辑：`usePagedList` 的页契约（每页条数、上下页夹取、页深按列表身份记忆、数据未到时不清空页深、键盘选中跨页跟随）、`utils/pagination` 的页码快捷窗口（第 1 页 / 当前页前后各 5 页 / 最后一页，首末不重复，跳空处的 `…` 标记）、`mobile/libraryFilters` 的筛选语义、`utils/diskFilter`、`utils/sortVideos`、`utils/videoName`。修这类共享逻辑的 bug 时，先补一条能复现的测试再改实现。
+- 前端：`frontend/` 下跑 `npm test`（Vitest + jsdom，约 3 秒）。测试写在源码旁的 `*.test.ts(x)`，夹具在 `src/test/fixtures.ts`。按行为断言，覆盖那些「错了也不会报错、只是界面悄悄不对」的逻辑：`usePagedList` 的页契约（每页条数、上下页夹取、页深按列表身份记忆、数据未到时不清空页深、键盘选中跨页跟随）、`utils/pagination` 的页码快捷窗口（第 1 页 / 当前页前后各 5 页 / 最后一页，首末不重复，跳空处的 `…` 标记）、`utils/libraryFilter` 的标签/演员/硬盘筛选语义、`utils/diskFilter`、`utils/sortVideos`、`utils/videoName`。修这类共享逻辑的 bug 时，先补一条能复现的测试再改实现。
 - 断言的写法：一条测试只钉一个行为，名称描述用户可见的结果，不测实现细节（不写「调用了 setRows」，写「滚动后窗口跟着移动」）
 
 ## 提交与 Pull Request 规范

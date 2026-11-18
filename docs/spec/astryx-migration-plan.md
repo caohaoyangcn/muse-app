@@ -2,6 +2,8 @@
 
 > 状态：Phase 1–9 已实施（2026-11-16）；保留少数业务组合例外，见文末。
 > 范围：`frontend/src/` 的桌面端与移动端；产品深色 token、`ui/` 唯一接缝、文件零改动原则不变。
+>
+> 注：文中提到的 `GroupContextMenu`、`GroupFlyout`、`GroupRelationFlyout`、`GroupDialog`、`GroupSuggestDialog`、`DiskFilterBar` 与侧栏分组拖拽均为 2026-11-18 之前的实现记录；用户自定义分组已移除，筛选改由共享 `views/library/FilterSections` 承担。
 
 ## 0. 结论先行
 

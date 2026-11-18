@@ -97,7 +97,7 @@ token 也不在 TS 里重复定义：`defineTheme()` 会把颜色搬进 TypeScri
 
 ## 刻意没有替换的
 
-- **`components/Sidebar.tsx` 的导航行**：分组树的拖拽排序/嵌套/投放规则是业务状态机；视觉行仍用 `Button`，后续若要换 `SideNav` 需先验证 DnD。`ui/sidebar.tsx` 只是无交互的 aside/nav/section 容器。
+- **`components/Sidebar.tsx` 的导航行**：侧栏行仍是 `Button`，标签快捷筛选只负责切换筛选状态；`ui/sidebar.tsx` 只是无交互的 aside/nav/section 容器。
 - **`ui/error-boundary.tsx`**：React 错误边界必须是 class，Astryx 没有等价物；fallback 已改为 `EmptyState` + `Button`。
 - 其它已替换的 `NavIcon`、业务徽标、StickyBar、移动端 States、旧 `menu`/`flyout-shell`、`MetadataPopup` 自绘定位、`SheetAction` 不再保留。
 - Phase 1–9 已完成；业务层裸 `<button>` 只剩 `GuidedTour` 的 2 个聚光灯控制，裸 `<input>`/`<select>`/`<textarea>` 为 0（`ui/input.tsx` 除外）。

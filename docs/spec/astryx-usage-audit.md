@@ -18,7 +18,7 @@ Phase 1–9 之后，业务层已经没有“自己画按钮、自己接对话�
 | `IconButton` | 只有 `label`，没有 hover 提示 | 必须给 `tooltip`，`label` 只给读屏 | 所有 `IconButton` 都补了 `tooltip` |
 | `Button` | 用原生 `title` 当提示 | 用 Astryx `tooltip` | `ui/button.tsx` 把 `title` 映射为 `tooltip`，不再输出原生属性 |
 | `Dialog` | 自绘 `<h2>` 标题 + `Button` 包 `<X>` 关闭 + 手接 `aria-labelledby` | 用 `DialogHeader`：标题聚焦、命名、关闭按钮都由它负责 | 全部改用 Astryx `DialogHeader`；无标题灯箱用 `DialogCloseButton` |
-| `Dialog` | 表单对话框没有 `purpose` | 有输入的对话框用 `purpose="form"`，防止误点遮罩丢输入 | 添加视频、编辑信息、网盘连接、分组命名等已设置 |
+| `Dialog` | 表单对话框没有 `purpose` | 有输入的对话框用 `purpose="form"`，防止误点遮罩丢输入 | 添加视频、编辑信息、网盘连接等已设置 |
 | 确认框 | 普通 `Dialog` + 两个按钮 | 破坏性/不可逆操作使用 `AlertDialog` | `ConfirmDialog` 改 `AlertDialog`；取消是初始焦点，遮罩不可关 |
 | `BottomSheet` | 高度写 `"auto"` / `"85dvh"` | 用 `hug` / `capped` / `tall` | 筛选、播放器、操作、编辑分别使用语义高度 |
 | `Drawer` | 自绘品牌头 + 关闭按钮 | `DrawerHeader` 提供标题、副标题、关闭 | 移动抽屉改用 `DrawerHeader` |
@@ -120,7 +120,7 @@ Badge 只用于状态或分类；时长、数量、哈希、日期属于元数�
 
 **为什么没改**
 
-- 侧栏行是原生 HTML5 拖拽的宿主：分组排序、嵌套、投放视频都挂在这些行上
+- 侧栏行仍用 `Button`；标签快捷入口只切换筛选状态，不再承载拖拽/嵌套（分组功能已移除）
 - 这些不是“画一个导航按钮”，而是带业务状态机的行
 
 **建议方案**

@@ -53,21 +53,21 @@
 
 - [x] **失效视频自动检测 + 回收站**
   - 当检测到收藏列表中某个视频文件已经不存在（如被移动/删除/外接盘未挂载）时，自动将其移入「回收站」；手动移除也走同一条软删除路径。
-  - 回收站标明移入原因、移入时间、剩余天数与**曾经所属的 group**；可恢复、彻底删除或清空。
+  - 回收站标明移入原因、移入时间与剩余天数；可恢复、彻底删除或清空。
   - 默认保留 14 天（可配置 1–365 天），启动时与运行中每小时自动清理超期条目；只删记录与生成图片/缓存，不碰源视频。
   - ✅ 外接盘未挂载已单独识别（`docs/spec/volume-offline.md`）：不写 `missing`、卡片照常展示，仅在右下角标「⚠ 磁盘未接入」；盘插回后自动恢复。
   - ✅ 卷在线 + 文件确认缺失时自动移入回收站（启动、盘插回、手动「检测文件」与打开番号查重页时触发；整卷全部缺失时只标 `missing` 防盘符复用）。设计见 `docs/spec/missing-auto-removal.md` 与 `docs/spec/trash.md`。
-  - ✅ 被移动的文件重新添加时通过内容指纹接回回收站中的原记录，id、分组、点赞与刮削资料不丢。
+  - ✅ 被移动的文件重新添加时通过内容指纹接回收藏库中的原记录，id、点赞与刮削资料不丢。
   - ⏳ 仍未做：运行中无卷插拔、且没有打开查重页时的持续检测。现在可随时手动重跑启动时的整卷对账（收藏列表工具栏「检测文件」，或 `POST /api/maintenance/files/scan`），但不会自动感知运行中的删除。
 
 - [x] **Web 端访问（局域网浏览 + 外部播放器）**
   - ✅ 桌面端启动时自动开启 LAN HTTP 服务（端口冲突只记警告、不阻断启动），头部「📱 局域网访问」按钮可停止/重新启动。
   - ✅ 移动端 Web UI：独立 React 应用（`frontend/src/mobile/`），构建产物入库到 `backend/server/webui/`。
   - ✅ 原始文件串流：HTTP Range + 按扩展名推断 Content-Type；服务端不 remux/转码。
-  - ✅ Web API 读端点：`/api/videos`（`?search=`）、`/api/videos/{id}`、`/api/videos/{id}/jav`、`/api/videos/{id}/jav/task`、`/api/groups`、`/api/groups/{id}/videos`、`/api/jav/tasks`、`/api/actors`、`/api/actors/videos?name=`。
-  - ✅ Web API 写端点：`POST /api/videos`、`DELETE /api/videos/{id}`、`PUT /api/videos/{id}/info`、`POST|DELETE /api/videos/{id}/likes`、`POST|PUT|DELETE /api/groups...`、`POST /api/groups/{id}/videos`。
-  - ✅ 移动端界面：浏览/搜索/分组筛选/排序/网格列表切换、详情（元数据/演员/标签/文件信息）、iOS 外部播放器跳转（Infuse/VLC）、演员索引与作品页、刮削任务看板、标题备注编辑、点赞、移除收藏。
-  - ⚠️ 写端点无鉴权（见下方「局域网服务」）；桌面专属能力（发起刮削、封面选帧、演员合并、分组结构维护、添加收藏、目录监控、设置）在移动端不提供。
+  - ✅ Web API 读端点：`/api/videos`（`?search=`）、`/api/videos/{id}`、`/api/videos/{id}/jav`、`/api/videos/{id}/jav/task`、`/api/jav/tasks`、`/api/actors`、`/api/actors/videos?name=`。
+  - ✅ Web API 写端点：`POST /api/videos`、`DELETE /api/videos/{id}`、`PUT /api/videos/{id}/info`、`POST|DELETE /api/videos/{id}/likes`。
+  - ✅ 移动端界面：浏览/搜索/标签·演员·硬盘筛选/排序/网格列表切换、详情（元数据/演员/标签/文件信息）、iOS 外部播放器跳转（Infuse/VLC）、演员索引与作品页、刮削任务看板、标题备注编辑、点赞、移除收藏。
+  - ⚠️ 写端点无鉴权（见下方「局域网服务」）；桌面专属能力（发起刮削、封面选帧、演员合并、添加收藏、目录监控、设置）在移动端不提供。
   - 设计文档：`docs/spec/mobile-web-design.md`。
   - 后续可扩展：鉴权/口令、HTTPS、更多具备公开播放协议的专用客户端。
 
@@ -82,7 +82,7 @@
 
 - [x] **单一 API 门面（backend/api）**
   - ✅ 新增 `api.Library`：封装读+写编排，桌面(Wails `app.go`) 与 局域网 HTTP (`server.go`) 共用同一份业务逻辑，杜绝行为漂移。
-  - ✅ `RemoveVideo`（含清除组成员）、`VideosInGroup`（id→完整对象）等跨服务编排收敛到门面。
+  - ✅ `RemoveVideo` 等跨服务编排收敛到门面。
   - ✅ 平台专属（打开播放器/Explorer/剪贴板/文件选择器）与 Web 专属（Range 串流/静态 SPA）保留在对应层。
   - ✅ Wails 前端 bindings/方法签名不变，前端零改动。
 
@@ -106,14 +106,12 @@
   - 建议：文件名命中 > 路径命中、前缀命中 > 包含命中，简单加权即可（数据量 1 万以内无需 FTS5）。
 - [ ] **多选批量操作**
   - 当前网格/右键菜单全部为单条操作（打开/复制路径/移除/打标）。
-  - 建议：网格多选后批量移除、批量加入分组、批量复制路径。
-- [x] **多选批量操作（拖拽标记分组）**
+  - 建议：网格多选后批量移除、批量复制路径。
+- [x] **多选批量操作**
   - ✅ 卡片左上角常驻复选框（悬停显示），点击勾选/取消，不触发打开。
-  - ✅ 选中卡片高亮（accent 描边 + 微光），内容头出现「已选 N 个」工具栏（取消选择 / 新建分组）。
-  - ✅ 拖拽选中的多张卡片到侧边栏分组：批量加入分组（MIME_VIDEO_DRAG_MULTI 携带 id 列表）。
-  - ✅ 单卡片拖拽行为不变（MIME_VIDEO_DRAG）；拖拽幽灵图在多选时显示批量数量。
+  - ✅ 选中卡片高亮（accent 描边 + 微光），内容头出现「已选 N 个」工具栏（取消选择）。
   - ✅ 交互模型改为点选驱动：单击卡片=勾选/取消（高亮），双击=打开；多选可连点或用复选框累积，批量操作不变。
-  - 源码：`frontend/src/pages/Library.tsx`、`components/VideoCard.tsx`、`components/Sidebar.tsx`、`components/VideoGrid.tsx`、`types.ts`、`style.css`。
+  - 源码：`frontend/src/pages/Library.tsx`、`components/VideoCard.tsx`、`components/VideoGrid.tsx`、`types.ts`、`style.css`。
 - [ ] **元数据 / 缩略图失败重试与可见性**
   - `Processor.process()`（`backend/video/processor.go`）中 ffprobe / ffmpeg 失败仅写日志，前端不可见且无重试。
   - 建议：带退避的重试 + 在卡片上暴露「处理中 / 缺元数据 / 缺缩略图」状态。
@@ -124,15 +122,15 @@
   - 源码：`EditVideoDialog.tsx`、`ContextMenu.tsx`、`Library.tsx`、`VideoCard/VideoList`、`thumbnail.go`（`ExtractAt`）、`video/service|repository|processor`。
 - [x] **列表 / 网格视图切换**
   - ✅ 排序栏右侧新增「▦ 网格 / ☰ 列表」分段切换（`frontend/src/components/SortBar.tsx`），偏好经 localStorage（`muse.view`）跨会话记忆。
-  - ✅ 新增列表视图（`frontend/src/components/VideoList.tsx`）：行式布局（复选框 + 小缩略图 + 文件名 + 元信息，悬浮 title 显示完整路径），点击打开 / 右键菜单 / 多选 / 拖拽（单选与多选批量）与网格完全一致。
+  - ✅ 新增列表视图（`frontend/src/components/VideoList.tsx`）：行式布局（复选框 + 小缩略图 + 文件名 + 元信息，悬浮 title 显示完整路径），点击打开 / 右键菜单 / 多选与网格完全一致。
   - ✅ 两种视图共享排序、选中集与全部交互（`Library.tsx` `videoListProps` 统一接线），切换即时生效。
 - [ ] **键盘快捷键**（部分完成：卡片键盘导航已上线）
   - ✅ 已有：单选卡片后 ↑/↓/←/→ 移动选中（网格上下按整行跳转并自动滚动到可见）、Enter 打开、Del 弹出移除确认、Esc 清除选中（`Library.tsx` keydown，输入框/按钮聚焦或弹窗打开时不劫持）。
-  - ✅ Ctrl/Cmd+F：从任意标签页回到影片库列表并聚焦顶部搜索框；演员索引、查重、刮削任务面板会回到「全部收藏」，全部收藏/分组/最近播放视图保持当前列表。已有输入内容会被全选，便于直接输入新关键词。
+  - ✅ Ctrl/Cmd+F：从任意标签页回到影片库列表并聚焦顶部搜索框；演员索引、查重、刮削任务面板会回到「全部收藏」，全部收藏/最近播放视图保持当前列表。已有输入内容会被全选，便于直接输入新关键词。
   - spec §40 其余仍缺：空格打开（当前空格是编辑信息）、以及更多全局快捷键。
 - [x] **排序选项**
   - ✅ 列表顶部新增排序栏（`frontend/src/components/SortBar.tsx`）：添加时间 / 文件大小 / 文件名三个字段，点击切换字段、再点切换升降序，活动字段显示 ↑/↓。
-  - ✅ 前端排序（`Library.tsx` `sortedVideos`），对全部/分组/搜索结果统一生效；默认「添加时间 降序」与后端 `created_at DESC, id DESC` 一致；文件名用 `Intl.Collator`（numeric，中文/英文与 "2"<"10" 均正确）。
+  - ✅ 前端排序（`Library.tsx` `sortedVideos`），对全部/最近播放/搜索结果统一生效；默认「添加时间 降序」与后端 `created_at DESC, id DESC` 一致；文件名用 `Intl.Collator`（numeric，中文/英文与 "2"<"10" 均正确）。
   - ✅ 「最近播放」排序已支持（桌面端与移动端）；仍可选：按时长排序。
 
 ### 局域网服务
@@ -152,10 +150,8 @@
 
 ### 工程与技术债
 
-- [ ] **`VideosInGroup` 全量拉表再内存过滤**
-  - `backend/api/library.go` `VideosInGroup` 先 `videos.List()` 全量再 map 过滤；应改为仓库层 SQL JOIN 直接取完整对象。
 - [ ] **前端 `reload()` 全量重查**
-  - `frontend/src/pages/Library.tsx` 大多数 handler 都 `loadGroups()` + `load()` 双重全量 fetch（`handleSaveGroups` / `handleDropVideo` / `confirmRemove` 等）；可引入轻量缓存 / 增量更新。
+  - `frontend/src/pages/Library.tsx` 大多数 handler 都 `load()` 全量 fetch（`confirmRemove` 等）；可引入轻量缓存 / 增量更新。
 - [ ] **设置页提供「打开日志 / 数据目录」入口**
   - 排查问题（防火墙、刮削失败）时用户只能去文件管理器找应用数据目录下的 `logs/app.log`。
 
@@ -164,12 +160,12 @@
 - [x] 文件夹导入 / Folder Watch（spec §40 V1.3）
   - ✅ 设置 → 目录监控：目录清单管理（添加 / 移除 / 立即扫描），目录经 Wails 原生选择器选取；移除仅停止监控，不删除已收藏视频。
   - ✅ 后端 `backend/watch` 包：`watched_dirs` 表（schema v10）、repository/service、fsnotify 递归监控；经 `api.Library` 门面暴露（`ListWatchDirs` / `AddWatchDir` / `RemoveWatchDir` / `RescanWatchDirs`）。
-  - ✅ 递归自动导入：添加目录即全量扫描（跳过隐藏目录、`$RECYCLE.BIN`、`System Volume Information`）；之后新文件由 fsnotify 事件触发（1.5s 防抖合并复制风暴，新建子目录自动纳入监控），另有 5 分钟周期兜底重扫。导入复用 `AddVideos`（路径去重），并自动进入缩略图 / 4K 分组 / 刮削流水线。
+  - ✅ 递归自动导入：添加目录即全量扫描（跳过隐藏目录、`$RECYCLE.BIN`、`System Volume Information`）；之后新文件由 fsnotify 事件触发（1.5s 防抖合并复制风暴，新建子目录自动纳入监控），另有 5 分钟周期兜底重扫。导入复用 `AddVideos`（路径去重），并自动进入缩略图 / 刮削流水线。
   - ✅ 前端监听 `watch:scanned` 事件：自动刷新网格，并 toast 提示导入 / 失败数量。
   - 测试：`backend/watch/repository_test.go`、`service_test.go`（含真实 fsnotify 实时导入回路测试）。
 - [ ] Explorer 右键菜单「Add to Favorites」（spec §40 V1.4；架构已预留，直接调 `AddVideos(paths)` 即可）
 - [ ] 标签 / 备注 / 评分（spec §41 架构预留）
 - [ ] **文件移动检测 / Hash 身份**（spec §40 V2；设计：`docs/spec/file-relocation.md`）
-  - ✅ Hash 身份（入库重连）：新入库文件的部分哈希与某条「失踪」收藏一致时，自动把该收藏的路径引用改到新文件，id 与分组 / 点赞 / 刮削数据 / 标题备注全部保留；文件回到原路径时也复活原记录（不再报「已添加」）。源码 `backend/video/relocate.go`、`repository.go`（`RelinkPath` / `ListRelocationCandidates`）；测试 `backend/video/relocate_test.go`；添加汇总与 `watch:scanned` 区分「新增 / 重连」，重连结果不重复自动分组。
+  - ✅ Hash 身份（入库重连）：新入库文件的部分哈希与某条「失踪」收藏一致时，自动把该收藏的路径引用改到新文件，id 与点赞 / 刮削数据 / 标题备注全部保留；文件回到原路径时也复活原记录（不再报「已添加」）。源码 `backend/video/relocate.go`、`repository.go`（`RelinkPath` / `ListRelocationCandidates`）；测试 `backend/video/relocate_test.go`；添加汇总与 `watch:scanned` 区分「新增 / 重连」，重连结果不重复应用导入规则。
   - [ ] 文件移动检测（主动发现）：缺失状态目前仍只在启动与打开前检查（spec-v1.md §20），运行中移动文件后要等一次对账才会显示缺失；可考虑 fsnotify 双向对账 + 定期校验，与上方「失效视频自动检测」一并做。
 - [ ] 高级搜索（spec §40 V2）

@@ -12,7 +12,7 @@
 
 收藏是引用，不是文件（`spec-v1.md` §41）。文件一旦被移动，引用指向的路径就不存在了：`RefreshAllStatuses` 在启动时、`Open` / `RefreshStatus` 在打开前把它标成 `missing`（§20、§21），界面显示 `⚠ 文件缺失`。
 
-在此之前，用户唯一的出路是「移除收藏」再重新添加。代价是 **id 变了**——而分组、点赞、刮削数据（番号/演员/封面）、自定义标题与备注全部挂在 id 上，于是这些数据一起丢失。`spec-v1.md` §40 把 File relocation detection / Hash based identity 列为 V2。
+在此之前，用户唯一的出路是「移除收藏」再重新添加。代价是 **id 变了**——而点赞、刮削数据（番号/演员/封面）、自定义标题与备注全部挂在 id 上，于是这些数据一起丢失。`spec-v1.md` §40 把 File relocation detection / Hash based identity 列为 V2。
 
 本设计用已有的内容指纹（部分哈希）判定「新入库的文件就是那条失踪收藏的文件」，并把引用改过去；id 与所有用户数据保持不变。
 
@@ -58,7 +58,7 @@ v1 非目标：
 
 - `content_hash` / `hash_version` 原样写回：摘要描述的正是这些字节，这正是重连成立的原因；
 - `full_hash` 保留：它是同一份字节的完整校验结果；
-- 用户数据列（title / notes / like_count / 封面 / 分组成员 / 刮削数据）一律不碰，分组等表通过 id 关联，天然跟随。
+- 用户数据列（title / notes / like_count / 封面 / 刮削数据）一律不碰，刮削与标签通过 id 关联，天然跟随。
 
 一条语句同时写完路径与事实，行不可能处在「新路径 + 旧事实」的中间态。
 
@@ -78,7 +78,7 @@ v1 非目标：
 - **多条收藏共享同一份字节且文件名都不同** → 不重连，新建记录，交给查重面板。
 - **卷未挂载时不重连**（§2.2 第 2 步），即使文件确实不在了；这类行由启动对账标成 `missing`，之后仍可在重连窗口内被认回。
 - **不处理仅大小写不同的重命名**：`videos.path` 是 `UNIQUE COLLATE NOCASE`，`GetByPath` 会直接命中，走 §4 的复活路径。
-- **重连结果不参与自动分组**：`AutoTagVideos` 跳过 `Relocated`——这些字节首次入库时已经过同一套规则，再应用一次只会撤销用户后来手工去掉的分组。桌面端的「分组建议」同样跳过。
+- **重连结果不重新应用导入规则**：`AddVideos` 跳过 `Relocated`——这些字节首次入库时已经处理过，再应用一次只会撤销用户后来改过的状态。
 - 重连后若该收藏从未完成过处理（文件在缩略图/元数据完成前就消失了），`needsProcessing` 会把它重新入队；已经处理过的不会重复 ffprobe / 抽帧，因为字节完全相同。
 
 ## 6. 接口与事件
@@ -89,7 +89,7 @@ v1 非目标：
 | `video.AddVideoResult.Relocated` | 报告该文件是「重连」而非「新增」 |
 | `video:relinked` | `{id, from, path}`；桌面端据此重新加载网格 |
 | `watch.ScanSummary.Relocated` / `watch:scanned` | 扫描把重连与新增分开计数（`{path, added, relocated, failed}`），toast 分别提示 |
-| `api.Library.AutoTagVideos` | 跳过 `Relocated` 结果 |
+| `api.Library.AddVideos` | 跳过 `Relocated` 结果，不重复应用导入规则 |
 | `frontend/wailsjs/go/models.ts` | 由 `wails generate module` 重新生成（勿手改） |
 
 移动端无新增端点：移动端没有添加入口，重连结果通过既有的 `GET /api/videos` 可见（HTTP 无事件通道，见 `mobile-web-design.md`）。
