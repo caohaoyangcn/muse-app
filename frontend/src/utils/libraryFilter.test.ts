@@ -11,6 +11,7 @@ import {
   filterVideos,
   NO_FILTERS,
   pageValueOptions,
+  pinnedValueOptions,
   removeFilterChip,
   toggleFilterValue,
   withSelectedDisks,
@@ -111,6 +112,39 @@ describe("withSelectedValues", () => {
     const options = withSelectedValues([{ name: "A", count: 2 }], ["A", "gone"]);
     expect(options).toEqual([
       { name: "A", count: 2 },
+      { name: "gone", count: 0 },
+    ]);
+  });
+});
+
+describe("pinnedValueOptions", () => {
+  const options = [
+    { name: "Alpha", count: 9 },
+    { name: "Beta", count: 8 },
+    { name: "Gamma", count: 7 },
+  ];
+
+  it("pins a selected value outside the head with its real count, not zero", () => {
+    // The sidebar keeps a selected tag visible even when it ranks below the
+    // top-12 shortcut. Its row still has to say how many films carry it.
+    expect(pinnedValueOptions(options, ["Gamma"], 2)).toEqual([
+      { name: "Alpha", count: 9 },
+      { name: "Beta", count: 8 },
+      { name: "Gamma", count: 7 },
+    ]);
+  });
+
+  it("does not repeat a selected value already in the head", () => {
+    expect(pinnedValueOptions(options, ["Alpha"], 2).map((option) => option.name)).toEqual([
+      "Alpha",
+      "Beta",
+    ]);
+  });
+
+  it("keeps a selection the list no longer holds with a zero count", () => {
+    expect(pinnedValueOptions(options, ["gone"], 2)).toEqual([
+      { name: "Alpha", count: 9 },
+      { name: "Beta", count: 8 },
       { name: "gone", count: 0 },
     ]);
   });

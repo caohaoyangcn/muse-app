@@ -125,6 +125,26 @@ export function withSelectedTags(
   return withSelectedValues(options, selected);
 }
 
+/**
+ * The shortcut list's rows: the `limit` most-used options plus every selected
+ * value outside that head. The pinned rows are looked up in the full list, so a
+ * selected tag ranked below the cut keeps its real count — slicing first would
+ * label it "0 个视频" while it still filters the list. A selection the list no
+ * longer holds at all keeps a zero-count row so it can always be undone.
+ */
+export function pinnedValueOptions(
+  options: readonly ValueOption[],
+  selected: readonly string[],
+  limit: number,
+): ValueOption[] {
+  const head = options.slice(0, Math.max(limit, 0));
+  const shown = new Set(head.map((option) => option.name));
+  const pinned = options.filter(
+    (option) => selected.includes(option.name) && !shown.has(option.name),
+  );
+  return withSelectedValues([...head, ...pinned], selected);
+}
+
 /** Actor-specific spelling of withSelectedValues. */
 export function withSelectedActors(
   options: readonly ValueOption[],

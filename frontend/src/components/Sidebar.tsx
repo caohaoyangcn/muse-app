@@ -4,8 +4,11 @@ import { Button } from "../ui/button";
 import { Sidebar as SidebarRoot, SidebarNav, SidebarSection } from "../ui/sidebar";
 import { Icon, type MuseIconName } from "../ui/icon";
 import { IconButton } from "../ui/astryx";
-import type { LibraryFilters, ValueOption } from "../utils/libraryFilter";
-import { withSelectedValues } from "../utils/libraryFilter";
+import {
+  pinnedValueOptions,
+  type LibraryFilters,
+  type ValueOption,
+} from "../utils/libraryFilter";
 import { withoutHiddenTags } from "../utils/hiddenTags";
 
 interface SidebarProps {
@@ -105,7 +108,7 @@ export default function Sidebar({
   // not come back just because it is selected. Its condition is still visible
   // in the chips above the list and in the filter dialog.
   const pinnedSelection = filters.tags.filter((tag) => !hiddenTags.includes(tag));
-  const topTags = withSelectedValues(visibleOptions.slice(0, TAG_LIMIT), pinnedSelection);
+  const topTags = pinnedValueOptions(visibleOptions, pinnedSelection, TAG_LIMIT);
   const hasMoreTags = visibleOptions.length > TAG_LIMIT;
   const selectedTags = new Set(filters.tags);
 
