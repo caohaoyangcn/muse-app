@@ -20,7 +20,10 @@ export default function FilterDialog({
   actors,
   disks,
   filters,
+  hiddenTags,
   onChange,
+  onUnhideTag,
+  onClearHiddenTags,
   onReset,
 }: {
   open: boolean;
@@ -29,7 +32,11 @@ export default function FilterDialog({
   actors: ValueOption[];
   disks: DiskOption[];
   filters: LibraryFilters;
+  /** Quick tags hidden from the sidebar; restorable from this dialog. */
+  hiddenTags: string[];
   onChange: (next: LibraryFilters) => void;
+  onUnhideTag: (tag: string) => void;
+  onClearHiddenTags: () => void;
   onReset: () => void;
 }) {
   const count = filterCount(filters);
@@ -49,7 +56,10 @@ export default function FilterDialog({
             actors={actors}
             disks={disks}
             filters={filters}
+            hiddenTags={hiddenTags}
             onChange={onChange}
+            onClearHiddenTags={onClearHiddenTags}
+            onUnhideTag={onUnhideTag}
             open={open}
             tags={tags}
           />

@@ -40,7 +40,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - 后端：使用 Go `testing`，按行为编写表驱动测试，共享辅助代码放在 `testhelpers_test.go`
 - 集成测试（-tags integration）会使用真实 SQLite + ffmpeg，需要这些工具在 PATH 中
 - 运行 `go test ./...`；覆盖率用 `go test ./... -cover`
-- 前端：`frontend/` 下跑 `npm test`（Vitest + jsdom，约 3 秒）。测试写在源码旁的 `*.test.ts(x)`，夹具在 `src/test/fixtures.ts`。按行为断言，覆盖那些「错了也不会报错、只是界面悄悄不对」的逻辑：`usePagedList` 的页契约（每页条数、上下页夹取、页深按列表身份记忆、数据未到时不清空页深、键盘选中跨页跟随）、`utils/pagination` 的页码快捷窗口（第 1 页 / 当前页前后各 5 页 / 最后一页，首末不重复，跳空处的 `…` 标记）、`utils/libraryFilter` 的标签/演员/硬盘筛选语义、`utils/diskFilter`、`utils/sortVideos`、`utils/videoName`。修这类共享逻辑的 bug 时，先补一条能复现的测试再改实现。
+- 前端：`frontend/` 下跑 `npm test`（Vitest + jsdom，约 3 秒）。测试写在源码旁的 `*.test.ts(x)`，夹具在 `src/test/fixtures.ts`。按行为断言，覆盖那些「错了也不会报错、只是界面悄悄不对」的逻辑：`usePagedList` 的页契约（每页条数、上下页夹取、页深按列表身份记忆、数据未到时不清空页深、键盘选中跨页跟随）、`utils/pagination` 的页码快捷窗口（第 1 页 / 当前页前后各 5 页 / 最后一页，首末不重复，跳空处的 `…` 标记）、`utils/libraryFilter` 的标签/演员/硬盘筛选语义、`utils/hiddenTags` 的快捷标签隐藏与恢复、`utils/diskFilter`、`utils/sortVideos`、`utils/videoName`。修这类共享逻辑的 bug 时，先补一条能复现的测试再改实现。
 - 断言的写法：一条测试只钉一个行为，名称描述用户可见的结果，不测实现细节（不写「调用了 setRows」，写「滚动后窗口跟着移动」）
 
 ## 提交与 Pull Request 规范

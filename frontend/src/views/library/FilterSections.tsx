@@ -35,7 +35,10 @@ export function FilterSections({
   actors,
   disks,
   filters,
+  hiddenTags = [],
   onChange,
+  onUnhideTag,
+  onClearHiddenTags,
 }: {
   /** Reopening the surface resets the two search boxes and their pages. */
   open: boolean;
@@ -43,7 +46,12 @@ export function FilterSections({
   actors: ValueOption[];
   disks: DiskOption[];
   filters: LibraryFilters;
+  /** Tags hidden from the sidebar shortcut; still selectable here. */
+  hiddenTags?: readonly string[];
   onChange: (next: LibraryFilters) => void;
+  /** Restore one hidden quick tag. Omit on a surface without quick tags. */
+  onUnhideTag?: (tag: string) => void;
+  onClearHiddenTags?: () => void;
 }) {
   const [tagKeyword, setTagKeyword] = useState("");
   const [tagLimit, setTagLimit] = useState(OPTION_PAGE_SIZE);
@@ -126,6 +134,40 @@ export function FilterSections({
             )}
           </>
         )}
+        {hiddenTags.length > 0 ? (
+          <div className="mt-2 border-t border-[var(--border)] px-1 pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-[var(--muted)]">
+                已从快捷入口隐藏 · {hiddenTags.length}
+              </span>
+              {onClearHiddenTags ? (
+                <Button
+                  className="h-7 shrink-0 rounded-full px-2 text-[11px] text-[var(--accent)]"
+                  onClick={onClearHiddenTags}
+                  size="sm"
+                  variant="ghost"
+                >
+                  全部恢复
+                </Button>
+              ) : null}
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {hiddenTags.map((tag) => (
+                <Button
+                  className="h-7 gap-1 rounded-full border border-[var(--border)] bg-[var(--panel-2)] px-2 text-xs text-[var(--muted)]"
+                  icon={<Icon className="size-3" name="plus" />}
+                  key={tag}
+                  onClick={() => onUnhideTag?.(tag)}
+                  size="sm"
+                  title="恢复到侧栏快捷入口"
+                  variant="ghost"
+                >
+                  <span className="max-w-[9rem] truncate">{tag}</span>
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </Section>
 
       <Divider />

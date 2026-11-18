@@ -62,6 +62,7 @@ import {
   type LibraryFilters,
 } from "../utils/libraryFilter";
 import { groupRecentlyPlayed } from "../utils/recent";
+import { readHiddenTags, toggleHiddenTag, writeHiddenTags } from "../utils/hiddenTags";
 import { compareLastOpened } from "../utils/sortVideos";
 import { planVideoTabGroups } from "../utils/tabGroups";
 import { videoDisplayName } from "../utils/videoName";
@@ -114,6 +115,9 @@ export default function Library({
   // localStorage) because they describe the current view, not a display
   // preference; a user switching views starts from the unfiltered list.
   const [filters, setFilters] = useState<LibraryFilters>(NO_FILTERS);
+  // Tags removed from the sidebar shortcut. A display preference, persisted per
+  // device; the full filter dialog still offers every tag.
+  const [hiddenTags, setHiddenTags] = useState<string[]>(readHiddenTags);
   const [filterOpen, setFilterOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [reports, setReports] = useState<ReportItem[]>([]);
@@ -652,6 +656,21 @@ export default function Library({
   const toggleTag = useCallback((tag: string) => {
     setFilters((prev) => ({ ...prev, tags: toggleFilterValue(prev.tags, tag) }));
   }, []);
+
+  // Persist the shortcut preference once per change; the setter stays pure.
+  useEffect(() => {
+    writeHiddenTags(hiddenTags);
+  }, [hiddenTags]);
+
+  const hideTag = useCallback((tag: string) => {
+    setHiddenTags((prev) => toggleHiddenTag(prev, tag));
+  }, []);
+
+  const unhideTag = useCallback((tag: string) => {
+    setHiddenTags((prev) => prev.filter((name) => name !== tag));
+  }, []);
+
+  const clearHiddenTags = useCallback(() => setHiddenTags([]), []);
 
   const clearViewFilters = useCallback(() => setFilters(NO_FILTERS), []);
 
@@ -1509,6 +1528,8 @@ export default function Library({
         <Sidebar
           filter={filter}
           filters={filters}
+          hiddenTags={hiddenTags}
+          onHideTag={hideTag}
           onOpenFilters={() => setFilterOpen(true)}
           onSelect={selectFilter}
           onToggleTag={toggleTag}
@@ -1737,9 +1758,12 @@ export default function Library({
         actors={actorOptions}
         disks={diskOptions}
         filters={filters}
+        hiddenTags={hiddenTags}
         onChange={setFilters}
+        onClearHiddenTags={clearHiddenTags}
         onClose={() => setFilterOpen(false)}
         onReset={clearViewFilters}
+        onUnhideTag={unhideTag}
         open={filterOpen}
         tags={tagOptions}
       />
