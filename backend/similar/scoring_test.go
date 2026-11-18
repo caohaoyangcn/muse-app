@@ -271,6 +271,7 @@ func BenchmarkRankLibrary(b *testing.B) {
 		features = append(features, Feature{
 			VideoID:     int64(i + 1),
 			Code:        "ABC-" + strconv.Itoa(i),
+			Title:       "作品" + strconv.Itoa(i%300) + " 中出し解禁 美人妻の誘惑 " + strconv.Itoa(i%97),
 			Series:      "系列" + strconv.Itoa(i%37),
 			Studio:      "厂牌" + strconv.Itoa(i%12),
 			Actors:      []string{"演员" + strconv.Itoa(i%140)},

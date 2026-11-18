@@ -16,7 +16,13 @@ type Feature struct {
 	VideoID int64
 	// Code is the authoritative 番号. It identifies the work, so a candidate
 	// carrying the query's own code is never a "similar" one.
-	Code   string
+	Code string
+	// Title is the scraped ORIGINAL title, never the Chinese translation: a
+	// translation is a derived text, so matching on it would tie the row to a
+	// translation model's version. It feeds only the title channel — the
+	// marketing phrase a label repeats is finer than the genre tags. Empty means
+	// the film does not participate at all (the jav layer drops those rows).
+	Title  string
 	Series string
 	Studio string
 	// ReleaseUnix is the provider's release date; nil when unknown.

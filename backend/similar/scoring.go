@@ -7,9 +7,14 @@ import (
 	"time"
 )
 
-// Signal weights. They sum to 1 over the six signals, so a score is directly
-// readable as "how much evidence the two favorites share": a shared actress is
-// worth 0.28, a shared label only 0.08.
+// Signal weights. A shared actress is worth 0.28, a shared label only 0.08.
+//
+// The title channel is deliberately the smallest of the content signals, and it
+// is scaled down further by tag agreement (see compare): a title phrase and a
+// genre tag often describe the same thing (「真正中出し」/「中出」), so letting
+// both speak at full weight would count one piece of evidence twice. When the
+// tags already agree the title channel falls silent; when the tags cannot tell
+// two films apart, it is the only thing that can.
 //
 // The weights are deliberately NOT renormalised over the signals a particular
 // query happens to have. Renormalising would make a film sharing only the label
@@ -20,6 +25,7 @@ const (
 	weightActor  = 0.28
 	weightTag    = 0.24
 	weightSeries = 0.18
+	weightTitle  = 0.12
 	weightStudio = 0.08
 	weightTime   = 0.06
 )
@@ -60,6 +66,8 @@ type document struct {
 	actors     map[string]float64 // IDF-weighted, unit length
 	actorSet   map[string]struct{}
 	tags       map[string]float64 // IDF-weighted, unit length; format tags dropped
+	titleVec   map[string]float64 // rare title bigrams, IDF-weighted, unit length
+	titleText  string             // original title, for naming the shared phrase
 	hasActors  bool
 }
 
@@ -78,15 +86,28 @@ func NewCorpus(features []Feature) *Corpus {
 	type sets struct {
 		actors map[string]struct{}
 		tags   map[string]struct{}
+		title  map[string]struct{}
 	}
+	// The cast vocabulary has to be complete before any title is tokenised: a
+	// title that merely repeats a performer's name (or a shared surname) must
+	// not earn title similarity, because the cast dimension already covers it.
+	names := make([]string, 0, len(features)*2)
+	for _, f := range features {
+		names = append(names, f.Actors...)
+	}
+	nameVocab := nameVocabulary(names)
+
 	prepared := make([]sets, len(features))
+	titleSets := make([]map[string]struct{}, len(features))
 	actorDF := make(map[string]int)
 	tagDF := make(map[string]int)
 	for i, f := range features {
 		prepared[i] = sets{
 			actors: make(map[string]struct{}, len(f.Actors)),
 			tags:   make(map[string]struct{}, len(f.Tags)),
+			title:  toSet(titleTokens(f.Title, nameVocab)),
 		}
+		titleSets[i] = prepared[i].title
 		for _, name := range f.Actors {
 			if name = strings.TrimSpace(name); name != "" {
 				prepared[i].actors[name] = struct{}{}
@@ -109,6 +130,7 @@ func NewCorpus(features []Feature) *Corpus {
 			tagDF[key]++
 		}
 	}
+	titleFreq := titleDocumentFrequency(titleSets)
 
 	total := float64(len(features))
 	idf := func(df int) float64 { return math.Log((total + 1) / (float64(df) + 0.5)) }
@@ -127,9 +149,19 @@ func NewCorpus(features []Feature) *Corpus {
 			release:    f.ReleaseUnix,
 			uncensored: f.IsUncensored,
 			actorSet:   prepared[i].actors,
+			titleText:  f.Title,
 		}
 		d.actors = weigh(prepared[i].actors, actorDF, idf)
 		d.tags = weigh(prepared[i].tags, tagDF, idf)
+		// Only the kept bigrams are weighed: a passed-in df of zero would give
+		// a dropped (boilerplate) token a huge inverse frequency.
+		kept := make(map[string]struct{}, len(prepared[i].title))
+		for token := range prepared[i].title {
+			if _, ok := titleFreq[token]; ok {
+				kept[token] = struct{}{}
+			}
+		}
+		d.titleVec = weigh(kept, titleFreq, idf)
 		d.hasActors = len(d.actorSet) > 0
 		c.index[d.id] = len(c.docs)
 		c.docs = append(c.docs, d)
@@ -285,22 +317,30 @@ func result(query *document, cand candidate) Result {
 
 // match is one pair's similarity broken down per signal, each in [0,1].
 type match struct {
-	actor, tag, series, studio, recency float64
-	seriesExact                         bool
-	prefixOnly                          bool
+	actor, tag, series, title, studio, recency float64
+	seriesExact                                bool
+	prefixOnly                                 bool
 }
+
+// titleWeight is weightTitle scaled down by tag agreement, so a shared marketing
+// phrase cannot be counted a second time as a shared genre. The two describe the
+// same evidence (「真正中出し」/「中出」): when the tags already agree the title
+// channel says nothing, and when they disagree it carries the whole 0.12.
+func (m match) titleWeight() float64 { return weightTitle * (1 - m.tag) }
 
 // gate reports whether the two films share any content signal at all. Time is
 // excluded on purpose: two unrelated films released in the same month are not
 // similar, and letting recency alone through would fill the row with whatever
-// the query's era happened to be.
+// the query's era happened to be. The title counts as content: the phrase a
+// label repeats is a real subject signal, and it is the only one available when
+// the tags cannot separate two films.
 func (m match) gate() bool {
-	return m.actor > 0 || m.tag > 0 || m.series > 0 || m.studio > 0
+	return m.actor > 0 || m.tag > 0 || m.series > 0 || m.title > 0 || m.studio > 0
 }
 
 func (m match) score() float64 {
 	return weightActor*m.actor + weightTag*m.tag + weightSeries*m.series +
-		weightStudio*m.studio + weightTime*m.recency
+		m.titleWeight()*m.title + weightStudio*m.studio + weightTime*m.recency
 }
 
 func compare(q, d *document) match {
@@ -316,6 +356,9 @@ func compare(q, d *document) match {
 		m.series, m.seriesExact = seriesSame, true
 	case q.prefix != "" && q.prefix == d.prefix:
 		m.series, m.prefixOnly = seriesPrefix, true
+	}
+	if len(q.titleVec) > 0 && len(d.titleVec) > 0 {
+		m.title = cosine(q.titleVec, d.titleVec)
 	}
 	if q.studio != "" && q.studio == d.studio {
 		m.studio = 1
@@ -347,6 +390,9 @@ func explain(q, d *document) []string {
 		list = append(list, contribution{"同系列", weightSeries * m.series})
 	case m.prefixOnly:
 		list = append(list, contribution{"同作品线", weightSeries * m.series})
+	}
+	if m.title >= titleReasonThreshold {
+		list = append(list, contribution{titleReason(q, d), m.titleWeight() * m.title})
 	}
 	if m.studio > 0 {
 		list = append(list, contribution{"同厂牌", weightStudio * m.studio})
