@@ -18,6 +18,7 @@ import {
   Spinner,
 } from "../ui/astryx";
 import { Button } from "../ui/button";
+import { CoverImage } from "../ui/cover";
 import { Icon } from "../ui/icon";
 import { Pagination } from "../ui/pagination";
 import {
@@ -286,7 +287,7 @@ function VersionCard({
       <AspectRatio ratio={16 / 9}>
         <div className="relative size-full bg-[#111114]">
           {!missing && video.thumbnailPath ? (
-            <img className="block size-full object-contain" draggable={false} src={videoCoverURL(video)} alt="" />
+            <CoverImage className="block size-full" src={videoCoverURL(video)} variant="landscape" />
           ) : (
             <div className="flex size-full items-center justify-center opacity-50">
               <Icon className="size-6" name="alert" />

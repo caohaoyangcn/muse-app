@@ -49,6 +49,7 @@ export default function SimilarVideos({
                   className="size-full"
                   loading="lazy"
                   src={videoCoverURL(item.video)}
+                  variant="portrait"
                 />
               </div>
               <div className="px-2 pb-2 pt-1.5">

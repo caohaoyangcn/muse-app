@@ -14,6 +14,7 @@ import {
   compactBadgeClass,
 } from "../ui/astryx";
 import { Button } from "../ui/button";
+import { CoverImage } from "../ui/cover";
 import { Icon } from "../ui/icon";
 
 export default function VideoCard({
@@ -93,12 +94,7 @@ export default function VideoCard({
       <AspectRatio ratio={16 / 9}>
         <div className="relative size-full bg-[#111114]">
           {hasThumb ? (
-            <img
-              alt=""
-              className="block size-full object-contain"
-              draggable={false}
-              src={videoCoverURL(video)}
-            />
+            <CoverImage className="block size-full" src={videoCoverURL(video)} variant="landscape" />
           ) : (
             <div className="flex size-full items-center justify-center opacity-60">
               {missing ? (

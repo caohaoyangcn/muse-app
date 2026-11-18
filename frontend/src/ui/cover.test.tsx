@@ -1,17 +1,17 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { CoverImage } from "./cover";
 
 /**
- * The one cover crop.
+ * The two cover presentations.
  *
- * Wide packshots carry the front cover and the back cover side by side, so a
- * centre crop in a poster frame lands on the seam and the card quietly shows
- * half of each. The rule lives in this component instead of in every view, so it
- * is pinned here: a cover frame that stops cropping from the right is a bug that
- * no other test would notice.
+ * Wide packshots carry the front cover and the back cover side by side, so the
+ * frame decides what the reader sees: the 3:4 poster crops to the front cover,
+ * the 16:9 card fits the whole artwork. Getting this wrong never throws — the
+ * card just quietly shows half of each — which is why both variants are pinned
+ * here instead of relying on each view's className.
  */
 
 let root: Root | null = null;
@@ -43,21 +43,35 @@ afterEach(() => {
 });
 
 describe("CoverImage", () => {
-  it("crops from the right so a poster shows the front cover, not the seam", () => {
-    const img = render(<CoverImage className="size-full" src="/thumbnails/1.jpg" />);
+  it("portrait posters crop from the right so the cover, not the seam, is shown", () => {
+    const img = render(<CoverImage className="size-full" src="/thumbnails/1.jpg" variant="portrait" />);
 
     expect(img.className).toContain("object-cover");
     expect(img.className).toContain("object-right");
+    expect(img.className).not.toContain("object-contain");
   });
 
-  it("keeps the caller's frame without letting a stray object-fit undo the crop", () => {
-    // Built at runtime on purpose: these classes exist only to prove the
-    // primitive wins a merge conflict, and a literal would make Tailwind ship
-    // an unused object-position utility in both bundles.
+  it("landscape cards fit the whole packshot, back cover included", () => {
+    const img = render(
+      <CoverImage className="block size-full" src="/thumbnails/1.jpg" variant="landscape" />,
+    );
+
+    expect(img.className).toContain("object-contain");
+    expect(img.className).not.toContain("object-cover");
+    expect(img.className).not.toContain("object-right");
+  });
+
+  it("keeps the caller's frame without letting a stray fit undo the variant", () => {
+    // Built at runtime on purpose: these classes only prove the variant wins a
+    // merge conflict, and a literal would make Tailwind ship an unused utility.
     const strayFit = ["object", "contain"].join("-");
     const strayPosition = ["object", "center"].join("-");
     const img = render(
-      <CoverImage className={`h-14 w-24 ${strayFit} ${strayPosition}`} src="/thumbnails/1.jpg" />,
+      <CoverImage
+        className={`h-14 w-24 ${strayFit} ${strayPosition}`}
+        src="/thumbnails/1.jpg"
+        variant="portrait"
+      />,
     );
 
     expect(img.className).toContain("h-14");
@@ -69,7 +83,7 @@ describe("CoverImage", () => {
   });
 
   it("stays decorative, leaving the accessible name to the surrounding control", () => {
-    const img = render(<CoverImage className="size-full" src="/thumbnails/1.jpg" />);
+    const img = render(<CoverImage className="size-full" src="/thumbnails/1.jpg" variant="portrait" />);
 
     expect(img.getAttribute("alt")).toBe("");
   });

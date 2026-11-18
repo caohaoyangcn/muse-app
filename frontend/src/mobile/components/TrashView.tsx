@@ -16,6 +16,7 @@ import {
   Spinner,
 } from "../../ui/astryx";
 import { Button } from "../../ui/button";
+import { CoverImage } from "../../ui/cover";
 import { Icon } from "../../ui/icon";
 import { Pagination } from "../../ui/pagination";
 
@@ -261,7 +262,7 @@ function TrashRow({
       startContent={
         <span className="block h-[60px] w-[104px] shrink-0 overflow-hidden rounded-[6px] bg-[#111114]">
           {video.thumbnailPath ? (
-            <img alt="" className="h-full w-full object-contain" loading="lazy" src={coverURL(video)} />
+            <CoverImage className="h-full w-full" loading="lazy" src={coverURL(video)} variant="landscape" />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-[var(--muted)]">
               <Icon name="archive" className="size-5" />

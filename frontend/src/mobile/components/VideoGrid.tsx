@@ -40,7 +40,7 @@ function Thumb({ v }: { v: Video }) {
       </div>
     );
   }
-  return <CoverImage className="size-full" loading="lazy" src={coverURL(v)} />;
+  return <CoverImage className="size-full" loading="lazy" src={coverURL(v)} variant="portrait" />;
 }
 
 /** Status pills that must be readable over artwork without a backing card. */

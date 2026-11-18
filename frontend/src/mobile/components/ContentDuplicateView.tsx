@@ -203,6 +203,7 @@ export function ContentDuplicateView({
                           className="h-14 w-24 shrink-0 rounded-md bg-[#111114]"
                           loading="lazy"
                           src={coverURL(member.video)}
+                          variant="landscape"
                         />
                       }
                     />

@@ -16,6 +16,7 @@ import {
   Toolbar,
 } from "../ui/astryx";
 import { Button } from "../ui/button";
+import { CoverImage } from "../ui/cover";
 import { Icon } from "../ui/icon";
 import { Pagination } from "../ui/pagination";
 import { groupTrashBySource, remainingDays, useTrash } from "../views/trash/useTrash";
@@ -350,11 +351,10 @@ function TrashRow({
       startContent={
         <span className="block h-[64px] w-[112px] shrink-0 overflow-hidden rounded-[6px] bg-[#111114]">
           {video.thumbnailPath ? (
-            <img
-              alt=""
-              className="block h-full w-full object-contain"
-              draggable={false}
+            <CoverImage
+              className="block h-full w-full"
               src={videoCoverURL(video)}
+              variant="landscape"
             />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-[var(--muted)]">

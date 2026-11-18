@@ -16,6 +16,7 @@ import {
   toggleChipClass,
 } from "../ui/astryx";
 import { Button } from "../ui/button";
+import { CoverImage } from "../ui/cover";
 import { Icon } from "../ui/icon";
 import { Pagination } from "../ui/pagination";
 import {
@@ -55,7 +56,7 @@ function TaskRow({ task, onOpen }: { task: JavTaskOverview; onOpen: (video: Vide
       startContent={
         <span className="block aspect-video w-28 shrink-0 overflow-hidden rounded-md bg-[#111114]">
           {video.thumbnailPath || (video.coverSource === "scraped" && video.scrapedCoverPath) ? (
-            <img alt="" className="block h-full w-full object-contain" draggable={false} src={videoCoverURL(video)} />
+            <CoverImage className="block h-full w-full" src={videoCoverURL(video)} variant="landscape" />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-[var(--muted)]">
               <Icon className="size-5" name="grid" />

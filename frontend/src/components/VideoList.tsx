@@ -17,6 +17,7 @@ import {
   Text,
   compactBadgeClass,
 } from "../ui/astryx";
+import { CoverImage } from "../ui/cover";
 import { Icon } from "../ui/icon";
 import { Pagination } from "../ui/pagination";
 
@@ -150,11 +151,10 @@ export default function VideoList({
                     <AspectRatio ratio={16 / 9}>
                       <span className="relative block size-full">
                         {hasThumb ? (
-                          <img
-                            alt=""
-                            className="block size-full object-contain"
-                            draggable={false}
+                          <CoverImage
+                            className="block size-full"
                             src={videoCoverURL(v)}
+                            variant="landscape"
                           />
                         ) : (
                           <span className="flex size-full items-center justify-center opacity-60">
