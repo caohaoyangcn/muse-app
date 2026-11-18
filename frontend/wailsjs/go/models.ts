@@ -1,19 +1,5 @@
 export namespace api {
 	
-	export class GroupSuggestion {
-	    groupId: number;
-	    name: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new GroupSuggestion(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.groupId = source["groupId"];
-	        this.name = source["name"];
-	    }
-	}
 	export class Library {
 	
 	
@@ -72,40 +58,6 @@ export namespace api {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.videos = this.convertValues(source["videos"], video.Video);
 	        this.retentionDays = source["retentionDays"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class VideoGroupSuggestion {
-	    path: string;
-	    fileName: string;
-	    suggested: GroupSuggestion[];
-	
-	    static createFrom(source: any = {}) {
-	        return new VideoGroupSuggestion(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.path = source["path"];
-	        this.fileName = source["fileName"];
-	        this.suggested = this.convertValues(source["suggested"], GroupSuggestion);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -237,35 +189,6 @@ export namespace cloud {
 	        this.ok = source["ok"];
 	        this.latencyMs = source["latencyMs"];
 	        this.error = source["error"];
-	    }
-	}
-
-}
-
-export namespace group {
-	
-	export class Group {
-	    id: number;
-	    name: string;
-	    position: number;
-	    parentId?: number;
-	    videoCount: number;
-	    createdAt: number;
-	    updatedAt: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new Group(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.position = source["position"];
-	        this.parentId = source["parentId"];
-	        this.videoCount = source["videoCount"];
-	        this.createdAt = source["createdAt"];
-	        this.updatedAt = source["updatedAt"];
 	    }
 	}
 
@@ -921,7 +844,6 @@ export namespace video {
 	    deletedAt: number;
 	    deleteReason: string;
 	    archiveSourceName: string;
-	    trashGroupNames: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Video(source);
@@ -972,7 +894,6 @@ export namespace video {
 	        this.deletedAt = source["deletedAt"];
 	        this.deleteReason = source["deleteReason"];
 	        this.archiveSourceName = source["archiveSourceName"];
-	        this.trashGroupNames = source["trashGroupNames"];
 	    }
 	}
 	export class ContentDuplicateMember {

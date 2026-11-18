@@ -148,11 +148,6 @@ type Video struct {
 	// is disabled. It keeps the archive readable after the connection row is
 	// deleted.
 	ArchiveSourceName string `json:"archiveSourceName"`
-	// TrashGroupNames is a read-model projection filled only by the recycle-bin
-	// read: the groups the favorite belonged to when it was moved to the trash.
-	// Memberships are deliberately retained, so a restore shows the same groups
-	// again; the field is never persisted on the row.
-	TrashGroupNames []string `json:"trashGroupNames"`
 }
 
 // IsRemote reports whether the favorite lives on a cloud connection.

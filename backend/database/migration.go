@@ -8,7 +8,7 @@ import (
 // currentSchemaVersion is the highest applied schema version. It is tracked in
 // PRAGMA user_version. Bump it whenever a migration adds a column/table that
 // requires (or could benefit from) re-extracting data for pre-existing rows.
-const currentSchemaVersion = 29
+const currentSchemaVersion = 30
 
 // MigrationResult reports what happened during Migrate so callers can trigger
 // one-off backfills (e.g. re-probing ffprobe for videos created before a new
@@ -55,26 +55,6 @@ CREATE INDEX IF NOT EXISTS idx_videos_created_at ON videos(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_videos_status ON videos(status);
 `
 
-// schemaV2 adds grouping of favorites (分组). Favorites can be assigned to
-// zero or more named, reorderable groups.
-const schemaV2 = `
-CREATE TABLE IF NOT EXISTS video_groups (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT NOT NULL,
-    position   INTEGER NOT NULL,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_video_groups_position ON video_groups(position);
-
-CREATE TABLE IF NOT EXISTS video_group_members (
-    video_id INTEGER NOT NULL,
-    group_id INTEGER NOT NULL,
-    PRIMARY KEY (video_id, group_id)
-);
-CREATE INDEX IF NOT EXISTS idx_video_group_members_group ON video_group_members(group_id);
-`
-
 // schemaV5 adds a generic key/value settings table. It holds user preferences
 // that must survive restarts (currently only the LAN server's fixed port). Each
 // value is stored as text; the settings.Store parses it into the right type.
@@ -83,15 +63,6 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-`
-
-// schemaV6 adds parent/child grouping (分组父子关系). A nullable parent_id on
-// video_groups lets one group be nested under another; a parent's video set is
-// the recursive union of its own and every descendant's members. NULL means the
-// group is top-level. Adding a column is idempotent-safe for existing installs.
-const schemaV6 = `
-ALTER TABLE video_groups ADD COLUMN parent_id INTEGER;
-CREATE INDEX IF NOT EXISTS idx_video_groups_parent ON video_groups(parent_id);
 `
 
 // A note on version 7–9: those steps were the Actor domain (演员) — actors,
@@ -119,14 +90,11 @@ func Migrate(db *sql.DB) (MigrationResult, error) {
 		if _, err := db.Exec(schemaV1); err != nil {
 			return res, fmt.Errorf("migrate database v1: %w", err)
 		}
-		if _, err := db.Exec(schemaV2); err != nil {
-			return res, fmt.Errorf("migrate database v2: %w", err)
-		}
 		version = 2
 	} else if version < 2 {
-		if _, err := db.Exec(schemaV2); err != nil {
-			return res, fmt.Errorf("migrate database v2: %w", err)
-		}
+		// v2 used to create the user-defined group tables. That feature has
+		// been removed; the version number is kept as a historical marker so a
+		// pre-versioning install still walks the later steps in order.
 		version = 2
 	}
 
@@ -157,10 +125,19 @@ func Migrate(db *sql.DB) (MigrationResult, error) {
 		version = 5
 	}
 
-	// v6 adds the nullable parent_id column for parent/child grouping.
+	// v6 added parent/child grouping to the retired group tables. A fresh
+	// database no longer creates them; an old one may still be upgraded from a
+	// stamp where the column does not exist yet, so keep the column available
+	// for v29's backfill.
 	if version < 6 {
-		if err := addColumnIfMissing(db, "video_groups", "parent_id", schemaV6); err != nil {
-			return res, fmt.Errorf("migrate database v6: %w", err)
+		hasGroups, err := tableExists(db, "video_groups")
+		if err != nil {
+			return res, err
+		}
+		if hasGroups {
+			if err := addColumnIfMissing(db, "video_groups", "parent_id", `ALTER TABLE video_groups ADD COLUMN parent_id INTEGER`); err != nil {
+				return res, fmt.Errorf("migrate database v6: %w", err)
+			}
 		}
 		version = 6
 	}
@@ -526,6 +503,29 @@ func Migrate(db *sql.DB) (MigrationResult, error) {
 			return res, fmt.Errorf("migrate database v29 commit: %w", err)
 		}
 		version = 29
+	}
+
+	if version < 30 {
+		// v30 drops the retired user-defined group tables. v29 has already
+		// copied the only data the application still needs (the 马赛克破解
+		// badge marker), so nothing reads these rows any more. A fresh
+		// database never created them and the IF EXISTS makes this a no-op.
+		tx, err := db.Begin()
+		if err != nil {
+			return res, fmt.Errorf("migrate database v30: %w", err)
+		}
+		if _, err := tx.Exec(`DROP TABLE IF EXISTS video_group_members`); err != nil {
+			_ = tx.Rollback()
+			return res, fmt.Errorf("migrate database v30 members: %w", err)
+		}
+		if _, err := tx.Exec(`DROP TABLE IF EXISTS video_groups`); err != nil {
+			_ = tx.Rollback()
+			return res, fmt.Errorf("migrate database v30 groups: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return res, fmt.Errorf("migrate database v30 commit: %w", err)
+		}
+		version = 30
 	}
 
 	res.SchemaVersion = version

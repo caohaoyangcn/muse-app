@@ -1,8 +1,8 @@
 // Package api is a single transport-independent façade over the business
-// services (video.Service, group.Service). Both transports — the Wails desktop
-// app (app.go) and the LAN HTTP server (server.go) — call exactly these methods,
-// so read/write behaviour, validation and orchestration live in one place and
-// can never drift between clients.
+// services (video.Service and the optional metadata/cloud/task services). Both
+// transports — the Wails desktop app (app.go) and the LAN HTTP server (server.go)
+// — call exactly these methods, so read/write behaviour, validation and
+// orchestration live in one place and can never drift between clients.
 //
 // Web-specific concerns (HTTP Range streaming, thumbnail URLs, the mobile SPA,
 // Platform shell actions like open-in-file-manager) deliberately stay in their own
@@ -19,17 +19,12 @@ import (
 	"time"
 
 	"muse-app/backend/cloud"
-	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/similar"
 	"muse-app/backend/tasks"
 	"muse-app/backend/video"
 	"muse-app/backend/watch"
 )
-
-// mosaicRestoredGroup is the automatic collection rule for restored
-// (mosaic-removed) works. Its members carry a tag badge in the UI.
-const mosaicRestoredGroup = "马赛克破解"
 
 // Recycle-bin retention policy. A trashed favorite is restorable for this long
 // by default; the value is a user preference and is clamped to the same range
@@ -53,7 +48,6 @@ type TrashSnapshot struct {
 // the HTTP handlers (the underlying services are themselves concurrency-safe).
 type Library struct {
 	videos *video.Service
-	groups *group.Service
 	watch  *watch.Service
 	jav    *jav.Service
 	cloud  *cloud.Service
@@ -67,9 +61,9 @@ type Library struct {
 }
 
 // New builds the façade over the given services.
-func New(videos *video.Service, groups *group.Service, log *slog.Logger) *Library {
+func New(videos *video.Service, log *slog.Logger) *Library {
 	l := &Library{
-		videos: videos, groups: groups, log: log,
+		videos: videos, log: log,
 		now: func() int64 { return time.Now().UnixMilli() },
 	}
 	// Automatic cleanup of a favorite whose file is gone while its volume is
@@ -396,43 +390,6 @@ func (l *Library) SimilarVideos(videoID int64, limit int) ([]SimilarVideo, error
 	return out, nil
 }
 
-// ListGroups returns all groups in sidebar order, with member counts.
-func (l *Library) ListGroups() ([]group.Group, error) {
-	return l.groups.List()
-}
-
-// VideoIDsInGroup returns the favorite ids in a group (newest first) — the
-// small-shaped form the desktop sidebar uses.
-func (l *Library) VideoIDsInGroup(groupID int64) ([]int64, error) {
-	return l.groups.VideoIDsInGroup(groupID)
-}
-
-// VideosInGroup returns the full favorites in a group (newest first), in the
-// same shape as ListVideos. Used by the HTTP API so a mobile client needs only
-// one source of truth. The orchestration of id→object lives here, shared.
-func (l *Library) VideosInGroup(groupID int64) ([]video.Video, error) {
-	ids, err := l.groups.VideoIDsInGroup(groupID)
-	if err != nil {
-		return nil, err
-	}
-	all, err := l.videos.List()
-	if err != nil {
-		return nil, err
-	}
-	byID := make(map[int64]video.Video, len(all))
-	for _, v := range all {
-		byID[v.ID] = v
-	}
-	out := make([]video.Video, 0, len(ids))
-	for _, id := range ids {
-		if v, ok := byID[id]; ok {
-			out = append(out, v)
-		}
-	}
-	l.attachReadModel(out)
-	return out, nil
-}
-
 // Video returns a single favorite by id.
 func (l *Library) Video(id int64) (*video.Video, error) {
 	v, err := l.videos.Get(id)
@@ -474,11 +431,6 @@ func (l *Library) ScanFileStatuses() video.FileScanStatus {
 // FileScanStatus returns the current or last 文件检测 pass.
 func (l *Library) FileScanStatus() video.FileScanStatus {
 	return l.videos.FileScanStatus()
-}
-
-// VideoGroupIDs returns the ids of the groups a video belongs to.
-func (l *Library) VideoGroupIDs(videoID int64) ([]int64, error) {
-	return l.groups.VideoGroupIDs(videoID)
 }
 
 // ---- Writes (shared write model; the Web front-end simply does not expose
@@ -594,9 +546,6 @@ func (l *Library) DeleteVideoPermanently(id int64) error {
 	if err := l.videos.Remove(id); err != nil {
 		return err
 	}
-	if err := l.groups.ClearVideoMembers(id); err != nil {
-		l.log.Warn("clear video group members failed", "id", id, "err", err)
-	}
 	if l.jav != nil {
 		_ = l.jav.Delete(id)
 	}
@@ -604,8 +553,7 @@ func (l *Library) DeleteVideoPermanently(id int64) error {
 }
 
 // ListTrash returns the recycle bin, newest removal first, together with the
-// current retention. Group names are a best-effort projection: a membership
-// read failure must not hide the trash.
+// current retention.
 func (l *Library) ListTrash() (TrashSnapshot, error) {
 	videos, err := l.videos.ListTrash()
 	if err != nil {
@@ -614,31 +562,10 @@ func (l *Library) ListTrash() (TrashSnapshot, error) {
 	// A trashed favorite still shows under its scraped 番号 (or source name for
 	// a cloud favorite), exactly as it did in the library.
 	l.attachReadModel(videos)
-	for i := range videos {
-		// JSON null would make the client's group list non-iterable; an empty
-		// array is the contract for "no groups".
-		videos[i].TrashGroupNames = []string{}
-	}
-	snapshot := TrashSnapshot{
+	return TrashSnapshot{
 		Videos:        videos,
 		RetentionDays: l.TrashRetentionDays(),
-	}
-	if len(videos) == 0 || l.groups == nil {
-		return snapshot, nil
-	}
-	ids := make([]int64, 0, len(videos))
-	for i := range videos {
-		ids = append(ids, videos[i].ID)
-	}
-	names, err := l.groups.GroupNamesForVideos(ids)
-	if err != nil {
-		l.log.Warn("load trash group names failed", "err", err)
-		return snapshot, nil
-	}
-	for i := range snapshot.Videos {
-		snapshot.Videos[i].TrashGroupNames = names[snapshot.Videos[i].ID]
-	}
-	return snapshot, nil
+	}, nil
 }
 
 // EmptyTrash permanently deletes every trashed favorite. Per-item failures are
@@ -1471,42 +1398,6 @@ func (l *Library) actorFillTask() []tasks.Task {
 	}}
 }
 
-// CreateGroup makes a new empty group.
-func (l *Library) CreateGroup(name string) (*group.Group, error) {
-	return l.groups.Create(name)
-}
-
-// RenameGroup updates a group's name.
-func (l *Library) RenameGroup(id int64, name string) (*group.Group, error) {
-	return l.groups.Rename(id, name)
-}
-
-// DeleteGroup removes a group and its memberships (videos are kept).
-func (l *Library) DeleteGroup(id int64) error {
-	return l.groups.Delete(id)
-}
-
-// SetGroupParent makes one group a child of another (or detaches it to the top
-// level when parentID is nil). It rejects self-parenting and cycles.
-func (l *Library) SetGroupParent(id int64, parentID *int64) (*group.Group, error) {
-	return l.groups.SetParent(id, parentID)
-}
-
-// ReorderGroups persists the sidebar drag & drop ordering.
-func (l *Library) ReorderGroups(ids []int64) error {
-	return l.groups.Reorder(ids)
-}
-
-// SetVideoGroups assigns a video to the given groups (replacing previous ones).
-func (l *Library) SetVideoGroups(videoID int64, groupIDs []int64) error {
-	return l.groups.SetVideoGroups(videoID, groupIDs)
-}
-
-// AddVideoToGroup adds one video to one group (idempotent).
-func (l *Library) AddVideoToGroup(videoID, groupID int64) error {
-	return l.groups.AddVideoToGroup(videoID, groupID)
-}
-
 // ---- Video info editing (编辑影片信息) ----
 //
 // Thin passthroughs: no cross-service orchestration is needed today, but the
@@ -1731,19 +1622,6 @@ func (l *Library) ListArchived() ([]video.Video, error) {
 		return nil, err
 	}
 	l.attachReadModel(videos)
-	// The trash UI shows original group names as context.
-	ids := make([]int64, 0, len(videos))
-	for i := range videos {
-		videos[i].TrashGroupNames = []string{}
-		ids = append(ids, videos[i].ID)
-	}
-	if l.groups != nil && len(ids) > 0 {
-		if names, err := l.groups.GroupNamesForVideos(ids); err == nil {
-			for i := range videos {
-				videos[i].TrashGroupNames = names[videos[i].ID]
-			}
-		}
-	}
 	return videos, nil
 }
 
@@ -1784,157 +1662,4 @@ func (l *Library) deleteArchived(videos []video.Video) (int, error) {
 	return deleted, nil
 }
 
-// ---- Group suggestions (auto-detected after adding videos) ----
-
-// GroupSuggestion is one recommended group for a just-added video.
-type GroupSuggestion struct {
-	GroupID int64  `json:"groupId"`
-	Name    string `json:"name"`
-}
-
-// VideoGroupSuggestion is the per-file group recommendation shown after adding.
-// A file with no matching groups has an empty Suggested slice.
-type VideoGroupSuggestion struct {
-	Path      string            `json:"path"`
-	FileName  string            `json:"fileName"`
-	Suggested []GroupSuggestion `json:"suggested"`
-}
-
-// matchGroupRules scores a file name against the automatic group rules shared
-// by both the suggestion flow and the silent auto-tag flow, so the two can
-// never drift. Rules:
-//   - "restored" in the name (case-insensitive) → "马赛克破解". The group is
-//     ensured (created on first use) as a deliberate side effect.
-//   - any existing group's name occurring in the file's base name
-//     (case-insensitive substring) → that group.
-//
-// It skips groups already produced by an earlier rule (dedup by group id) and
-// yields suggestions in sidebar (display) order.
-func (l *Library) matchGroupRules(fileName string, groups []group.Group, ensureRestored func() *group.Group) []GroupSuggestion {
-	base := strings.ToLower(fileName)
-	suggested := make([]GroupSuggestion, 0)
-	seen := make(map[int64]struct{})
-	if strings.Contains(base, "restored") || strings.Contains(base, "ltx") || strings.Contains(base, "LTX") {
-		if g := ensureRestored(); g != nil {
-			suggested = append(suggested, GroupSuggestion{GroupID: g.ID, Name: g.Name})
-			seen[g.ID] = struct{}{}
-		} else {
-			l.log.Warn("group rules: ensure restored group failed")
-		}
-	}
-	for _, g := range groups {
-		if g.Name == "" {
-			continue
-		}
-		if _, dup := seen[g.ID]; dup {
-			continue
-		}
-		if strings.Contains(base, strings.ToLower(g.Name)) {
-			suggested = append(suggested, GroupSuggestion{GroupID: g.ID, Name: g.Name})
-		}
-	}
-	return suggested
-}
-
-// SuggestGroupsForVideos infers recommended groups for a batch of just-added
-// paths purely from the file name (spec: resolution-based grouping is automatic
-// and async, so only the group-name substring rule is suggested here). For each
-// path, every existing group whose name is a case-insensitive substring of the
-// file's base name becomes a suggestion. Suggestions reference real, persisted
-// groups — the frontend only needs to confirm them.
-func (l *Library) SuggestGroupsForVideos(paths []string) []VideoGroupSuggestion {
-	out := make([]VideoGroupSuggestion, 0, len(paths))
-	if len(paths) == 0 {
-		return out
-	}
-	groups, err := l.groups.List()
-	if err != nil {
-		// Best effort: on failure we simply offer no suggestions.
-		l.log.Warn("suggest groups: list groups failed", "err", err)
-		groups = nil
-	}
-	ensureRestored := l.ensureRestoredGroup()
-
-	for _, p := range paths {
-		fileName := filepath.Base(p)
-		suggested := l.matchGroupRules(fileName, groups, ensureRestored)
-		// Deterministic display order follows the sidebar (already sorted).
-		out = append(out, VideoGroupSuggestion{Path: p, FileName: fileName, Suggested: suggested})
-	}
-	return out
-}
-
-// AutoTagVideos silently applies the automatic group rules to freshly imported
-// videos. It is the folder-watch path: scans land here so auto-imported files
-// are classified exactly like manual adds (same rules), but without a
-// suggestion dialog — membership is applied immediately and idempotently, the
-// same way resolution-based 4K grouping already works.
-//
-// A relocated result is skipped: those bytes were imported once already, and
-// with them these same rules, so re-applying them would only undo a membership
-// the user has since removed.
-func (l *Library) AutoTagVideos(results []video.AddVideoResult) {
-	added := make([]string, 0, len(results))
-	byPath := make(map[string]int64, len(results))
-	for _, r := range results {
-		if r.Success && r.VideoID > 0 && !r.Relocated {
-			added = append(added, r.Path)
-			byPath[r.Path] = r.VideoID
-		}
-	}
-	if len(added) == 0 {
-		return
-	}
-	for _, s := range l.SuggestGroupsForVideos(added) {
-		id, ok := byPath[s.Path]
-		if !ok {
-			continue
-		}
-		for _, g := range s.Suggested {
-			if err := l.groups.AddVideoToGroup(id, g.GroupID); err != nil {
-				l.log.Warn("auto-tag: add to group failed", "videoId", id, "path", s.Path, "group", g.Name, "err", err)
-				continue
-			}
-			l.log.Info("auto-tag applied", "videoId", id, "path", s.Path, "group", g.Name)
-		}
-	}
-}
-
-// ensureRestoredGroup lazily ensures the "马赛克破解" group exists (bound once
-// per call batch, so a batch of restored files reuses the same group).
-func (l *Library) ensureRestoredGroup() func() *group.Group {
-	var restoredGroup *group.Group
-	ready := false
-	return func() *group.Group {
-		if !ready {
-			restoredGroup, _ = l.groups.EnsureGroup(mosaicRestoredGroup)
-			ready = true
-		}
-		return restoredGroup
-	}
-}
-
-// EnsureVideoIn4KGroup auto-assigns a just-probed 4K (3840×2160) video to the
-// "4K" group, creating that group on first use. It is invoked asynchronously by
-// the background processor once the resolution is known, so it never blocks or
-// shows a suggestion dialog.
-func (l *Library) EnsureVideoIn4KGroup(videoID int64) {
-	v, err := l.videos.Get(videoID)
-	if err != nil {
-		l.log.Warn("auto 4K: video unavailable", "id", videoID, "err", err)
-		return
-	}
-	if v.Width != 3840 || v.Height != 2160 {
-		return
-	}
-	g, err := l.groups.EnsureGroup("4K")
-	if err != nil {
-		l.log.Warn("auto 4K: ensure group failed", "id", videoID, "err", err)
-		return
-	}
-	if err := l.groups.AddVideoToGroup(videoID, g.ID); err != nil {
-		l.log.Warn("auto 4K: add to group failed", "id", videoID, "err", err)
-		return
-	}
-	l.log.Info("4K video auto-grouped", "id", videoID, "group", g.ID)
-}
+// ---- Group suggestions were removed with the custom-group feature. ----

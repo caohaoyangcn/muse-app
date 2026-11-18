@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"muse-app/backend/database"
-	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/tasks"
 	"muse-app/backend/video"
@@ -53,11 +52,7 @@ func newBackgroundLibrary(t *testing.T) (*Library, *jav.Service, *sql.DB, int64)
 
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 	vr := video.NewSQLiteRepository(db)
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(&memGroupRepo{members: map[int64][]int64{}}, discard, nil),
-		discard,
-	)
+	lib := New(video.NewService(vr, nil, t.TempDir(), discard, nil), discard)
 	javRepo := jav.NewSQLiteRepository(db)
 	svc := jav.NewService(javRepo, vr, nil, "", nil, discard, 1)
 	t.Cleanup(svc.Close)
@@ -154,7 +149,7 @@ func TestBackgroundTasksReportsScrapeQueueDepth(t *testing.T) {
 // Without services the dashboard is empty rather than nil: the JSON contract is
 // an array, and an empty screen is the honest answer.
 func TestBackgroundTasksWithoutServices(t *testing.T) {
-	lib := New(nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	lib := New(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	snapshot := lib.BackgroundTasks()
 	if snapshot.Tasks == nil {
 		t.Fatal("tasks = nil, want an empty slice")

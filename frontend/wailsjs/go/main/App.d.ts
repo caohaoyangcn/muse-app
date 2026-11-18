@@ -5,7 +5,6 @@ import {video} from '../models';
 import {watch} from '../models';
 import {tasks} from '../models';
 import {cloud} from '../models';
-import {group} from '../models';
 import {context} from '../models';
 import {main} from '../models';
 import {api} from '../models';
@@ -19,8 +18,6 @@ export function ActorProfile(arg1:string):Promise<jav.ActorProfile>;
 export function AddCloudVideos(arg1:number,arg2:Array<string>):Promise<Array<video.AddVideoResult>>;
 
 export function AddVideo(arg1:string):Promise<video.Video>;
-
-export function AddVideoToGroup(arg1:number,arg2:number):Promise<void>;
 
 export function AddVideos(arg1:Array<string>):Promise<Array<video.AddVideoResult>>;
 
@@ -54,11 +51,7 @@ export function ContentScanStatus():Promise<video.ContentScanStatus>;
 
 export function CopyPath(arg1:number):Promise<void>;
 
-export function CreateGroup(arg1:string):Promise<group.Group>;
-
 export function DeleteCloudConnection(arg1:number):Promise<void>;
-
-export function DeleteGroup(arg1:number):Promise<void>;
 
 export function DeleteVideoPermanently(arg1:number):Promise<void>;
 
@@ -67,8 +60,6 @@ export function Emit(arg1:string,arg2:Array<any>):Promise<void>;
 export function EmptyTrash():Promise<number>;
 
 export function EnableCloudConnection(arg1:number):Promise<void>;
-
-export function EnsureVideoIn4KGroup(arg1:number):Promise<void>;
 
 export function EventContext():Promise<context.Context>;
 
@@ -102,8 +93,6 @@ export function ListCloudConnections():Promise<Array<cloud.ConnectionView>>;
 
 export function ListContentDuplicates(arg1:boolean):Promise<Array<video.ContentDuplicateGroup>>;
 
-export function ListGroups():Promise<Array<group.Group>>;
-
 export function ListJavDuplicates(arg1:boolean):Promise<Array<jav.DuplicateGroup>>;
 
 export function ListJavTaskOverviews():Promise<Array<jav.TaskOverview>>;
@@ -136,10 +125,6 @@ export function RemoveVideo(arg1:number):Promise<void>;
 
 export function RemoveWatchDir(arg1:number):Promise<void>;
 
-export function RenameGroup(arg1:number,arg2:string):Promise<group.Group>;
-
-export function ReorderGroups(arg1:Array<number>):Promise<void>;
-
 export function RescanWatchDirs():Promise<void>;
 
 export function ResetVideoCover(arg1:number):Promise<video.Video>;
@@ -166,8 +151,6 @@ export function ServerStatus():Promise<server.StartInfo>;
 
 export function SetFC2Cookie(arg1:string):Promise<void>;
 
-export function SetGroupParent(arg1:number,arg2:any):Promise<group.Group>;
-
 export function SetJavBusCookie(arg1:string):Promise<void>;
 
 export function SetLLMSettings(arg1:main.LLMSettingsInput):Promise<void>;
@@ -190,8 +173,6 @@ export function SetTrashRetentionDays(arg1:number):Promise<void>;
 
 export function SetVideoCover(arg1:number,arg2:number):Promise<video.Video>;
 
-export function SetVideoGroups(arg1:number,arg2:Array<number>):Promise<void>;
-
 export function SetVideoJavOverride(arg1:number,arg2:string,arg3:string):Promise<void>;
 
 export function SetVideoScrapedCoverAllowed(arg1:number,arg2:boolean):Promise<video.Video>;
@@ -203,8 +184,6 @@ export function StartActorFill():Promise<number>;
 export function StartServer(arg1:number):Promise<server.StartInfo>;
 
 export function StopServer():Promise<void>;
-
-export function SuggestGroupsForVideos(arg1:Array<string>):Promise<Array<api.VideoGroupSuggestion>>;
 
 export function TestCloudConnection(arg1:cloud.ConnectionInput):Promise<cloud.TestResult>;
 
@@ -218,12 +197,8 @@ export function UnmergeActor(arg1:string):Promise<void>;
 
 export function UpdateVideoInfo(arg1:number,arg2:string,arg3:string):Promise<video.Video>;
 
-export function VideoGroupIDs(arg1:number):Promise<Array<number>>;
-
 export function VideoJav(arg1:number):Promise<jav.Detail>;
 
 export function VideoJavTask(arg1:number):Promise<jav.Task>;
 
 export function VideosByActor(arg1:string):Promise<Array<video.Video>>;
-
-export function VideosInGroup(arg1:number):Promise<Array<number>>;

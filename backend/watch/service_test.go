@@ -14,14 +14,12 @@ import (
 )
 
 // fakeLibrary emulates the favorites façade: it dedups by path like
-// video.Service, records what was imported, and records which videos were
-// auto-tagged by the watcher.
+// video.Service and records what was imported.
 type fakeLibrary struct {
 	mu     sync.Mutex
 	videos map[string]string // lower-cased path -> file name
 	seq    int64
 	adds   [][]string
-	tagged []string
 	// relocating holds the lower-cased paths whose add has to report a
 	// relocation instead of a new favorite, the way a moved file behaves.
 	relocating map[string]bool
@@ -59,16 +57,6 @@ func (f *fakeLibrary) AddVideos(paths []string) []video.AddVideoResult {
 		})
 	}
 	return results
-}
-
-func (f *fakeLibrary) AutoTagVideos(results []video.AddVideoResult) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, r := range results {
-		if r.Success && !r.Relocated {
-			f.tagged = append(f.tagged, r.Path)
-		}
-	}
 }
 
 func (f *fakeLibrary) has(path string) bool {
@@ -130,23 +118,6 @@ func TestServiceAddScansRecursively(t *testing.T) {
 	}
 	if !lib.has(a) || !lib.has(b) {
 		t.Error("expected a.mp4 and sub/b.mkv to be imported")
-	}
-	// Every successfully imported file must be passed to the auto-tag rules so
-	// directory-monitored videos are grouped exactly like manual adds.
-	if len(lib.tagged) != 2 {
-		t.Errorf("expected 2 videos auto-tagged, got %v", lib.tagged)
-	}
-	for _, p := range []string{a, b} {
-		found := false
-		for _, tp := range lib.tagged {
-			if tp == p {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("expected %s to be auto-tagged, got %v", p, lib.tagged)
-		}
 	}
 	if lib.has(filepath.Join(root, "notes.txt")) {
 		t.Error("non-video file must not be imported")
@@ -254,11 +225,6 @@ func TestServiceScanCountsRelocatedSeparately(t *testing.T) {
 	}
 	if !lib.has(moved) || !lib.has(fresh) {
 		t.Error("both files must belong to the favorites after the scan")
-	}
-	// Only the freshly imported file goes through the auto-tag rules: the
-	// reconnected one already went through them when it was first imported.
-	if len(lib.tagged) != 1 || lib.tagged[0] != fresh {
-		t.Errorf("auto-tagged %v, want only %s", lib.tagged, fresh)
 	}
 	found := false
 	for _, ev := range *events {

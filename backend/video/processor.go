@@ -46,20 +46,7 @@ type Processor struct {
 	closeOnce sync.Once
 	jobsMu    sync.RWMutex
 	closed    bool
-	// autoGroup4K, when set, is invoked after metadata extraction for a video
-	// confirmed to be 3840×2160 so the orchestrator can auto-assign it to the
-	// "4K" group (creating it on first use). Set by the caller (wiring) — kept
-	// out of the video domain to avoid the api↔video dependency cycle.
-	autoGroup4K func(videoID int64)
-	mu          sync.RWMutex
-}
-
-// SetAutoGroup4K installs the optional callback that assigns a detected 4K
-// video to the auto-created "4K" group (see the comment on autoGroup4K).
-func (p *Processor) SetAutoGroup4K(fn func(videoID int64)) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.autoGroup4K = fn
+	mu        sync.RWMutex
 }
 
 // SetMediaPathResolver wires the local/remote media URL decision. It is called
@@ -195,19 +182,6 @@ func (p *Processor) process(id int64) {
 		durationMs = md.DurationMs
 		if err := p.repo.UpdateMetadata(id, md.DurationMs, md.Width, md.Height, md.FrameRate, md.Bitrate, md.VideoCodec, md.AudioCodec); err != nil {
 			p.log.Warn("update metadata failed", "id", id, "err", err)
-		}
-		// Auto-group rule: a confirmed 4K (3840×2160) video is added to the "4K"
-		// group by the caller, asynchronously after ffprobe resolves the
-		// resolution (spec: no group suggestion for resolution, it is automatic).
-		if md.Width == 3840 && md.Height == 2160 {
-			p.mu.RLock()
-			fn := p.autoGroup4K
-			p.mu.RUnlock()
-			if fn != nil {
-				fn(id)
-			} else {
-				p.log.Info("4K video detected, no auto-group handler", "id", id, "width", md.Width, "height", md.Height)
-			}
 		}
 	}
 

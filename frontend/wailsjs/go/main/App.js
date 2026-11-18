@@ -18,10 +18,6 @@ export function AddVideo(arg1) {
   return window['go']['main']['App']['AddVideo'](arg1);
 }
 
-export function AddVideoToGroup(arg1, arg2) {
-  return window['go']['main']['App']['AddVideoToGroup'](arg1, arg2);
-}
-
 export function AddVideos(arg1) {
   return window['go']['main']['App']['AddVideos'](arg1);
 }
@@ -86,16 +82,8 @@ export function CopyPath(arg1) {
   return window['go']['main']['App']['CopyPath'](arg1);
 }
 
-export function CreateGroup(arg1) {
-  return window['go']['main']['App']['CreateGroup'](arg1);
-}
-
 export function DeleteCloudConnection(arg1) {
   return window['go']['main']['App']['DeleteCloudConnection'](arg1);
-}
-
-export function DeleteGroup(arg1) {
-  return window['go']['main']['App']['DeleteGroup'](arg1);
 }
 
 export function DeleteVideoPermanently(arg1) {
@@ -112,10 +100,6 @@ export function EmptyTrash() {
 
 export function EnableCloudConnection(arg1) {
   return window['go']['main']['App']['EnableCloudConnection'](arg1);
-}
-
-export function EnsureVideoIn4KGroup(arg1) {
-  return window['go']['main']['App']['EnsureVideoIn4KGroup'](arg1);
 }
 
 export function EventContext() {
@@ -182,10 +166,6 @@ export function ListContentDuplicates(arg1) {
   return window['go']['main']['App']['ListContentDuplicates'](arg1);
 }
 
-export function ListGroups() {
-  return window['go']['main']['App']['ListGroups']();
-}
-
 export function ListJavDuplicates(arg1) {
   return window['go']['main']['App']['ListJavDuplicates'](arg1);
 }
@@ -250,14 +230,6 @@ export function RemoveWatchDir(arg1) {
   return window['go']['main']['App']['RemoveWatchDir'](arg1);
 }
 
-export function RenameGroup(arg1, arg2) {
-  return window['go']['main']['App']['RenameGroup'](arg1, arg2);
-}
-
-export function ReorderGroups(arg1) {
-  return window['go']['main']['App']['ReorderGroups'](arg1);
-}
-
 export function RescanWatchDirs() {
   return window['go']['main']['App']['RescanWatchDirs']();
 }
@@ -310,10 +282,6 @@ export function SetFC2Cookie(arg1) {
   return window['go']['main']['App']['SetFC2Cookie'](arg1);
 }
 
-export function SetGroupParent(arg1, arg2) {
-  return window['go']['main']['App']['SetGroupParent'](arg1, arg2);
-}
-
 export function SetJavBusCookie(arg1) {
   return window['go']['main']['App']['SetJavBusCookie'](arg1);
 }
@@ -358,10 +326,6 @@ export function SetVideoCover(arg1, arg2) {
   return window['go']['main']['App']['SetVideoCover'](arg1, arg2);
 }
 
-export function SetVideoGroups(arg1, arg2) {
-  return window['go']['main']['App']['SetVideoGroups'](arg1, arg2);
-}
-
 export function SetVideoJavOverride(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetVideoJavOverride'](arg1, arg2, arg3);
 }
@@ -384,10 +348,6 @@ export function StartServer(arg1) {
 
 export function StopServer() {
   return window['go']['main']['App']['StopServer']();
-}
-
-export function SuggestGroupsForVideos(arg1) {
-  return window['go']['main']['App']['SuggestGroupsForVideos'](arg1);
 }
 
 export function TestCloudConnection(arg1) {
@@ -414,10 +374,6 @@ export function UpdateVideoInfo(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateVideoInfo'](arg1, arg2, arg3);
 }
 
-export function VideoGroupIDs(arg1) {
-  return window['go']['main']['App']['VideoGroupIDs'](arg1);
-}
-
 export function VideoJav(arg1) {
   return window['go']['main']['App']['VideoJav'](arg1);
 }
@@ -428,8 +384,4 @@ export function VideoJavTask(arg1) {
 
 export function VideosByActor(arg1) {
   return window['go']['main']['App']['VideosByActor'](arg1);
-}
-
-export function VideosInGroup(arg1) {
-  return window['go']['main']['App']['VideosInGroup'](arg1);
 }

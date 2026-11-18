@@ -15,15 +15,12 @@ import (
 
 // LibrarySource is the slice of the favorites library the watcher needs:
 // list existing paths (to diff each scan against) and add newly discovered
-// files. AutoTagVideos applies the automatic group rules (file-name based plus
-// the caller's resolution grouping) to the success results. api.Library
-// satisfies it, so the façade stays the only writer and auto-imports behave
-// exactly like manual adds (dedup, background thumbnail + metadata scrape) —
-// including their group rules.
+// files. api.Library satisfies it, so the façade stays the only writer and
+// auto-imports behave exactly like manual adds (dedup, background thumbnail +
+// metadata scrape).
 type LibrarySource interface {
 	ListVideos() ([]video.Video, error)
 	AddVideos(paths []string) []video.AddVideoResult
-	AutoTagVideos(results []video.AddVideoResult)
 }
 
 // Service manages the watched-directory catalog and the auto-import loop.
@@ -230,10 +227,6 @@ func (s *Service) scanRoot(d *WatchedDir) ScanSummary {
 
 	if len(candidates) > 0 {
 		results := s.lib.AddVideos(candidates)
-		// Auto-imported files get the same automatic group rules as manual adds
-		// (e.g. "马赛克破解" for restored files); no dialog — the rules apply
-		// silently, like the processor's resolution-based 4K grouping.
-		s.lib.AutoTagVideos(results)
 		for _, r := range results {
 			switch {
 			case !r.Success:

@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"muse-app/backend/api"
-	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/platform"
 	"muse-app/backend/streaming"
@@ -203,8 +202,6 @@ func (s *Server) routes() http.Handler {
 	// 详情页底部的「类似影片」. Computed on read from the scrape results, so
 	// there is nothing to keep in sync; `limit` bounds the row.
 	mux.HandleFunc("GET /api/videos/{id}/similar", s.handleSimilarVideos)
-	mux.HandleFunc("GET /api/groups", s.handleListGroups)
-	mux.HandleFunc("GET /api/groups/{id}/videos", s.handleVideosInGroup)
 	mux.HandleFunc("GET /api/jav/tasks", s.handleJavTasks)
 	// 后台任务 dashboard: read-only aggregation of the tasks that own progress
 	// state. The phone polls it while something is running.
@@ -234,10 +231,6 @@ func (s *Server) routes() http.Handler {
 	// The phone hands playback to an external player, so it reports that a
 	// favorite was played; only the timestamp is stored (no playback progress).
 	mux.HandleFunc("POST /api/videos/{id}/opened", s.handleMarkVideoOpened)
-	mux.HandleFunc("POST /api/groups", s.handleCreateGroup)
-	mux.HandleFunc("PUT /api/groups/{id}", s.handleRenameGroup)
-	mux.HandleFunc("DELETE /api/groups/{id}", s.handleDeleteGroup)
-	mux.HandleFunc("POST /api/groups/{id}/videos", s.handleAddVideoToGroup)
 	mux.HandleFunc("POST /api/jav/duplicates/ignore", s.handleIgnoreJavDuplicate)
 	// Maintenance: delete generated images no favorite refers to any more.
 	mux.HandleFunc("POST /api/maintenance/orphaned-images", s.handleSweepImages)
@@ -278,30 +271,6 @@ func (s *Server) handleListVideos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, list)
-}
-
-func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request) {
-	list, err := s.lib.ListGroups()
-	if err != nil {
-		httpError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, list)
-}
-
-func (s *Server) handleVideosInGroup(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r.PathValue("id"))
-	if !ok {
-		return
-	}
-	// Full Video objects (not just ids) so the mobile UI needs only one source
-	// of truth; the façade owns this orchestration.
-	videos, err := s.lib.VideosInGroup(id)
-	if err != nil {
-		httpError(w, http.StatusNotFound, "分组不存在")
-		return
-	}
-	writeJSON(w, videos)
 }
 
 // handleGetVideo returns a single favorite. The mobile detail screen refreshes
@@ -770,77 +739,6 @@ func (s *Server) handleMarkVideoOpened(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.lib.MarkVideoOpened(id); err != nil {
 		httpError(w, http.StatusBadRequest, video.UserMessage(err))
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Name string `json:"name"`
-	}
-	if err := decodeJSON(r, &body); err != nil {
-		httpError(w, http.StatusBadRequest, "无效的请求体")
-		return
-	}
-	g, err := s.lib.CreateGroup(body.Name)
-	if err != nil {
-		httpError(w, http.StatusBadRequest, group.UserMessage(err))
-		return
-	}
-	writeJSON(w, g)
-}
-
-func (s *Server) handleRenameGroup(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r.PathValue("id"))
-	if !ok {
-		return
-	}
-	var body struct {
-		Name string `json:"name"`
-	}
-	if err := decodeJSON(r, &body); err != nil {
-		httpError(w, http.StatusBadRequest, "无效的请求体")
-		return
-	}
-	g, err := s.lib.RenameGroup(id, body.Name)
-	if err != nil {
-		httpError(w, http.StatusBadRequest, group.UserMessage(err))
-		return
-	}
-	writeJSON(w, g)
-}
-
-func (s *Server) handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
-	id, ok := parseID(w, r.PathValue("id"))
-	if !ok {
-		return
-	}
-	if err := s.lib.DeleteGroup(id); err != nil {
-		httpError(w, http.StatusBadRequest, group.UserMessage(err))
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) handleAddVideoToGroup(w http.ResponseWriter, r *http.Request) {
-	groupId, ok := parseID(w, r.PathValue("id"))
-	if !ok {
-		return
-	}
-	var body struct {
-		VideoID int64 `json:"videoId"`
-	}
-	if err := decodeJSON(r, &body); err != nil {
-		httpError(w, http.StatusBadRequest, "无效的请求体")
-		return
-	}
-	if body.VideoID <= 0 {
-		httpError(w, http.StatusBadRequest, "无效的 videoId")
-		return
-	}
-	if err := s.lib.AddVideoToGroup(body.VideoID, groupId); err != nil {
-		httpError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -16,7 +16,6 @@ import (
 
 	"muse-app/backend/api"
 	"muse-app/backend/database"
-	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/video"
 )
@@ -174,43 +173,6 @@ func TestWithExtensionCORS(t *testing.T) {
 	})
 }
 
-// stubGroupRepo satisfies group.GroupRepository minimally. It lives here rather
-// than in the integration test file because the extension route needs a façade
-// without a real database too.
-type stubGroupRepo struct{}
-
-func (r *stubGroupRepo) Create(name string, pos int, parentID *int64, at int64) (*group.Group, error) {
-	return &group.Group{ID: 1, Name: name, ParentID: parentID}, nil
-}
-func (r *stubGroupRepo) Get(id int64) (*group.Group, error) {
-	if id == 7 { // distinct id used by an add-to-group test
-		return &group.Group{ID: 7, Name: "g7"}, nil
-	}
-	return &group.Group{ID: id, Name: "g"}, nil
-}
-func (r *stubGroupRepo) FindByName(name string) (*group.Group, error) {
-	return &group.Group{ID: 1, Name: name}, nil
-}
-func (r *stubGroupRepo) List() ([]group.Group, error)                 { return nil, nil }
-func (r *stubGroupRepo) Rename(id int64, name string, at int64) error { return nil }
-func (r *stubGroupRepo) Delete(id int64) error                        { return nil }
-func (r *stubGroupRepo) SetPositions(ids []int64) error               { return nil }
-func (r *stubGroupRepo) SetParent(id int64, parentID *int64, at int64) error {
-	return nil
-}
-func (r *stubGroupRepo) Children(parentID int64) ([]int64, error) { return nil, nil }
-func (r *stubGroupRepo) VideosInGroups(groupIDs []int64) ([]int64, error) {
-	return nil, nil
-}
-func (r *stubGroupRepo) Members(videoID int64) ([]int64, error)       { return nil, nil }
-func (r *stubGroupRepo) SetMembers(videoID int64, ids []int64) error  { return nil }
-func (r *stubGroupRepo) AddVideoToGroup(videoID, groupID int64) error { return nil }
-func (r *stubGroupRepo) VideosInGroup(groupID int64) ([]int64, error) { return nil, nil }
-func (r *stubGroupRepo) ClearVideoMembers(videoID int64) error        { return nil }
-func (r *stubGroupRepo) GroupNamesForVideos(videoIDs []int64) (map[int64][]string, error) {
-	return map[int64][]string{}, nil
-}
-
 // listenLoopback keeps a test server off every network interface and out of the
 // host firewall: binding 0.0.0.0 makes Windows Firewall ask whether to allow the
 // freshly built test binary — once per run, because every build lands in a new
@@ -248,7 +210,7 @@ func newExtensionServer(t *testing.T) string {
 		t.Fatal(err)
 	}
 	vr := video.NewSQLiteRepository(db)
-	lib := api.New(video.NewService(vr, nil, t.TempDir(), log, nil), group.NewService(&stubGroupRepo{}, log, nil), log)
+	lib := api.New(video.NewService(vr, nil, t.TempDir(), log, nil), log)
 	javRepo := jav.NewSQLiteRepository(db)
 	javSvc := jav.NewService(javRepo, vr, nil, t.TempDir(), nil, log, 1)
 	t.Cleanup(javSvc.Close)

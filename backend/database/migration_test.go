@@ -16,6 +16,25 @@ func openMigrated(t *testing.T) *sql.DB {
 	return db
 }
 
+// legacyGroupSchema is the retired user-defined-group storage exactly as v2/v6
+// created it. Tests that simulate an old install build it by hand now that the
+// production migration no longer creates it.
+const legacyGroupSchema = `
+CREATE TABLE video_groups (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    position   INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    parent_id  INTEGER
+);
+CREATE TABLE video_group_members (
+    video_id INTEGER NOT NULL,
+    group_id INTEGER NOT NULL,
+    PRIMARY KEY (video_id, group_id)
+);
+`
+
 // TestFreshMigrate ensures a brand-new database lands on the current version and
 // requests a metadata backfill (it finds nothing on a fresh library, but the
 // migration itself was newly applied).
@@ -98,9 +117,6 @@ func TestUpgradeFromV2(t *testing.T) {
 	// Build the V1+V2 structure and set version to 2, no frame_rate column.
 	if _, err := db.Exec(schemaV1); err != nil {
 		t.Fatalf("exec v1: %v", err)
-	}
-	if _, err := db.Exec(schemaV2); err != nil {
-		t.Fatalf("exec v2: %v", err)
 	}
 	if _, err := db.Exec(`PRAGMA user_version = 2`); err != nil {
 		t.Fatalf("set version 2: %v", err)
@@ -207,14 +223,11 @@ func TestUpgradeDropsActorDomain(t *testing.T) {
 			if _, err := db.Exec(schemaV1); err != nil {
 				t.Fatalf("exec v1: %v", err)
 			}
-			if _, err := db.Exec(schemaV2); err != nil {
-				t.Fatalf("exec v2: %v", err)
+			if _, err := db.Exec(legacyGroupSchema); err != nil {
+				t.Fatalf("create legacy group schema: %v", err)
 			}
 			if _, err := db.Exec(schemaV5); err != nil {
 				t.Fatalf("exec v5: %v", err)
-			}
-			if err := addColumnIfMissing(db, "video_groups", "parent_id", schemaV6); err != nil {
-				t.Fatalf("exec v6: %v", err)
 			}
 			if _, err := db.Exec(legacyActorSchema); err != nil {
 				t.Fatalf("create legacy actor schema: %v", err)
@@ -419,11 +432,8 @@ func TestV29BackfillsMosaicRestoredMarker(t *testing.T) {
 	if _, err := db.Exec(schemaV1); err != nil {
 		t.Fatalf("exec v1: %v", err)
 	}
-	if _, err := db.Exec(schemaV2); err != nil {
-		t.Fatalf("exec v2: %v", err)
-	}
-	if err := addColumnIfMissing(db, "video_groups", "parent_id", schemaV6); err != nil {
-		t.Fatalf("exec v6: %v", err)
+	if _, err := db.Exec(legacyGroupSchema); err != nil {
+		t.Fatalf("create legacy group schema: %v", err)
 	}
 	if _, err := db.Exec(`PRAGMA user_version = 28`); err != nil {
 		t.Fatalf("stamp v28: %v", err)
@@ -490,11 +500,21 @@ func TestV29BackfillsMosaicRestoredMarker(t *testing.T) {
 	if err := fresh.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='video_groups'`).Scan(&n); err != nil {
 		t.Fatalf("check fresh groups: %v", err)
 	}
-	if n != 1 {
-		t.Errorf("fresh database group table count = %d, want 1 (still created by v2 at this schema step)", n)
+	if n != 0 {
+		t.Errorf("fresh database group table count = %d, want 0 (feature removed)", n)
 	}
 	if !hasColumn(fresh, "videos", "mosaic_restored") {
 		t.Error("fresh database lacks videos.mosaic_restored")
+	}
+	// v30 drops the retired tables from an upgraded install.
+	for _, table := range []string{"video_group_members", "video_groups"} {
+		var count int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&count); err != nil {
+			t.Fatalf("check dropped table %s: %v", table, err)
+		}
+		if count != 0 {
+			t.Errorf("group table %s should be dropped by v30", table)
+		}
 	}
 }
 
@@ -536,9 +556,6 @@ func TestUpgradeFromV11(t *testing.T) {
 	db := openMigrated(t)
 	if _, err := db.Exec(schemaV1); err != nil {
 		t.Fatalf("exec v1: %v", err)
-	}
-	if _, err := db.Exec(schemaV2); err != nil {
-		t.Fatalf("exec v2: %v", err)
 	}
 	// v5 always precedes v11 in real installs, so the settings table exists.
 	if _, err := db.Exec(schemaV5); err != nil {

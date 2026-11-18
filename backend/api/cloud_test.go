@@ -10,7 +10,6 @@ import (
 
 	"muse-app/backend/cloud"
 	"muse-app/backend/database"
-	"muse-app/backend/group"
 	"muse-app/backend/video"
 )
 
@@ -25,8 +24,7 @@ func TestAddCloudVideosAndReadModel(t *testing.T) {
 	processor := video.NewProcessor(videoRepo, "", "", filepath.Join(t.TempDir(), "thumb"), nil, log, 1)
 	t.Cleanup(processor.Close)
 	videoSvc := video.NewService(videoRepo, processor, t.TempDir(), log, nil)
-	groupSvc := group.NewService(group.NewSQLiteRepository(db), log, nil)
-	lib := New(videoSvc, groupSvc, log)
+	lib := New(videoSvc, log)
 	cloudSvc := cloud.NewService(cloud.NewSQLiteRepository(db), nil, log)
 	lib.SetCloudService(cloudSvc)
 
@@ -106,8 +104,7 @@ func TestCloudSourceOfflineReadModel(t *testing.T) {
 	processor := video.NewProcessor(videoRepo, "", "", filepath.Join(t.TempDir(), "thumb"), nil, log, 1)
 	t.Cleanup(processor.Close)
 	videoSvc := video.NewService(videoRepo, processor, t.TempDir(), log, nil)
-	groupSvc := group.NewService(group.NewSQLiteRepository(db), log, nil)
-	lib := New(videoSvc, groupSvc, log)
+	lib := New(videoSvc, log)
 	cloudSvc := cloud.NewService(cloud.NewSQLiteRepository(db), nil, log)
 	lib.SetCloudService(cloudSvc)
 
@@ -160,8 +157,7 @@ func TestArchiveCloudConnectionMovesFavoritesToTrashArchive(t *testing.T) {
 	processor := video.NewProcessor(videoRepo, "", "", filepath.Join(t.TempDir(), "thumb"), nil, log, 1)
 	t.Cleanup(processor.Close)
 	videoSvc := video.NewService(videoRepo, processor, t.TempDir(), log, nil)
-	groupSvc := group.NewService(group.NewSQLiteRepository(db), log, nil)
-	lib := New(videoSvc, groupSvc, log)
+	lib := New(videoSvc, log)
 	cloudSvc := cloud.NewService(cloud.NewSQLiteRepository(db), nil, log)
 	lib.SetCloudService(cloudSvc)
 

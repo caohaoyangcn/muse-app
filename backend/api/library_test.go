@@ -9,11 +9,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"strings"
 	"testing"
 
 	"muse-app/backend/database"
-	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/video"
 )
@@ -313,128 +311,22 @@ func (r *memVideoRepo) ListVideoIDs() ([]int64, error) {
 	return ids, nil
 }
 
-// memGroupRepo records written memberships and video clears.
-type memGroupRepo struct {
-	groups    []group.Group
-	members   map[int64][]int64 // groupID -> videoIDs
-	clearVids []int64
-}
-
-func (r *memGroupRepo) Create(name string, pos int, parentID *int64, at int64) (*group.Group, error) {
-	// Deterministic increasing id so tests can distinguish created groups.
-	next := int64(100)
-	for _, g := range r.groups {
-		if g.ID >= next {
-			next = g.ID + 1
-		}
-	}
-	g := group.Group{ID: next, Name: name, ParentID: parentID, Position: pos, CreatedAt: at, UpdatedAt: at}
-	r.groups = append(r.groups, g)
-	return &g, nil
-}
-func (r *memGroupRepo) Get(id int64) (*group.Group, error) {
-	return &group.Group{ID: id, Name: "g"}, nil
-}
-func (r *memGroupRepo) FindByName(name string) (*group.Group, error) {
-	for i := range r.groups {
-		if strings.EqualFold(r.groups[i].Name, name) {
-			return &r.groups[i], nil
-		}
-	}
-	return nil, group.ErrNotFound
-}
-func (r *memGroupRepo) List() ([]group.Group, error) {
-	if r.groups != nil {
-		return r.groups, nil
-	}
-	return nil, nil
-}
-func (r *memGroupRepo) Rename(id int64, name string, at int64) error { return nil }
-func (r *memGroupRepo) Delete(id int64) error                        { return nil }
-func (r *memGroupRepo) SetPositions(ids []int64) error               { return nil }
-func (r *memGroupRepo) SetParent(id int64, parentID *int64, at int64) error {
-	return nil
-}
-func (r *memGroupRepo) Children(parentID int64) ([]int64, error) { return nil, nil }
-func (r *memGroupRepo) VideosInGroups(groupIDs []int64) ([]int64, error) {
-	var out []int64
-	seen := map[int64]bool{}
-	for _, gid := range groupIDs {
-		for _, vid := range r.members[gid] {
-			if !seen[vid] {
-				seen[vid] = true
-				out = append(out, vid)
-			}
-		}
-	}
-	return out, nil
-}
-func (r *memGroupRepo) Members(videoID int64) ([]int64, error)      { return nil, nil }
-func (r *memGroupRepo) SetMembers(videoID int64, ids []int64) error { return nil }
-func (r *memGroupRepo) AddVideoToGroup(videoID, groupID int64) error {
-	r.members[groupID] = append(r.members[groupID], videoID)
-	return nil
-}
-func (r *memGroupRepo) VideosInGroup(groupID int64) ([]int64, error) { return r.members[groupID], nil }
-func (r *memGroupRepo) ClearVideoMembers(videoID int64) error {
-	r.clearVids = append(r.clearVids, videoID)
-	return nil
-}
-func (r *memGroupRepo) GroupNamesForVideos(videoIDs []int64) (map[int64][]string, error) {
-	out := make(map[int64][]string, len(videoIDs))
-	wanted := make(map[int64]bool, len(videoIDs))
-	for _, id := range videoIDs {
-		wanted[id] = true
-	}
-	for _, g := range r.groups {
-		for _, vid := range r.members[g.ID] {
-			if wanted[vid] {
-				out[vid] = append(out[vid], g.Name)
-			}
-		}
-	}
-	return out, nil
-}
-
-func newFacade(t *testing.T) (*Library, *memVideoRepo, *memGroupRepo) {
+func newFacade(t *testing.T) (*Library, *memVideoRepo) {
 	t.Helper()
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 	vr := &memVideoRepo{all: []video.Video{
 		{ID: 10, Path: filepath.Join(t.TempDir(), "a.mp4"), FileName: "a.mp4", Status: video.StatusAvailable},
 		{ID: 20, Path: filepath.Join(t.TempDir(), "b.mp4"), FileName: "b.mp4", Status: video.StatusMissing},
 	}}
-	gr := &memGroupRepo{members: map[int64][]int64{1: {20, 10}}} // group 1 holds videos [20,10]
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(gr, discard, nil),
-		discard,
-	)
-	return lib, vr, gr
-}
-
-// VideosInGroup resolves ids → full objects in the group's order (newest first).
-func TestVideosInGroupResolvesObjects(t *testing.T) {
-	lib, _, _ := newFacade(t)
-	got, err := lib.VideosInGroup(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("got %d videos, want 2", len(got))
-	}
-	if got[0].ID != 20 || got[1].ID != 10 {
-		t.Errorf("order = [%d,%d], want [20,10] (group order preserved)", got[0].ID, got[1].ID)
-	}
-	if got[0].FileName != "b.mp4" {
-		t.Errorf("resolved object mismatch: %q", got[0].FileName)
-	}
+	lib := New(video.NewService(vr, nil, t.TempDir(), discard, nil), discard)
+	return lib, vr
 }
 
 // MarkVideoOpened is the transport entry for a playback the server itself never
 // sees (the phone hands it to an external player). It must store the timestamp
 // the 最近播放 view and sort read, and reject an unknown id.
 func TestMarkVideoOpenedThroughFacade(t *testing.T) {
-	lib, vr, _ := newFacade(t)
+	lib, vr := newFacade(t)
 	if err := lib.MarkVideoOpened(10); err != nil {
 		t.Fatalf("mark opened: %v", err)
 	}
@@ -450,15 +342,11 @@ func TestMarkVideoOpenedThroughFacade(t *testing.T) {
 	}
 }
 
-// RemoveVideo is now a soft delete: the record moves to the recycle bin and
-// keeps its group memberships, so restoring it puts it back where it was.
+// RemoveVideo is now a soft delete: the record moves to the recycle bin.
 func TestRemoveVideoMovesToTrashKeepsMembers(t *testing.T) {
-	lib, vr, gr := newFacade(t)
+	lib, vr := newFacade(t)
 	if err := lib.RemoveVideo(10); err != nil {
 		t.Fatal(err)
-	}
-	if len(gr.clearVids) != 0 {
-		t.Errorf("trashing must not clear memberships, got %v", gr.clearVids)
 	}
 	if v, err := vr.GetAny(10); err != nil || v.DeletedAt == 0 || v.DeleteReason != video.TrashReasonUser {
 		t.Fatalf("trashed row = %+v, err=%v", v, err)
@@ -480,7 +368,7 @@ func TestRemoveVideoMovesToTrashKeepsMembers(t *testing.T) {
 
 // A stale list (the record was already removed) must not surface an error.
 func TestRemoveVideoAlreadyGone(t *testing.T) {
-	lib, _, _ := newFacade(t)
+	lib, _ := newFacade(t)
 	if err := lib.RemoveVideo(10); err != nil {
 		t.Fatalf("first remove: %v", err)
 	}
@@ -492,259 +380,17 @@ func TestRemoveVideoAlreadyGone(t *testing.T) {
 	}
 }
 
-// Permanent deletion is the only path that clears memberships and scraped
-// metadata, and it stays idempotent for a stale card.
+// Permanent deletion stays idempotent for a stale card.
 func TestDeleteVideoPermanentlyClearsRelations(t *testing.T) {
-	lib, _, gr := newFacade(t)
+	lib, _ := newFacade(t)
 	if err := lib.DeleteVideoPermanently(10); err != nil {
 		t.Fatalf("permanent delete: %v", err)
-	}
-	if len(gr.clearVids) != 1 || gr.clearVids[0] != 10 {
-		t.Errorf("cleared videos = %v, want [10]", gr.clearVids)
 	}
 	if err := lib.DeleteVideoPermanently(999); err != nil {
 		t.Errorf("deleting an unknown favorite must succeed, got %v", err)
 	}
-	if len(gr.clearVids) != 2 || gr.clearVids[1] != 999 {
-		t.Errorf("group memberships should still be cleared for a stale removal, got %v", gr.clearVids)
-	}
 }
 
-// SuggestGroupsForVideos matches existing groups whose name is a case-insensitive
-// substring of the file base name, on a per-file basis.
-func TestSuggestGroupsForVideos(t *testing.T) {
-	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
-	vr := &memVideoRepo{}
-	gr := &memGroupRepo{
-		groups: []group.Group{
-			{ID: 1, Name: "4K"},
-			{ID: 2, Name: "动漫"},
-			{ID: 3, Name: "每日"},
-		},
-		members: map[int64][]int64{},
-	}
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(gr, discard, nil),
-		discard,
-	)
-
-	got := lib.SuggestGroupsForVideos([]string{
-		`D:\videos\每日总结-watch.mp4`,   // base contains "每日" → 每日
-		`D:\videos\我的动漫合集.mp4`,       // base contains "动漫" → 动漫
-		`D:\videos\movie.4K.xxx.mkv`, // base contains "4k" (case-insensitive) → 4K
-		"D:/videos/movie.mkv",        // no restored
-	})
-	if len(got) != 4 {
-		t.Fatalf("got %d suggestions, want 4", len(got))
-	}
-	// File 0 → 每日 (group 3)
-	if len(got[0].Suggested) != 1 || got[0].Suggested[0].GroupID != 3 {
-		t.Errorf("file0 suggested = %+v, want only group 3", got[0].Suggested)
-	}
-	// File 1 → 动漫 (group 2)
-	if len(got[1].Suggested) != 1 || got[1].Suggested[0].GroupID != 2 {
-		t.Errorf("file1 suggested = %+v, want only group 2", got[1].Suggested)
-	}
-	// File 2 → 4K (group 1)
-	if len(got[2].Suggested) != 1 || got[2].Suggested[0].GroupID != 1 {
-		t.Errorf("file2 suggested = %+v, want only group 1", got[2].Suggested)
-	}
-	// File 3 → none
-	if len(got[3].Suggested) != 0 {
-		t.Errorf("file3 suggested = %+v, want none", got[3].Suggested)
-	}
-	if got[3].Suggested == nil {
-		t.Error("file3 suggested is nil, want an empty array for frontend consumers")
-	}
-}
-
-// TestSuggestRestoredGroupAutoCreates verifies that a file whose name contains
-// "restored" is suggested for the "马赛克破解" group, creating it on first use.
-func TestSuggestRestoredGroupAutoCreates(t *testing.T) {
-	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
-	vr := &memVideoRepo{}
-	gr := &memGroupRepo{
-		groups:  []group.Group{{ID: 1, Name: "每日"}},
-		members: map[int64][]int64{},
-	}
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(gr, discard, nil),
-		discard,
-	)
-
-	got := lib.SuggestGroupsForVideos([]string{
-		"D:/videos/Movie.Restored.4K.mp4", // contains restored (case-insensitive)
-		"D:/videos/movie.mkv",             // no restored
-	})
-	if len(got) != 2 {
-		t.Fatalf("got %d suggestions, want 2", len(got))
-	}
-	// File 0 → 马赛克破解 (created on first use).
-	if len(got[0].Suggested) != 1 || got[0].Suggested[0].Name != "马赛克破解" {
-		t.Fatalf("file0 suggested = %+v, want 马赛克破解", got[0].Suggested)
-	}
-	// The group was actually created (not just suggested).
-	if _, err := gr.FindByName("马赛克破解"); err != nil {
-		t.Errorf("马赛克破解 group should have been created, got err %v", err)
-	}
-	// File 1 → none.
-	if len(got[1].Suggested) != 0 {
-		t.Errorf("file1 suggested = %+v, want none", got[1].Suggested)
-	}
-
-	// Second call reuses the existing group (no duplicate creation).
-	countBefore := len(gr.groups)
-	got2 := lib.SuggestGroupsForVideos([]string{"D:/videos/restored2.mp4"})
-	if len(got2) != 1 || len(got2[0].Suggested) != 1 {
-		t.Fatalf("second call suggested = %+v", got2)
-	}
-	if len(gr.groups) != countBefore {
-		t.Errorf("EnsureGroup should reuse existing group, groups = %d", len(gr.groups))
-	}
-}
-
-// EnsureVideoIn4KGroup auto-assigns a confirmed 4K video to the "4K" group.
-func TestEnsureVideoIn4KGroupAutoAssigns(t *testing.T) {
-	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
-	vr := &memVideoRepo{all: []video.Video{
-		{ID: 7, Path: filepath.Join(t.TempDir(), "k.mp4"), FileName: "k.mp4", Width: 3840, Height: 2160},
-		{ID: 8, Path: filepath.Join(t.TempDir(), "f.mp4"), FileName: "f.mp4", Width: 1920, Height: 1080},
-	}}
-	gr := &memGroupRepo{members: map[int64][]int64{}}
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(gr, discard, nil),
-		discard,
-	)
-
-	lib.EnsureVideoIn4KGroup(7) // 4K → added to "4K"
-	lib.EnsureVideoIn4KGroup(8) // 1080p → skipped
-	g4k, err := gr.FindByName("4K")
-	if err != nil {
-		t.Fatalf("4K group not created: %v", err)
-	}
-	if len(gr.members[g4k.ID]) != 1 || gr.members[g4k.ID][0] != 7 {
-		t.Errorf("members[%d] = %v, want [7]", g4k.ID, gr.members[g4k.ID])
-	}
-}
-
-// AutoTagVideos silently applies the automatic group rules to freshly imported
-// videos: restored files land in "马赛克破解" (auto-created), name-matched
-// files land in existing groups, and failures are skipped.
-func TestAutoTagVideos(t *testing.T) {
-	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
-	vr := &memVideoRepo{}
-	gr := &memGroupRepo{
-		groups: []group.Group{
-			{ID: 1, Name: "动漫"},
-			{ID: 3, Name: "每日"},
-		},
-		members: map[int64][]int64{},
-	}
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(gr, discard, nil),
-		discard,
-	)
-
-	lib.AutoTagVideos([]video.AddVideoResult{
-		{Path: `D:\videos\movie.Restored.mp4`, Success: true, VideoID: 10}, // → 马赛克破解（自动建组）
-		{Path: `D:\videos\每日总结.mp4`, Success: true, VideoID: 11},           // → 每日
-		{Path: `D:\videos\plain.mkv`, Success: true, VideoID: 12},          // name matches nothing
-		{Path: `D:\videos\broken.mp4`, Success: false, VideoID: 0},         // failed add → skipped
-	})
-
-	restored, err := gr.FindByName("马赛克破解")
-	if err != nil {
-		t.Fatalf("马赛克破解 group not auto-created: %v", err)
-	}
-	// File 10 → restored group (auto-created).
-	if len(gr.members[restored.ID]) != 1 || gr.members[restored.ID][0] != 10 {
-		t.Errorf("restored members = %v, want [10]", gr.members[restored.ID])
-	}
-	// File 11 → existing "每日" (group 3).
-	if len(gr.members[3]) != 1 || gr.members[3][0] != 11 {
-		t.Errorf("每日 members = %v, want [11]", gr.members[3])
-	}
-	// File 12 (no match) and the failed file must not be grouped anywhere.
-	for gid, vids := range gr.members {
-		for _, vid := range vids {
-			if vid == 12 || vid == 0 {
-				t.Errorf("unexpected membership: group %d holds video %d", gid, vid)
-			}
-		}
-	}
-}
-
-// AutoTagVideos on an empty batch must not create any groups.
-func TestAutoTagVideosEmptyBatch(t *testing.T) {
-	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
-	gr := &memGroupRepo{members: map[int64][]int64{}}
-	lib := New(
-		video.NewService(&memVideoRepo{}, nil, t.TempDir(), discard, nil),
-		group.NewService(gr, discard, nil),
-		discard,
-	)
-
-	lib.AutoTagVideos(nil)
-	if len(gr.groups) != 0 {
-		t.Errorf("AutoTagVideos(nil) created groups: %+v", gr.groups)
-	}
-}
-
-// ListGroups must pass the parent/child hierarchy through to the web client: the
-// ParentID field reaches the LAN SPA so it can render the tree. Also verifies
-// that a video in a child group is visible via the parent group's endpooint
-// (transitive membership), which the mobile SPA relies on.
-func TestListGroupsAndTransitiveVideosAcrossTransport(t *testing.T) {
-	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
-	pid := int64(1)
-	gr := &memGroupRepo{
-		groups: []group.Group{
-			{ID: 1, Name: "Root", ParentID: nil},
-			{ID: 2, Name: "Child", ParentID: &pid},
-		},
-		members: map[int64][]int64{2: {10}}, // video 10 lives in the child group only
-	}
-	vr := &memVideoRepo{all: []video.Video{
-		{ID: 10, Path: filepath.Join(t.TempDir(), "a.mp4"), FileName: "a.mp4", Status: video.StatusAvailable},
-	}}
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(gr, discard, nil),
-		discard,
-	)
-
-	got, err := lib.ListGroups()
-	if err != nil {
-		t.Fatal(err)
-	}
-	byID := map[int64]group.Group{}
-	for _, g := range got {
-		byID[g.ID] = g
-	}
-	if byID[1].ParentID != nil {
-		t.Errorf("root parent = %v, want nil", byID[1].ParentID)
-	}
-	if byID[2].ParentID == nil || *byID[2].ParentID != 1 {
-		t.Errorf("child parent = %v, want root (1)", byID[2].ParentID)
-	}
-
-	// Viewing the parent group returns the child's video (transitive).
-	vids, err := lib.VideosInGroup(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(vids) != 1 || vids[0].ID != 10 {
-		t.Errorf("parent group videos = %v, want the child's video", vids)
-	}
-}
-
-// newActorFacade builds a façade whose jav service has real (SQLite-backed)
-// scrape results, so the actor aggregate and its id→object resolution are
-// exercised end to end.
 func newActorFacade(t *testing.T, casts [][]string) *Library {
 	t.Helper()
 	db, err := sql.Open(database.DriverName, "file:"+filepath.Join(t.TempDir(), "app.db"))
@@ -759,11 +405,7 @@ func newActorFacade(t *testing.T, casts [][]string) *Library {
 
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 	vr := video.NewSQLiteRepository(db)
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(&memGroupRepo{members: map[int64][]int64{}}, discard, nil),
-		discard,
-	)
+	lib := New(video.NewService(vr, nil, t.TempDir(), discard, nil), discard)
 
 	javRepo := jav.NewSQLiteRepository(db)
 	svc := jav.NewService(javRepo, vr, nil, "", nil, discard, 1)
@@ -879,7 +521,7 @@ func TestListVideosCarriesScrapedActors(t *testing.T) {
 // only ever turns the marker on. It is applied by the single, batch and cloud
 // add paths, so testing the helper pins the behaviour they share.
 func TestMarkMosaicRestoredUsesFileNameRule(t *testing.T) {
-	lib, repo, _ := newFacade(t)
+	lib, repo := newFacade(t)
 
 	if !lib.markMosaicRestored(10, "Movie.Restored.4K.mkv") {
 		t.Fatal("a restored file name should set the marker")
@@ -898,7 +540,7 @@ func TestMarkMosaicRestoredUsesFileNameRule(t *testing.T) {
 // Favorites marked as mosaic-restored carry the badge both clients render
 // beside the name; favorites without the marker do not.
 func TestListVideosCarriesRestoredBadge(t *testing.T) {
-	lib, repo, _ := newFacade(t)
+	lib, repo := newFacade(t)
 	repo.all[0].MosaicRestored = true // only the first favorite is restored
 
 	videos, err := lib.ListVideos()
@@ -941,11 +583,7 @@ func TestListVideosCarriesScrapedTags(t *testing.T) {
 
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 	vr := video.NewSQLiteRepository(db)
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(&memGroupRepo{members: map[int64][]int64{}}, discard, nil),
-		discard,
-	)
+	lib := New(video.NewService(vr, nil, t.TempDir(), discard, nil), discard)
 	javRepo := jav.NewSQLiteRepository(db)
 	svc := jav.NewService(javRepo, vr, nil, "", nil, discard, 1)
 	t.Cleanup(svc.Close)
@@ -1000,7 +638,7 @@ func TestListVideosCarriesScrapedTags(t *testing.T) {
 // Without a JAV service the read model is still complete; the code is simply
 // absent, which is what makes the UI fall back to the file name.
 func TestListVideosWithoutJavServiceLeavesCodeEmpty(t *testing.T) {
-	lib, _, _ := newFacade(t)
+	lib, _ := newFacade(t)
 	videos, err := lib.ListVideos()
 	if err != nil {
 		t.Fatal(err)
@@ -1047,7 +685,7 @@ func TestVideosByActorResolvesObjects(t *testing.T) {
 
 // The facade reports a missing jav service rather than panicking.
 func TestVideosByActorWithoutJavService(t *testing.T) {
-	lib, _, _ := newFacade(t)
+	lib, _ := newFacade(t)
 	if _, err := lib.VideosByActor("A"); err == nil {
 		t.Fatal("want an error when the jav service is not configured")
 	}
@@ -1106,11 +744,7 @@ func newDuplicateFacade(t *testing.T, entries [][2]string) (*Library, video.Vide
 
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 	vr := video.NewSQLiteRepository(db)
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(&memGroupRepo{members: map[int64][]int64{}}, discard, nil),
-		discard,
-	)
+	lib := New(video.NewService(vr, nil, t.TempDir(), discard, nil), discard)
 	javRepo := jav.NewSQLiteRepository(db)
 	svc := jav.NewService(javRepo, vr, nil, "", nil, discard, 1)
 	t.Cleanup(svc.Close)
@@ -1230,7 +864,7 @@ func TestDuplicateWorklistRemovesAMissingVersion(t *testing.T) {
 
 // Without a jav service the façade reports the gap instead of panicking.
 func TestDuplicatesWithoutJavService(t *testing.T) {
-	lib, _, _ := newFacade(t)
+	lib, _ := newFacade(t)
 	if _, err := lib.ListJavDuplicates(false); err == nil {
 		t.Fatal("want an error when the jav service is not configured")
 	}
@@ -1255,11 +889,7 @@ func newContentDuplicateFacade(t *testing.T) (*Library, video.VideoRepository, s
 	}
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 	vr := video.NewSQLiteRepository(db)
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(&memGroupRepo{members: map[int64][]int64{}}, discard, nil),
-		discard,
-	)
+	lib := New(video.NewService(vr, nil, t.TempDir(), discard, nil), discard)
 	return lib, vr, t.TempDir()
 }
 
@@ -1353,12 +983,10 @@ func TestContentDuplicatesWithoutFingerprintWorker(t *testing.T) {
 	}
 }
 
-// TestTrashSnapshotCarriesRetentionAndGroups verifies the recycle-bin read
-// model: the retention travels with the rows, and the groups a favorite
-// belonged to are shown so a restore has no surprises.
-func TestTrashSnapshotCarriesRetentionAndGroups(t *testing.T) {
-	lib, vr, gr := newFacade(t)
-	gr.groups = []group.Group{{ID: 1, Name: "收藏夹"}}
+// TestTrashSnapshotCarriesRetention verifies the recycle-bin read model: the
+// retention travels with the rows so the UI can render "N days left".
+func TestTrashSnapshotCarriesRetention(t *testing.T) {
+	lib, vr := newFacade(t)
 	vr.all[0].DeletedAt = 1000
 	vr.all[0].DeleteReason = video.TrashReasonUser
 	lib.SetTrashRetention(func() int { return 30 })
@@ -1373,15 +1001,12 @@ func TestTrashSnapshotCarriesRetentionAndGroups(t *testing.T) {
 	if len(snapshot.Videos) != 1 || snapshot.Videos[0].ID != 10 {
 		t.Fatalf("videos = %+v, want video 10", snapshot.Videos)
 	}
-	if len(snapshot.Videos[0].TrashGroupNames) != 1 || snapshot.Videos[0].TrashGroupNames[0] != "收藏夹" {
-		t.Errorf("group names = %v, want [收藏夹]", snapshot.Videos[0].TrashGroupNames)
-	}
 }
 
 // TestTrashRetentionClampsInvalidValues keeps a broken preference from silently
 // turning into a one-day policy.
 func TestTrashRetentionClampsInvalidValues(t *testing.T) {
-	lib, _, _ := newFacade(t)
+	lib, _ := newFacade(t)
 	for _, days := range []int{0, -5, MaxTrashRetentionDays + 1} {
 		lib.SetTrashRetention(func() int { return days })
 		if got := lib.TrashRetentionDays(); got != DefaultTrashRetentionDays {
@@ -1397,7 +1022,7 @@ func TestTrashRetentionClampsInvalidValues(t *testing.T) {
 // TestPurgeExpiredTrashOnlyRemovesPastTheRetention pins the boundary and proves
 // the purge hard-deletes what it removes.
 func TestPurgeExpiredTrashOnlyRemovesPastTheRetention(t *testing.T) {
-	lib, vr, gr := newFacade(t)
+	lib, vr := newFacade(t)
 	const day = int64(24 * 60 * 60 * 1000)
 	lib.now = func() int64 { return 100 * day }
 	lib.SetTrashRetention(func() int { return 14 })
@@ -1419,14 +1044,11 @@ func TestPurgeExpiredTrashOnlyRemovesPastTheRetention(t *testing.T) {
 	if _, err := vr.GetAny(10); err != nil {
 		t.Errorf("row inside retention was removed: %v", err)
 	}
-	if len(gr.clearVids) != 1 || gr.clearVids[0] != 20 {
-		t.Errorf("cleared videos = %v, want [20]", gr.clearVids)
-	}
 }
 
 // TestEmptyTrashPurgesEverythingAndReportsCount covers the explicit action.
 func TestEmptyTrashPurgesEverythingAndReportsCount(t *testing.T) {
-	lib, vr, _ := newFacade(t)
+	lib, vr := newFacade(t)
 	vr.all[0].DeletedAt = 1000
 	vr.all[1].DeletedAt = 2000
 	count, err := lib.EmptyTrash()
@@ -1462,11 +1084,7 @@ func TestSearchVideosMatchesScrapedTitlesAndProjectsDisplayFields(t *testing.T) 
 
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 	vr := video.NewSQLiteRepository(db)
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(&memGroupRepo{members: map[int64][]int64{}}, discard, nil),
-		discard,
-	)
+	lib := New(video.NewService(vr, nil, t.TempDir(), discard, nil), discard)
 	javRepo := jav.NewSQLiteRepository(db)
 	svc := jav.NewService(javRepo, vr, nil, "", nil, discard, 1)
 	t.Cleanup(svc.Close)

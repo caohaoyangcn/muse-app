@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"muse-app/backend/database"
-	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/video"
 )
@@ -32,11 +31,7 @@ func newSimilarFacade(t *testing.T) (*Library, func(name string, meta jav.Metada
 
 	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
 	vr := video.NewSQLiteRepository(db)
-	lib := New(
-		video.NewService(vr, nil, t.TempDir(), discard, nil),
-		group.NewService(&memGroupRepo{members: map[int64][]int64{}}, discard, nil),
-		discard,
-	)
+	lib := New(video.NewService(vr, nil, t.TempDir(), discard, nil), discard)
 	javRepo := jav.NewSQLiteRepository(db)
 	svc := jav.NewService(javRepo, vr, nil, "", nil, discard, 1)
 	t.Cleanup(svc.Close)

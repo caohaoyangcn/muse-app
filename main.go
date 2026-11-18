@@ -23,7 +23,6 @@ import (
 	"muse-app/backend/api"
 	"muse-app/backend/cloud"
 	"muse-app/backend/database"
-	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/jav/providers"
 	"muse-app/backend/llm"
@@ -153,10 +152,9 @@ func main() {
 	// hashing must not compete with thumbnail extraction for workers.
 	fingerprinter := video.NewFingerprinter(repo, app.Emit, log, 2)
 	videoSvc.SetFingerprinter(fingerprinter)
-	groupSvc := group.NewService(group.NewSQLiteRepository(db), log, app.Emit)
 	app.SetService(videoSvc)
 	// Single business façade shared by the desktop bindings and the LAN server.
-	lib := api.New(videoSvc, groupSvc, log)
+	lib := api.New(videoSvc, log)
 	app.SetLibrary(lib)
 	cloudSvc := cloud.NewService(cloud.NewSQLiteRepository(db), app.Emit, log)
 	lib.SetCloudService(cloudSvc)
@@ -287,9 +285,6 @@ func main() {
 	app.setLLMClient(llmClient)
 	lib.SetJavService(javSvc)
 	javSvc.Start()
-	// After ffprobe confirms a 4K resolution, the background processor asks the
-	// façade to auto-assign it to the "4K" group (creating it on first use).
-	processor.SetAutoGroup4K(lib.EnsureVideoIn4KGroup)
 	// LAN web server: exposes the library + streaming to devices on the same
 	// network. It starts with the app so the phone URL is ready without opening
 	// the header toggle every session; the toggle still stops and restarts it.

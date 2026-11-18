@@ -11,7 +11,6 @@ import (
 
 	"muse-app/backend/api"
 	"muse-app/backend/cloud"
-	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/llm"
 	"muse-app/backend/netproxy"
@@ -685,73 +684,6 @@ func (a *App) PickVideoFiles() ([]string, error) {
 			{DisplayName: "视频文件 (*.mp4;*.mkv;*.webm;*.mov;*.avi;*.m4v)", Pattern: "*.mp4;*.mkv;*.webm;*.mov;*.avi;*.m4v"},
 		},
 	})
-}
-
-// ---- Grouping API (分组) ----
-
-// ListGroups returns all groups in sidebar order, with member counts.
-func (a *App) ListGroups() ([]group.Group, error) {
-	return a.lib.ListGroups()
-}
-
-// CreateGroup makes a new empty group and returns it.
-func (a *App) CreateGroup(name string) (*group.Group, error) {
-	return a.lib.CreateGroup(name)
-}
-
-// RenameGroup updates a group's name.
-func (a *App) RenameGroup(id int64, name string) (*group.Group, error) {
-	return a.lib.RenameGroup(id, name)
-}
-
-// DeleteGroup removes a group and its memberships.
-func (a *App) DeleteGroup(id int64) error {
-	return a.lib.DeleteGroup(id)
-}
-
-// SetGroupParent makes one group a child of another, or detaches it to the top
-// level when parentID is nil. It rejects self-parenting and cycles.
-func (a *App) SetGroupParent(id int64, parentID *int64) (*group.Group, error) {
-	return a.lib.SetGroupParent(id, parentID)
-}
-
-// ReorderGroups persists the sidebar drag & drop ordering. ids is the full
-// list of group ids in the desired display order.
-func (a *App) ReorderGroups(ids []int64) error {
-	return a.lib.ReorderGroups(ids)
-}
-
-// VideoGroupIDs returns the ids of the groups a video belongs to.
-func (a *App) VideoGroupIDs(videoID int64) ([]int64, error) {
-	return a.lib.VideoGroupIDs(videoID)
-}
-
-// SetVideoGroups assigns a video to the given groups (replacing previous ones).
-func (a *App) SetVideoGroups(videoID int64, groupIDs []int64) error {
-	return a.lib.SetVideoGroups(videoID, groupIDs)
-}
-
-// AddVideoToGroup adds one video to one group (idempotent; no-op if already a member).
-func (a *App) AddVideoToGroup(videoID int64, groupID int64) error {
-	return a.lib.AddVideoToGroup(videoID, groupID)
-}
-
-// SuggestGroupsForVideos infers recommended groups for just-added videos from
-// their file names (group-name substring match). The frontend shows these in
-// the post-add suggestion carousel.
-func (a *App) SuggestGroupsForVideos(paths []string) []api.VideoGroupSuggestion {
-	return a.lib.SuggestGroupsForVideos(paths)
-}
-
-// EnsureVideoIn4KGroup auto-assigns a confirmed 4K video to the "4K" group. It
-// is called by the background processor once ffprobe resolves the resolution.
-func (a *App) EnsureVideoIn4KGroup(videoID int64) {
-	a.lib.EnsureVideoIn4KGroup(videoID)
-}
-
-// VideosInGroup returns the favorite ids in a group, newest first.
-func (a *App) VideosInGroup(groupID int64) ([]int64, error) {
-	return a.lib.VideoIDsInGroup(groupID)
 }
 
 // ---- Server mode (局域网访问) ----

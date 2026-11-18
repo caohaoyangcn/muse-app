@@ -14,7 +14,6 @@ import (
 
 	"muse-app/backend/api"
 	"muse-app/backend/database"
-	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/video"
 )
@@ -36,7 +35,7 @@ func newSimilarRoutes(t *testing.T) (http.Handler, func(name string, meta jav.Me
 	}
 
 	vr := video.NewSQLiteRepository(db)
-	lib := api.New(video.NewService(vr, nil, t.TempDir(), log, nil), group.NewService(&stubGroupRepo{}, log, nil), log)
+	lib := api.New(video.NewService(vr, nil, t.TempDir(), log, nil), log)
 	javRepo := jav.NewSQLiteRepository(db)
 	javSvc := jav.NewService(javRepo, vr, nil, t.TempDir(), nil, log, 1)
 	t.Cleanup(javSvc.Close)

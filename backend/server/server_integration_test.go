@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"muse-app/backend/api"
-	"muse-app/backend/group"
 	"muse-app/backend/jav"
 	"muse-app/backend/tasks"
 	"muse-app/backend/video"
@@ -283,9 +282,7 @@ func newTestServer(t *testing.T) (*Server, string /*dataDir*/, string /*base url
 	// Wire the map used by Get() to the slice element the test relies on.
 	repo.byID[1] = &repo.all[0]
 	svc := video.NewService(repo, nil, dir, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
-	grepo := &stubGroupRepo{}
-	g := group.NewService(grepo, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
-	lib := api.New(svc, g, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	lib := api.New(svc, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	srv := New(lib, dir, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	listenLoopback(srv)
@@ -309,8 +306,7 @@ func newMetadataServer(t *testing.T, dataDir string, v video.Video) string {
 	}
 	repo.byID[v.ID] = &repo.all[0]
 	svc := video.NewService(repo, nil, dataDir, log, nil)
-	gsvc := group.NewService(&stubGroupRepo{}, log, nil)
-	lib := api.New(svc, gsvc, log)
+	lib := api.New(svc, log)
 
 	srv := New(lib, dataDir, log)
 	listenLoopback(srv)
@@ -732,45 +728,10 @@ func doJSON(t *testing.T, method, url, payload string) (*http.Response, []byte) 
 func TestAPIWrites(t *testing.T) {
 	_, _, base := newTestServer(t)
 
-	// Create group → 200 + JSON body.
-	res, body := doJSON(t, http.MethodPost, base+"/api/groups", `{"name":"旅行"}`)
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("create group status = %d, body=%s", res.StatusCode, body)
-	}
-	var g group.Group
-	if err := json.Unmarshal(body, &g); err != nil {
-		t.Fatalf("create group JSON: %v (%s)", err, body)
-	}
-	if g.Name != "旅行" {
-		t.Errorf("group name = %q, want 旅行", g.Name)
-	}
-
-	// Create group with empty/invalid body → 400.
-	res, body = doJSON(t, http.MethodPost, base+"/api/groups", `{bad json`)
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("bad json status = %d, want 400 (body=%s)", res.StatusCode, body)
-	}
-	res, body = doJSON(t, http.MethodPost, base+"/api/groups", `{}`)
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("empty-name create status = %d, want 400 (body=%s)", res.StatusCode, body)
-	}
-
-	// Add video to group with invalid videoId → 400.
-	res, body = doJSON(t, http.MethodPost, base+"/api/groups/7/videos", `{"videoId":0}`)
-	if res.StatusCode != http.StatusBadRequest {
-		t.Errorf("add-video status = %d, want 400 (body=%s)", res.StatusCode, body)
-	}
-
 	// Remove a video → 204 (stub Remove is a no-op but must go through the façade).
-	res, body = doJSON(t, http.MethodDelete, base+"/api/videos/1", "")
+	res, body := doJSON(t, http.MethodDelete, base+"/api/videos/1", "")
 	if res.StatusCode != http.StatusNoContent {
 		t.Errorf("remove video status = %d, want 204 (body=%s)", res.StatusCode, body)
-	}
-
-	// Rename group → 200.
-	res, body = doJSON(t, http.MethodPut, base+"/api/groups/1", `{"name":"新名"}`)
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("rename status = %d, want 200 (body=%s)", res.StatusCode, body)
 	}
 }
 
@@ -977,8 +938,7 @@ func newJavTestServer(t *testing.T, repo *stubJavRepo) string {
 	}
 	vrepo.byID[1] = &vrepo.all[0]
 	svc := video.NewService(vrepo, nil, dir, log, nil)
-	gsvc := group.NewService(&stubGroupRepo{}, log, nil)
-	lib := api.New(svc, gsvc, log)
+	lib := api.New(svc, log)
 	javSvc := jav.NewService(repo, vrepo, nil, filepath.Join(dir, "covers", "jav"), nil, log, 1)
 	t.Cleanup(javSvc.Close)
 	lib.SetJavService(javSvc)
@@ -1333,7 +1293,7 @@ func newContentDedupServer(t *testing.T) string {
 	t.Cleanup(fp.Close)
 	svc.SetFingerprinter(fp)
 
-	lib := api.New(svc, group.NewService(&stubGroupRepo{}, log, nil), log)
+	lib := api.New(svc, log)
 	srv := New(lib, dir, log)
 	listenLoopback(srv)
 	info, err := srv.Start(0)

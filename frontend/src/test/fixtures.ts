@@ -53,7 +53,6 @@ export function makeVideo(overrides: Partial<Video> = {}): Video {
     deletedAt: 0,
     deleteReason: "",
     archiveSourceName: "",
-    trashGroupNames: [],
     ...overrides,
   };
 }
