@@ -869,7 +869,9 @@ func (r *stubJavRepo) ScrapeTaskCounts() (jav.ScrapeTaskCounts, error) {
 // The translation reads answer empty here: the LAN tests never run the bulk
 // actions, but jav.Repository has to be complete to wire the service.
 func (r *stubJavRepo) ListTitles() (map[int64]jav.ScrapedTitle, error)  { return nil, nil }
+func (r *stubJavRepo) ListTags() (map[int64][]string, error)            { return nil, nil }
 func (r *stubJavRepo) SearchTitleIDs(string) ([]int64, error)           { return nil, nil }
+func (r *stubJavRepo) ListSimilarRows() ([]jav.SimilarRow, error)       { return nil, nil }
 func (r *stubJavRepo) ListTitleTranslationCandidates() ([]int64, error) { return nil, nil }
 func (r *stubJavRepo) ListTitleRetranslationCandidates() ([]jav.TitleTranslationCandidate, error) {
 	return nil, nil
