@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"muse-app/backend/api"
@@ -43,6 +44,9 @@ func newSimilarRoutes(t *testing.T) (http.Handler, func(name string, meta jav.Me
 
 	add := func(name string, meta jav.Metadata) int64 {
 		t.Helper()
+		if strings.TrimSpace(meta.Title) == "" {
+			meta.Title = name
+		}
 		v := &video.Video{
 			Path:     filepath.Join(t.TempDir(), name),
 			FileName: name,

@@ -60,6 +60,7 @@ func TestSimilarFeaturesAppliesActorMerges(t *testing.T) {
 	uncensored := true
 	if err := repo.SaveSuccess(id, Metadata{
 		Code:         "IPX-633",
+		Title:        "となりの人妻",
 		Series:       "群",
 		Studio:       "L1",
 		ReleaseUnix:  &released,
@@ -100,13 +101,36 @@ func TestSimilarFeaturesAppliesActorMerges(t *testing.T) {
 	}
 }
 
+// A favorite the scraper produced no title for does not take part at all: the
+// original title is the title channel's only text, so there is nothing to
+// compare it on.
+func TestSimilarFeaturesSkipsFavoritesWithoutATitle(t *testing.T) {
+	svc, repo, videos := newSimilarService(t)
+	titled := createSimilarVideo(t, videos, repo, "titled.mp4")
+	untitled := createSimilarVideo(t, videos, repo, "untitled.mp4")
+	if err := repo.SaveSuccess(titled, Metadata{Code: "AAA-001", Title: "となりの人妻"}, "filename", 2); err != nil {
+		t.Fatalf("save titled: %v", err)
+	}
+	if err := repo.SaveSuccess(untitled, Metadata{Code: "BBB-001"}, "filename", 2); err != nil {
+		t.Fatalf("save untitled: %v", err)
+	}
+
+	features, err := svc.SimilarFeatures()
+	if err != nil {
+		t.Fatalf("similar features: %v", err)
+	}
+	if len(features) != 1 || features[0].VideoID != titled {
+		t.Fatalf("features = %+v, want only the titled favorite", features)
+	}
+}
+
 // A favorite in the recycle bin must not come back as a recommendation.
 func TestSimilarFeaturesSkipsTrashedFavorites(t *testing.T) {
 	svc, repo, videos := newSimilarService(t)
 	kept := createSimilarVideo(t, videos, repo, "kept.mp4")
 	trashed := createSimilarVideo(t, videos, repo, "trashed.mp4")
 	for _, id := range []int64{kept, trashed} {
-		if err := repo.SaveSuccess(id, Metadata{Code: "AAA-001"}, "filename", 2); err != nil {
+		if err := repo.SaveSuccess(id, Metadata{Code: "AAA-001", Title: "作品"}, "filename", 2); err != nil {
 			t.Fatalf("save success: %v", err)
 		}
 	}

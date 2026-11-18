@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"muse-app/backend/database"
@@ -55,6 +56,11 @@ func newSimilarFacade(t *testing.T) (*Library, func(name string, meta jav.Metada
 	}
 	addScraped := func(name string, meta jav.Metadata) int64 {
 		t.Helper()
+		if strings.TrimSpace(meta.Title) == "" {
+			// A scraped favorite always carries the provider's title; the cases
+			// that matter are the ones with one.
+			meta.Title = name
+		}
 		v := createVideo(t, name)
 		if err := javRepo.PrepareTask(v.ID, false); err != nil {
 			t.Fatal(err)
@@ -153,8 +159,10 @@ func TestSimilarVideosSkipsTheSameWorkAndTrashedFavorites(t *testing.T) {
 func TestSimilarVideosAppliesActorMerges(t *testing.T) {
 	lib, addScraped, _ := newSimilarFacade(t)
 
-	query := addScraped("a.mp4", jav.Metadata{Code: "AAA-001", Actors: []string{"B"}})
-	alias := addScraped("b.mp4", jav.Metadata{Code: "BBB-001", Actors: []string{"A"}})
+	// Titles deliberately share nothing: this case is about the cast, and a
+	// shared title phrase would connect the two films on its own.
+	query := addScraped("a.mp4", jav.Metadata{Code: "AAA-001", Title: "となりの人妻", Actors: []string{"B"}})
+	alias := addScraped("b.mp4", jav.Metadata{Code: "BBB-001", Title: "温泉旅行の休日", Actors: []string{"A"}})
 
 	before, err := lib.SimilarVideos(query, 8)
 	if err != nil {

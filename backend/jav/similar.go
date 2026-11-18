@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"strings"
 
 	"muse-app/backend/similar"
 )
@@ -15,6 +16,7 @@ import (
 type SimilarRow struct {
 	VideoID      int64
 	Code         string
+	Title        string
 	Series       string
 	Studio       string
 	ReleaseUnix  *int64
@@ -30,7 +32,7 @@ type SimilarRow struct {
 // half-scraped favorites exist.
 func (r *SQLiteRepository) ListSimilarRows() ([]SimilarRow, error) {
 	rows, err := r.db.Query(`
-		SELECT j.video_id, j.code, j.series, j.studio, j.release_unix,
+		SELECT j.video_id, j.code, j.title, j.series, j.studio, j.release_unix,
 		       j.is_uncensored, j.actors_json, j.tags_json
 		FROM video_jav j
 		JOIN videos v ON v.id = j.video_id AND v.deleted_at IS NULL
@@ -47,7 +49,7 @@ func (r *SQLiteRepository) ListSimilarRows() ([]SimilarRow, error) {
 			release    sql.NullInt64
 			uncensored sql.NullInt64
 		)
-		if err := rows.Scan(&row.VideoID, &row.Code, &row.Series, &row.Studio, &release,
+		if err := rows.Scan(&row.VideoID, &row.Code, &row.Title, &row.Series, &row.Studio, &release,
 			&uncensored, &row.ActorsJSON, &row.TagsJSON); err != nil {
 			return nil, fmt.Errorf("scan similar row: %w", err)
 		}
@@ -64,7 +66,13 @@ func (r *SQLiteRepository) ListSimilarRows() ([]SimilarRow, error) {
 	return out, rows.Err()
 }
 
-// SimilarFeatures returns the scoring features of every scraped favorite.
+// SimilarFeatures returns the scoring features of every scraped favorite that
+// has an original title.
+//
+// A film without one does not participate at all: the title is the only text
+// the title channel can match on, and a favorite the scraper never produced a
+// title for cannot be compared on it. (It is also the honest reading of
+// "similar": nothing to describe it, nothing to say.)
 //
 // The cast is resolved exactly like ActorsByVideo does it, so 演员合并 applies
 // here too: two stage names for one performer must not look like two different
@@ -83,9 +91,13 @@ func (s *Service) SimilarFeatures() ([]similar.Feature, error) {
 
 	out := make([]similar.Feature, 0, len(rows))
 	for _, row := range rows {
+		if strings.TrimSpace(row.Title) == "" {
+			continue
+		}
 		out = append(out, similar.Feature{
 			VideoID:      row.VideoID,
 			Code:         row.Code,
+			Title:        row.Title,
 			Series:       row.Series,
 			Studio:       row.Studio,
 			ReleaseUnix:  row.ReleaseUnix,
