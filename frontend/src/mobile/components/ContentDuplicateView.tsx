@@ -12,6 +12,7 @@ import { ConfirmSheet } from "../../ui/sheet";
 import { cn } from "../../lib/utils";
 import { Badge, Banner, CheckboxInput, EmptyState, List, ListItem, Spinner } from "../../ui/astryx";
 import { Button } from "../../ui/button";
+import { CoverImage } from "../../ui/cover";
 import { Pagination } from "../../ui/pagination";
 
 /** One page of duplicate content groups; each group can hold several copies. */
@@ -198,10 +199,8 @@ export function ContentDuplicateView({
                       label={videoName(member.video)}
                       onClick={() => onOpenVideo(member.video)}
                       startContent={
-                        <img
-                          alt=""
-                          className="h-14 w-24 shrink-0 rounded-md bg-[#111114] object-cover object-right"
-                          draggable={false}
+                        <CoverImage
+                          className="h-14 w-24 shrink-0 rounded-md bg-[#111114]"
                           loading="lazy"
                           src={coverURL(member.video)}
                         />

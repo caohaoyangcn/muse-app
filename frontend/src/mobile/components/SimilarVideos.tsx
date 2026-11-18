@@ -3,6 +3,7 @@ import { useSimilarVideos } from "../../views/similar/useSimilarVideos";
 import { videoCoverURL } from "../../utils/format";
 import { videoDisplayName } from "../../utils/videoName";
 import { ClickableCard, Spinner, Text } from "../../ui/astryx";
+import { CoverImage } from "../../ui/cover";
 
 /**
  * 详情页底部的「类似影片」横排（手机尺寸）。
@@ -43,14 +44,9 @@ export function SimilarVideos({
               padding={0}
             >
               <div className="aspect-[3/4] w-full bg-[#111114]">
-                {/* A wide packshot carries the front and back cover side by side;
-                    a centre crop lands on the seam and shows half of each. Align
-                    right so the poster shows the front cover, the same offset the
-                    grid uses. */}
-                <img
-                  alt=""
-                  className="size-full object-cover object-right"
-                  draggable={false}
+                <CoverImage
+                  className="size-full"
+                  loading="lazy"
                   src={videoCoverURL(item.video)}
                 />
               </div>

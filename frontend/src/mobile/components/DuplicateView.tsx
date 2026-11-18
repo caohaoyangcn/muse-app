@@ -18,6 +18,7 @@ import {
   Spinner,
 } from "../../ui/astryx";
 import { Button } from "../../ui/button";
+import { CoverImage } from "../../ui/cover";
 import { Pagination } from "../../ui/pagination";
 import { cn } from "../../lib/utils";
 
@@ -201,10 +202,8 @@ function JavDuplicatePanel({
                       label={videoName(v)}
                       onClick={() => onOpenVideo(v)}
                       startContent={
-                        <img
-                          alt=""
-                          className="h-14 w-24 shrink-0 rounded-md bg-[#111114] object-cover object-right"
-                          draggable={false}
+                        <CoverImage
+                          className="h-14 w-24 shrink-0 rounded-md bg-[#111114]"
                           loading="lazy"
                           src={coverURL(v)}
                         />

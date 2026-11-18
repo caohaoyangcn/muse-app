@@ -10,6 +10,7 @@ import {
   Text,
   compactBadgeClass,
 } from "../../ui/astryx";
+import { CoverImage } from "../../ui/cover";
 import { Icon } from "../../ui/icon";
 import { Pagination } from "../../ui/pagination";
 import { coverURL } from "../../services/web";
@@ -39,18 +40,7 @@ function Thumb({ v }: { v: Video }) {
       </div>
     );
   }
-  return (
-    // Wide packshots can carry the front and back cover side by side. A centre
-    // crop in the 3:4 poster lands on the seam and shows half of each; align
-    // right so the card shows the front cover instead.
-    <img
-      alt=""
-      className="size-full object-cover object-right"
-      draggable={false}
-      loading="lazy"
-      src={coverURL(v)}
-    />
-  );
+  return <CoverImage className="size-full" loading="lazy" src={coverURL(v)} />;
 }
 
 /** Status pills that must be readable over artwork without a backing card. */
