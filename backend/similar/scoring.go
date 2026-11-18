@@ -25,7 +25,7 @@ const (
 	weightActor  = 0.28
 	weightTag    = 0.24
 	weightSeries = 0.18
-	weightTitle  = 0.12
+	weightTitle  = 0.20
 	weightStudio = 0.08
 	weightTime   = 0.06
 )
