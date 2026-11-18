@@ -68,6 +68,79 @@ func TestListCodesReturnsAuthoritativeResults(t *testing.T) {
 	}
 }
 
+// TestListTagsProjectsScrapedGenres pins the tag projection the library filter
+// reads: trashed favorites are excluded, blank/duplicate tags are dropped while
+// the provider's order survives, and an override-mode skip still contributes
+// its genres (skip only hides the card's code/title).
+func TestListTagsProjectsScrapedGenres(t *testing.T) {
+	db, _, err := database.Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	repo := NewSQLiteRepository(db)
+	videos := video.NewSQLiteRepository(db)
+	create := func(name string) int64 {
+		t.Helper()
+		v := &video.Video{
+			Path:      filepath.Join(t.TempDir(), name),
+			FileName:  name,
+			FileSize:  1,
+			CreatedAt: 1,
+			UpdatedAt: 1,
+			Status:    video.StatusAvailable,
+		}
+		if err := videos.Create(v); err != nil {
+			t.Fatalf("create favorite %q: %v", name, err)
+		}
+		if err := repo.PrepareTask(v.ID, false); err != nil {
+			t.Fatalf("prepare task %q: %v", name, err)
+		}
+		return v.ID
+	}
+
+	tagged := create("a.mp4")
+	if err := repo.SaveSuccess(tagged, Metadata{
+		Code: "IPX-633",
+		Tags: []string{" Action ", "Action", "", "Drama"},
+	}, "filename", 2); err != nil {
+		t.Fatalf("save tags: %v", err)
+	}
+	skipped := create("b.mp4")
+	if err := repo.SaveSuccess(skipped, Metadata{Code: "ABW-180", Tags: []string{"剧情"}}, "filename", 2); err != nil {
+		t.Fatalf("save skipped tags: %v", err)
+	}
+	if err := repo.SetOverride(skipped, OverrideSkip, ""); err != nil {
+		t.Fatalf("skip video: %v", err)
+	}
+	unscraped := create("c.mp4")
+	trashed := create("d.mp4")
+	if err := repo.SaveSuccess(trashed, Metadata{Code: "SSS-001", Tags: []string{"巨乳"}}, "filename", 2); err != nil {
+		t.Fatalf("save trashed tags: %v", err)
+	}
+	if err := videos.Trash(trashed, video.TrashReasonUser, 1000); err != nil {
+		t.Fatalf("trash: %v", err)
+	}
+
+	tags, err := repo.ListTags()
+	if err != nil {
+		t.Fatalf("list tags: %v", err)
+	}
+	if want := []string{"Action", "Drama"}; !reflect.DeepEqual(tags[tagged], want) {
+		t.Errorf("tagged tags = %v, want %v", tags[tagged], want)
+	}
+	if want := []string{"剧情"}; !reflect.DeepEqual(tags[skipped], want) {
+		t.Errorf("skipped tags = %v, want %v", tags[skipped], want)
+	}
+	if _, ok := tags[unscraped]; ok {
+		t.Error("a video with no scrape result must not carry tags")
+	}
+	if _, ok := tags[trashed]; ok {
+		t.Error("a trashed video must not contribute tags")
+	}
+}
+
 // TestTrashedVideosAreHiddenFromJavReads pins the recycle-bin boundary for the
 // scrape domain: a trashed favorite keeps its metadata for a restore, but must
 // not appear in the task board, duplicate worklist, actor index or retry scan.

@@ -137,6 +137,21 @@ func (l *Library) scrapedActors() map[int64][]string {
 	return actors
 }
 
+// scrapedTags loads the scraped genre tags per favorite for the video read
+// model. Best effort like scrapedActors: without a scrape result a favorite
+// simply carries no tags and never matches a tag filter.
+func (l *Library) scrapedTags() map[int64][]string {
+	if l.jav == nil {
+		return nil
+	}
+	tags, err := l.jav.TagsByVideo()
+	if err != nil {
+		l.log.Warn("load scraped tags failed", "err", err)
+		return nil
+	}
+	return tags
+}
+
 // restoredVideoIDs returns the favorites in the 马赛克破解 group, including the
 // members of its child groups (group membership is transitive). It is best
 // effort, like the scrape read: a failure leaves the badge off rather than
@@ -163,6 +178,7 @@ type videoReadModel struct {
 	codes    map[int64]string
 	titles   map[int64]jav.ScrapedTitle
 	actors   map[int64][]string
+	tags     map[int64][]string
 	restored map[int64]struct{}
 	sources  map[int64]cloud.SourceState
 	backups  map[string]bool
@@ -176,6 +192,7 @@ func (l *Library) loadVideoReadModel() videoReadModel {
 		codes:    l.scrapedCodes(),
 		titles:   l.scrapedTitles(),
 		actors:   l.scrapedActors(),
+		tags:     l.scrapedTags(),
 		restored: l.restoredVideoIDs(),
 		sources:  l.cloudSources(),
 		backups:  l.backedUpKeys(),
@@ -195,6 +212,12 @@ func (m videoReadModel) apply(v *video.Video) {
 		// The API contract is an array, not JSON null; the workspace tab strip
 		// iterates it without a nil guard.
 		v.Actors = []string{}
+	}
+	v.Tags = m.tags[v.ID]
+	if v.Tags == nil {
+		// Same array contract as Actors: both clients treat a missing tag list
+		// as "no tags" and iterate it directly.
+		v.Tags = []string{}
 	}
 	_, v.MosaicRestored = m.restored[v.ID]
 	if v.DeletedAt == 0 && v.JavCode != "" {

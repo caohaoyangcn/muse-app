@@ -902,6 +902,7 @@ export namespace video {
 	    javTitle: string;
 	    javTitleZh: string;
 	    actors: string[];
+	    tags: string[];
 	    mosaicRestored: boolean;
 	    customCoverAt: number;
 	    likeCount: number;
@@ -952,6 +953,7 @@ export namespace video {
 	        this.javTitle = source["javTitle"];
 	        this.javTitleZh = source["javTitleZh"];
 	        this.actors = source["actors"];
+	        this.tags = source["tags"];
 	        this.mosaicRestored = source["mosaicRestored"];
 	        this.customCoverAt = source["customCoverAt"];
 	        this.likeCount = source["likeCount"];

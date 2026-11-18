@@ -75,6 +75,10 @@ type Video struct {
 	// video_jav.actors_json, never a column on videos; empty until a scrape has
 	// produced a cast. The workspace uses it to group open video tabs by actor.
 	Actors []string `json:"actors"`
+	// Tags is the scraped genre/tag list (题材标签) for this favorite, projected
+	// from video_jav.tags_json. It is a read model, never a column on videos; the
+	// library filter uses it in place of the removed user-defined groups.
+	Tags []string `json:"tags"`
 	// MosaicRestored reports membership in the 马赛克破解 group — the collection
 	// rule that tags restored/mosaic-removed works. It is a read-model
 	// projection filled by the shared façade (transitive membership included),

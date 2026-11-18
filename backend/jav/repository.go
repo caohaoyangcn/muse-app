@@ -25,6 +25,9 @@ type Repository interface {
 	// ListTitles returns the scraped original title and Chinese translation per
 	// favorite. It feeds the video read model's 【番号】译名 display name.
 	ListTitles() (map[int64]ScrapedTitle, error)
+	// ListTags returns the scraped genre tags per favorite. It feeds the shared
+	// video read model's tag filter; a favorite with no saved tags is absent.
+	ListTags() (map[int64][]string, error)
 	// SearchTitleIDs returns the favorites whose 番号, original title or
 	// Chinese translation matches the keyword.
 	SearchTitleIDs(keyword string) ([]int64, error)
@@ -265,6 +268,50 @@ func (r *SQLiteRepository) ListTitles() (map[int64]ScrapedTitle, error) {
 			return nil, fmt.Errorf("scan jav title: %w", err)
 		}
 		out[videoID] = title
+	}
+	return out, rows.Err()
+}
+
+// ListTags returns the scraped genre tags per favorite for the shared video
+// read model. Trashed favorites are excluded; override_mode is deliberately not
+// filtered here because "skip" suppresses the card's code/title, not the work's
+// genre metadata (the similar-films scorer reads tags the same way). Values are
+// trimmed and deduplicated while keeping the provider's order, so the filter
+// shows a stable list instead of a map-iteration order.
+func (r *SQLiteRepository) ListTags() (map[int64][]string, error) {
+	rows, err := r.db.Query(`
+		SELECT j.video_id, j.tags_json
+		FROM video_jav j
+		JOIN videos v ON v.id = j.video_id AND v.deleted_at IS NULL
+		WHERE TRIM(j.tags_json) NOT IN ('', '[]')`)
+	if err != nil {
+		return nil, fmt.Errorf("list jav tags: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make(map[int64][]string)
+	for rows.Next() {
+		var videoID int64
+		var raw string
+		if err := rows.Scan(&videoID, &raw); err != nil {
+			return nil, fmt.Errorf("scan jav tags: %w", err)
+		}
+		seen := make(map[string]struct{})
+		tags := make([]string, 0, 8)
+		for _, tag := range parseStringList(raw) {
+			tag = strings.TrimSpace(tag)
+			if tag == "" {
+				continue
+			}
+			if _, dup := seen[tag]; dup {
+				continue
+			}
+			seen[tag] = struct{}{}
+			tags = append(tags, tag)
+		}
+		if len(tags) > 0 {
+			out[videoID] = tags
+		}
 	}
 	return out, rows.Err()
 }

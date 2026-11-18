@@ -896,6 +896,78 @@ func TestListVideosCarriesRestoredBadge(t *testing.T) {
 	}
 }
 
+// The facade attaches scraped genre tags to the favorites both transports read;
+// the tag filter depends on this projection, and an unscraped favorite must
+// still answer with an empty array rather than null.
+func TestListVideosCarriesScrapedTags(t *testing.T) {
+	db, err := sql.Open(database.DriverName, "file:"+filepath.Join(t.TempDir(), "app.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := database.Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+
+	discard := slog.New(slog.NewTextHandler(io.Discard, nil))
+	vr := video.NewSQLiteRepository(db)
+	lib := New(
+		video.NewService(vr, nil, t.TempDir(), discard, nil),
+		group.NewService(&memGroupRepo{members: map[int64][]int64{}}, discard, nil),
+		discard,
+	)
+	javRepo := jav.NewSQLiteRepository(db)
+	svc := jav.NewService(javRepo, vr, nil, "", nil, discard, 1)
+	t.Cleanup(svc.Close)
+	lib.SetJavService(svc)
+
+	tagged := &video.Video{
+		Path:     filepath.Join(t.TempDir(), "tagged.mp4"),
+		FileName: "tagged.mp4",
+		Status:   video.StatusAvailable,
+	}
+	plain := &video.Video{
+		Path:     filepath.Join(t.TempDir(), "plain.mp4"),
+		FileName: "plain.mp4",
+		Status:   video.StatusAvailable,
+	}
+	for _, v := range []*video.Video{tagged, plain} {
+		if err := vr.Create(v); err != nil {
+			t.Fatal(err)
+		}
+		if err := javRepo.PrepareTask(v.ID, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := javRepo.SaveSuccess(tagged.ID, jav.Metadata{Code: "ABC-123", Tags: []string{"Action", "Drama"}}, "filename", 1); err != nil {
+		t.Fatal(err)
+	}
+
+	videos, err := lib.ListVideos()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := make(map[int64]video.Video, len(videos))
+	for _, v := range videos {
+		byID[v.ID] = v
+	}
+	if want := []string{"Action", "Drama"}; !reflect.DeepEqual(byID[tagged.ID].Tags, want) {
+		t.Errorf("ListVideos tags = %v, want %v", byID[tagged.ID].Tags, want)
+	}
+	if got := byID[plain.ID].Tags; got == nil || len(got) != 0 {
+		t.Errorf("unscraped tags = %#v, want an empty non-nil array", got)
+	}
+
+	single, err := lib.Video(tagged.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Action", "Drama"}; !reflect.DeepEqual(single.Tags, want) {
+		t.Errorf("Video tags = %v, want %v", single.Tags, want)
+	}
+}
+
 // Without a JAV service the read model is still complete; the code is simply
 // absent, which is what makes the UI fall back to the file name.
 func TestListVideosWithoutJavServiceLeavesCodeEmpty(t *testing.T) {

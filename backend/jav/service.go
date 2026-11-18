@@ -256,6 +256,11 @@ func (s *Service) Codes() (map[int64]string, error) { return s.repo.ListCodes() 
 // call site: a failure only leaves cards on their file-name fallback.
 func (s *Service) Titles() (map[int64]ScrapedTitle, error) { return s.repo.ListTitles() }
 
+// TagsByVideo returns the scraped genre tags per favorite for the shared video
+// read model. The read is best effort at the call site, like Codes and Titles:
+// a favorite with no saved tags is simply absent from the map.
+func (s *Service) TagsByVideo() (map[int64][]string, error) { return s.repo.ListTags() }
+
 // SearchTitleIDs resolves a keyword against 番号, original titles and Chinese
 // translations, so a card shown as 【番号】译名 can be found by typing either
 // half even when the file name says nothing about it.
