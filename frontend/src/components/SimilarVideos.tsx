@@ -44,9 +44,13 @@ export default function SimilarVideos({
               padding={0}
             >
               <div className="aspect-[3/4] w-full bg-[#111114]">
+                {/* A wide packshot carries the front and back cover side by side;
+                    a centre crop lands on the seam and shows half of each. Align
+                    right so the poster shows the front cover, the same offset the
+                    library cards use. */}
                 <img
                   alt=""
-                  className="size-full object-cover"
+                  className="size-full object-cover object-right"
                   draggable={false}
                   src={videoCoverURL(item.video)}
                 />
