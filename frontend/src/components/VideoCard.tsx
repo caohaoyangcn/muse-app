@@ -24,7 +24,6 @@ export default function VideoCard({
   onOpen,
   onPlay,
   onContextMenu,
-  onDragStart,
   onLike,
 }: {
   video: Video;
@@ -33,7 +32,6 @@ export default function VideoCard({
   onOpen: (video: Video) => void;
   onPlay: (video: Video) => void;
   onContextMenu: (e: React.MouseEvent, video: Video) => void;
-  onDragStart: (e: React.DragEvent, video: Video) => void;
   onLike: (id: number) => void;
 }) {
   // A favorite on an unplugged drive is not a missing file: the card keeps its
@@ -67,12 +65,10 @@ export default function VideoCard({
           "border-[var(--accent)] shadow-[0_0_0_1px_var(--accent),0_4px_16px_rgba(124,92,255,0.25)]",
       )}
       data-video-id={video.id}
-      draggable
       label={videoDisplayName(video)}
       onClick={() => onOpen(video)}
       onContextMenu={(event) => onContextMenu(event, video)}
       onDoubleClick={() => onPlay(video)}
-      onDragStart={(event) => onDragStart(event, video)}
       padding={0}
     >
       <span
@@ -80,7 +76,6 @@ export default function VideoCard({
           "absolute left-2 top-2 z-[5] opacity-0 transition group-hover:opacity-100",
           selected && "opacity-100",
         )}
-        onDragStart={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <CheckboxInput

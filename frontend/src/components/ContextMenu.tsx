@@ -1,8 +1,6 @@
-import type { Group, Video } from "../types";
+import type { Video } from "../types";
 import { DropdownMenuItem } from "../ui/astryx";
 import { MenuSurface } from "../ui/menu";
-import { videoDisplayName } from "../utils/videoName";
-import GroupFlyout from "./GroupFlyout";
 
 export type MenuAction = "open" | "details" | "openFolder" | "copyPath" | "edit" | "remove";
 
@@ -10,9 +8,7 @@ interface ContextMenuProps {
   x: number;
   y: number;
   video: Video;
-  groups: Group[];
   onAction: (action: MenuAction, video: Video) => void;
-  onSaveGroups: (videoId: number, groupIds: number[]) => Promise<void>;
   onClose: () => void;
 }
 
@@ -27,7 +23,6 @@ const ITEMS: { action: MenuAction; label: string; danger?: boolean }[] = [
 
 /**
  * Right-click menu for a library card, built from Astryx DropdownMenu rows.
- * "添加到分组…" is an Astryx submenu; membership saves live through GroupFlyout.
  * Network-drive favorites have no local folder to reveal, so the two path rows
  * say what they actually do (open in OpenList / copy the remote path).
  */
@@ -35,9 +30,7 @@ export default function ContextMenu({
   x,
   y,
   video,
-  groups,
   onAction,
-  onSaveGroups,
   onClose,
 }: ContextMenuProps) {
   return (
@@ -56,12 +49,6 @@ export default function ContextMenu({
           variant={item.danger ? "destructive" : "default"}
         />
       ))}
-      <GroupFlyout
-        groups={groups}
-        onSave={onSaveGroups}
-        videoId={video.id}
-        videoName={videoDisplayName(video)}
-      />
     </MenuSurface>
   );
 }

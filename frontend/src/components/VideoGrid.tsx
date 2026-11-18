@@ -32,7 +32,6 @@ export default function VideoGrid({
   onOpen,
   onPlay,
   onContextMenu,
-  onDragStart,
   onLike,
   cardSize,
 }: {
@@ -43,7 +42,6 @@ export default function VideoGrid({
   onOpen: (video: Video) => void;
   onPlay: (video: Video) => void;
   onContextMenu: (e: React.MouseEvent, video: Video) => void;
-  onDragStart: (e: React.DragEvent, video: Video) => void;
   onLike: (id: number) => void;
   cardSize: CardSize;
 }) {
@@ -98,7 +96,6 @@ export default function VideoGrid({
             onOpen={onOpen}
             onPlay={onPlay}
             onContextMenu={onContextMenu}
-            onDragStart={onDragStart}
             onLike={onLike}
           />
         ))}

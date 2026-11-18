@@ -10,7 +10,6 @@ import * as http from "./http";
 export const httpClient: MuseClient = {
   listVideos: () => http.listVideos(),
   searchVideos: (keyword) => http.listVideos(keyword),
-  listGroups: () => http.listGroups(),
   listActors: () => http.listActors(),
   videosByActor: (name) => http.videosByActor(name),
   similarVideos: (id, limit) => http.similarVideos(id, limit ?? 0),

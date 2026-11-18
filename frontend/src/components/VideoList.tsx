@@ -44,7 +44,6 @@ export default function VideoList({
   onOpen,
   onPlay,
   onContextMenu,
-  onDragStart,
   onLike,
   cardSize,
 }: {
@@ -55,7 +54,6 @@ export default function VideoList({
   onOpen: (video: Video) => void;
   onPlay: (video: Video) => void;
   onContextMenu: (e: React.MouseEvent, video: Video) => void;
-  onDragStart: (e: React.DragEvent, video: Video) => void;
   onLike: (id: number) => void;
   cardSize: CardSize;
 }) {
@@ -118,13 +116,11 @@ export default function VideoList({
                   "border-[var(--accent)] shadow-[0_0_0_1px_var(--accent),0_2px_10px_rgba(124,92,255,0.2)]",
               )}
               data-video-id={v.id}
-              draggable
               key={v.id}
               label={videoDisplayName(v)}
               onClick={() => onOpen(v)}
               onContextMenu={(event) => onContextMenu(event, v)}
               onDoubleClick={() => onPlay(v)}
-              onDragStart={(event) => onDragStart(event, v)}
               padding={0}
               variant="transparent"
             >
@@ -134,7 +130,6 @@ export default function VideoList({
               >
                 <span
                   className="flex shrink-0 items-center gap-2"
-                  onDragStart={(event) => event.stopPropagation()}
                   onMouseDown={(event) => event.stopPropagation()}
                 >
                   <CheckboxInput

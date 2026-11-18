@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client } from "../services/desktop";
 import { invalidate } from "../services/live";
 import type { ActorProfile, CardSize, SortDir, SortKey, Video, ViewMode } from "../types";
-import { beginVideoDrag } from "../utils/dragGhost";
 import { actorAvatarURL, actorProfileMeta as profileMeta } from "../utils/format";
 import { compareLastOpened } from "../utils/sortVideos";
 import { readCardSize, readViewMode, writeCardSize, writeViewMode } from "../utils/viewPrefs";
@@ -120,7 +119,6 @@ export default function ActorFilmsView({
     onOpen,
     onPlay,
     onContextMenu,
-    onDragStart: (e: React.DragEvent, v: Video) => beginVideoDrag(e, v, selectedIds),
     onLike: handleLike,
     cardSize,
   };

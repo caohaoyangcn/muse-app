@@ -1,27 +1,26 @@
-import type { Group, Video } from "../types";
-import { diskKey, diskLabel, type DiskOption } from "../utils/diskFilter";
+import type { Video } from "../types";
+import { diskKey, diskLabel, type DiskOption } from "./diskFilter";
 
 /**
- * The library's filter state. Every field is a multi-select: values inside one
- * field are a union (any of these actors), and fields combine with AND (a video
- * must match the chosen group, actor and disk sets).
+ * The library's filter state, shared by the desktop app and the LAN web client.
  *
- * Groups are the one field the HTTP layer can answer directly — membership
- * lives in the database, not on the Video read model — so the chosen group ids
- * take part in the fetch (see LibraryView). Actors and disks are derived from
- * the loaded rows and applied locally.
+ * Every field is a multi-select: values inside one field are a union (any of
+ * these tags), and fields combine with AND (a video must match the chosen tag,
+ * actor and disk sets). Tags are the scraped genre labels projected onto
+ * `Video.tags`; they replaced the old user-defined groups. Everything is
+ * derived from the rows already loaded, so no transport call is involved.
  */
 export interface LibraryFilters {
-  groupIds: number[];
+  tags: string[];
   actors: string[];
   /** Volume identity keys (`diskKey`), not display labels. */
   disks: string[];
 }
 
-export const NO_FILTERS: LibraryFilters = { groupIds: [], actors: [], disks: [] };
+export const NO_FILTERS: LibraryFilters = { tags: [], actors: [], disks: [] };
 
 export function filterCount(filters: LibraryFilters): number {
-  return filters.groupIds.length + filters.actors.length + filters.disks.length;
+  return filters.tags.length + filters.actors.length + filters.disks.length;
 }
 
 export function hasFilters(filters: LibraryFilters): boolean {
@@ -34,33 +33,36 @@ export function toggleFilterValue<T>(values: readonly T[], value: T): T[] {
 }
 
 /**
- * The local half of the filter. Groups are already resolved by the fetch, so
- * only the actor and disk sets are checked here. An empty set means "all".
+ * The local half of the filter. An empty field means "all"; a video must match
+ * every non-empty field. Tags and actors use a set so a duplicate label in the
+ * scrape data cannot count twice.
  */
 export function filterVideos(videos: Video[], filters: LibraryFilters): Video[] {
-  if (filters.actors.length === 0 && filters.disks.length === 0) return videos;
+  if (!hasFilters(filters)) return videos;
+  const tags = new Set(filters.tags);
   const actors = new Set(filters.actors);
   const disks = new Set(filters.disks);
   return videos.filter((video) => {
+    if (tags.size > 0 && !video.tags?.some((tag) => tags.has(tag))) return false;
     if (actors.size > 0 && !video.actors?.some((name) => actors.has(name))) return false;
     if (disks.size > 0 && !disks.has(diskKey(video.volumeRoot))) return false;
     return true;
   });
 }
 
-export interface ActorOption {
+export interface ValueOption {
   name: string;
-  /** Videos in the current (group/keyword narrowed) list that name this actor. */
+  /** Videos in the current (search/actor narrowed) list that carry this value. */
   count: number;
 }
 
-/** How many actor chips the filter sheet shows before offering 展示更多. */
-export const ACTOR_PAGE_SIZE = 20;
+/** How many option chips a filter surface shows before offering 展示更多. */
+export const OPTION_PAGE_SIZE = 20;
 
-/** One page of the actor section: what to render, and what is still behind 展示更多. */
-export interface ActorPage {
-  visible: ActorOption[];
-  /** Options matching the actor keyword, before the page limit. */
+/** One page of an option section: what to render, and what is still hidden. */
+export interface ValuePage {
+  visible: ValueOption[];
+  /** Options matching the keyword, before the page limit. */
   matched: number;
   /** Matches the page limit is still hiding. */
   hidden: number;
@@ -69,13 +71,16 @@ export interface ActorPage {
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 
 /**
- * Actor choices for the sheet, derived from the rows currently loaded. A video
- * names each actor once, so counting distinct videos is just a set per row.
+ * Counts distinct videos per value and orders by count then name. A video names
+ * each value once (a set per row), so listing a tag twice is still one film.
  */
-export function collectActorOptions(videos: readonly Video[]): ActorOption[] {
+function collectValueOptions(
+  videos: readonly Video[],
+  valuesOf: (video: Video) => readonly string[] | undefined,
+): ValueOption[] {
   const counts = new Map<string, number>();
   for (const video of videos) {
-    for (const name of new Set(video.actors ?? [])) {
+    for (const name of new Set(valuesOf(video) ?? [])) {
       if (!name) continue;
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
@@ -85,16 +90,26 @@ export function collectActorOptions(videos: readonly Video[]): ActorOption[] {
     .sort((a, b) => b.count - a.count || collator.compare(a.name, b.name));
 }
 
+/** Tag choices for the filter surface, derived from the rows currently loaded. */
+export function collectTagOptions(videos: readonly Video[]): ValueOption[] {
+  return collectValueOptions(videos, (video) => video.tags);
+}
+
+/** Actor choices for the filter surface, derived from the rows currently loaded. */
+export function collectActorOptions(videos: readonly Video[]): ValueOption[] {
+  return collectValueOptions(videos, (video) => video.actors);
+}
+
 /**
- * Keeps a selected actor visible when the rows have moved on (a group change or
- * a search may leave none of their films on screen). Dropping it silently would
+ * Keeps selected values visible when the rows have moved on (a search or a tag
+ * change may leave none of their films on screen). Dropping them silently would
  * leave an invisible condition filtering the list, so the option stays with a
  * zero count and a visible place in the sheet.
  */
-export function withSelectedActors(
-  options: readonly ActorOption[],
+export function withSelectedValues(
+  options: readonly ValueOption[],
   selected: readonly string[],
-): ActorOption[] {
+): ValueOption[] {
   const known = new Set(options.map((option) => option.name));
   const missing = selected
     .filter((name) => !known.has(name))
@@ -102,27 +117,42 @@ export function withSelectedActors(
   return missing.length === 0 ? [...options] : [...options, ...missing];
 }
 
+/** Tag-specific spelling of withSelectedValues. */
+export function withSelectedTags(
+  options: readonly ValueOption[],
+  selected: readonly string[],
+): ValueOption[] {
+  return withSelectedValues(options, selected);
+}
+
+/** Actor-specific spelling of withSelectedValues. */
+export function withSelectedActors(
+  options: readonly ValueOption[],
+  selected: readonly string[],
+): ValueOption[] {
+  return withSelectedValues(options, selected);
+}
+
 /**
- * The actor chips the sheet renders: the first `limit` matches of the keyword,
- * plus every selected actor.
- *
- * The pin matters: the sheet caps the list at 20, so a selection made earlier
- * (or one the keyword no longer matches) would otherwise vanish from the sheet
- * while still narrowing the library — a filter with no way to turn it off.
+ * The value chips a surface renders: the first `limit` matches of the keyword,
+ * plus every selected value. A selection made earlier (or one the keyword no
+ * longer matches) must stay visible while it still narrows the list.
  */
-export function pageActorOptions(
-  options: readonly ActorOption[],
+export function pageValueOptions(
+  options: readonly ValueOption[],
   selected: readonly string[],
   keyword: string,
-  limit: number = ACTOR_PAGE_SIZE,
-): ActorPage {
+  limit: number = OPTION_PAGE_SIZE,
+): ValuePage {
   const needle = keyword.trim().toLowerCase();
   const matched = needle
     ? options.filter((option) => option.name.toLowerCase().includes(needle))
     : [...options];
   const head = matched.slice(0, Math.max(limit, 0));
   const shown = new Set(head.map((option) => option.name));
-  const pinned = options.filter((option) => selected.includes(option.name) && !shown.has(option.name));
+  const pinned = options.filter(
+    (option) => selected.includes(option.name) && !shown.has(option.name),
+  );
   return {
     visible: [...head, ...pinned],
     matched: matched.length,
@@ -151,19 +181,19 @@ export function withSelectedDisks(
   }));
 }
 
-export type FilterChipKind = "group" | "actor" | "disk";
+export type FilterChipKind = "tag" | "actor" | "disk";
 
 /** One removable chip on the library home. */
 export interface FilterChip {
-  /** Category + value, stable across a label edit (a renamed group). */
+  /** Category + value, stable across a re-scrape. */
   id: string;
   kind: FilterChipKind;
-  value: number | string;
+  value: string;
   label: string;
 }
 
 const KIND_LABELS: Record<FilterChipKind, string> = {
-  group: "分组",
+  tag: "标签",
   actor: "演员",
   disk: "硬盘",
 };
@@ -173,25 +203,18 @@ export function chipKindLabel(kind: FilterChipKind): string {
 }
 
 /**
- * The applied conditions as chips, in the same order as the sheet's sections.
- * Chips are built from the selection, not from the current options, so a
- * selection survives a list that no longer contains it (or a group deletion)
- * and can still be removed.
+ * The applied conditions as chips, in the same order as the filter surface's
+ * sections. Chips are built from the selection, not from the current options,
+ * so a selection survives a list that no longer contains it and can still be
+ * removed.
  */
 export function buildFilterChips(
   filters: LibraryFilters,
-  groups: readonly Group[],
   disks: readonly DiskOption[],
 ): FilterChip[] {
-  const groupNames = new Map(groups.map((group) => [group.id, group.name]));
   const diskLabels = new Map(disks.map((option) => [option.key, diskOptionLabel(option)]));
   return [
-    ...filters.groupIds.map((id) => ({
-      id: `group:${id}`,
-      kind: "group" as const,
-      value: id,
-      label: groupNames.get(id) ?? `分组 ${id}`,
-    })),
+    ...filters.tags.map((name) => ({ id: `tag:${name}`, kind: "tag" as const, value: name, label: name })),
     ...filters.actors.map((name) => ({
       id: `actor:${name}`,
       kind: "actor" as const,
@@ -210,8 +233,8 @@ export function buildFilterChips(
 /** Removes one chip's condition without disturbing the rest of the selection. */
 export function removeFilterChip(filters: LibraryFilters, chip: FilterChip): LibraryFilters {
   switch (chip.kind) {
-    case "group":
-      return { ...filters, groupIds: filters.groupIds.filter((id) => id !== chip.value) };
+    case "tag":
+      return { ...filters, tags: filters.tags.filter((name) => name !== chip.value) };
     case "actor":
       return { ...filters, actors: filters.actors.filter((name) => name !== chip.value) };
     case "disk":

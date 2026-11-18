@@ -1,6 +1,6 @@
 // Types re-export the Wails-generated models so the bindings stay the single
 // source of truth for backend shapes.
-import { api, cloud, group, jav, main, server, tasks, video, watch } from "../wailsjs/go/models";
+import { api, cloud, jav, main, server, tasks, video, watch } from "../wailsjs/go/models";
 
 export type Video = video.Video;
 export type AddVideoResult = video.AddVideoResult;
@@ -8,10 +8,7 @@ export type AddVideoResult = video.AddVideoResult;
 export type TrashSnapshot = api.TrashSnapshot;
 /** 详情页底部「类似影片」的一项：影片本身、排序分数与推荐理由。 */
 export type SimilarVideo = api.SimilarVideo;
-export type Group = group.Group;
 export type ServerStartInfo = server.StartInfo;
-export type GroupSuggestion = api.GroupSuggestion;
-export type VideoGroupSuggestion = api.VideoGroupSuggestion;
 export type WatchedDir = watch.WatchedDir;
 /** 一个只读 WebDAV 网盘连接（不含密码）。 */
 export type CloudConnection = cloud.ConnectionView;
@@ -63,34 +60,22 @@ export type VideoStatus = "available" | "missing";
 export const STATUS_AVAILABLE: VideoStatus = "available";
 export const STATUS_MISSING: VideoStatus = "missing";
 
-// A library view is either all favorites, a single group, the scrape-task
-// board, the 后台任务 dashboard, the aggregated actor index, the 查重 (duplicate)
-// worklist, the recently-played history, or the search results. An individual
-// actor's film list is not a filter — it opens as its own workspace tab.
+// A library view is either all favorites, the scrape-task board, the 后台任务
+// dashboard, the aggregated actor index, the 查重 (duplicate) worklist, the
+// recently-played history, or the search results. Tags/actors/disks are
+// conditions on that list, not separate views. An individual actor's film list
+// is not a filter — it opens as its own workspace tab.
 export type ViewFilter =
   | { kind: "all" }
   | { kind: "recent" }
-  | { kind: "group"; id: number }
   | { kind: "scrapeTasks"; status: "queued" | "succeeded" | "failed" }
   | { kind: "tasks" }
   | { kind: "actors" }
   | { kind: "duplicates" }
   | { kind: "trash" };
 
-// Custom MIME type used to carry a video id during HTML5 drag & drop from a
-// video card to a sidebar group. Distinct from "text/plain" (which the sidebar
-// uses for group reordering) so the two drags never collide.
-export const MIME_VIDEO_DRAG = "application/x-video-drag";
-
-// Custom MIME type that carries a comma-separated list of video ids when a
-// multi-selected batch of cards is dragged (the selection set is dropped as a
-// whole). A single card drag still uses MIME_VIDEO_DRAG.
-export const MIME_VIDEO_DRAG_MULTI = "application/x-video-drag-multi";
-
 // Custom MIME type that carries an actor name when an actor chip is dragged
-// onto another chip to merge the two stage names (演员合并). Kept separate from
-// the video drags so dropping a chip is never mistaken for adding a film to a
-// group.
+// onto another chip to merge the two stage names (演员合并).
 export const MIME_ACTOR_DRAG = "application/x-actor-drag";
 
 // A workspace tab is the library home, one video detail tab (its id), or one

@@ -19,7 +19,6 @@ import type {
   BackgroundTasks,
   ContentDuplicateGroup,
   ContentScanStatus,
-  Group,
   JavDetail,
   JavDuplicateGroup,
   JavTask,
@@ -33,7 +32,6 @@ export interface MuseClient {
   // ---- library reads ----
   listVideos(): Promise<Video[]>;
   searchVideos(keyword: string): Promise<Video[]>;
-  listGroups(): Promise<Group[]>;
   listActors(): Promise<ActorSummary[]>;
   videosByActor(name: string): Promise<Video[]>;
   /** 详情页底部的「类似影片」：按相似度排序，limit 省略时由后端决定条数。 */
@@ -101,7 +99,6 @@ function bound(): MuseClient {
 export const client: MuseClient = {
   listVideos: () => bound().listVideos(),
   searchVideos: (keyword) => bound().searchVideos(keyword),
-  listGroups: () => bound().listGroups(),
   listActors: () => bound().listActors(),
   videosByActor: (name) => bound().videosByActor(name),
   similarVideos: (videoId, limit) => bound().similarVideos(videoId, limit),

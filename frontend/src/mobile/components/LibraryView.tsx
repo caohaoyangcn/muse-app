@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { Group, SortDir, SortKey, Video, ViewMode } from "../../types";
+import type { SortDir, SortKey, Video, ViewMode } from "../../types";
 import { collectDiskOptions } from "../../utils/diskFilter";
 import { compareLastOpened } from "../../utils/sortVideos";
-import { client, videosInGroup } from "../../services/web";
+import { client } from "../../services/web";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { cn } from "../../lib/utils";
 import {
-  IconButton,
   SegmentedControl,
   SegmentedControlItem,
   Toolbar,
@@ -15,18 +14,16 @@ import {
 import { Button } from "../../ui/button";
 import { Icon } from "../../ui/icon";
 import {
-  buildFilterChips,
-  chipKindLabel,
   collectActorOptions,
+  collectTagOptions,
   filterCount,
   filterVideos,
   NO_FILTERS,
-  removeFilterChip,
   withSelectedActors,
   withSelectedDisks,
-  type FilterChip,
+  withSelectedTags,
   type LibraryFilters,
-} from "../libraryFilters";
+} from "../../utils/libraryFilter";
 import {
   readSortDir,
   readSortKey,
@@ -37,16 +34,16 @@ import {
 } from "../prefs";
 import { FilterSheet } from "./FilterSheet";
 import { SortSheet } from "./SortSheet";
-import { SORT_LABELS } from "../sortOptions";
+import { SORT_LABELS, defaultSortDir } from "../../utils/sortOptions";
 import { VideoGrid, VideoList } from "./VideoGrid";
 import type { VideoMenuActions } from "../videoMenu";
 import { EmptyState, Spinner } from "../../ui/astryx";
+import { FilterChips } from "../../views/library/FilterChips";
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 
 // Stable identities for the empty answers.
 const NO_VIDEOS: Video[] = [];
-const NO_GROUPS: Group[] = [];
 
 /**
  * The library tab: a cinematic poster grid, one compact control line, the
@@ -84,55 +81,17 @@ export function LibraryView({
   const [sortOpen, setSortOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(readViewMode);
 
-  const groupIds = filters.groupIds;
-  const groupKey = groupIds.join(",");
-
-  // Search always spans the whole library (matching the desktop app); the group
-  // selection then intersects it by id. With no keyword the selected groups are
-  // the source list themselves, so no redundant full-library read is needed.
+  // Search always spans the whole library; tags, actors and disks narrow that
+  // list locally. There is no longer a server-side group selection: the tag
+  // dimensions live on the Video read model itself.
   const fetchLibrary = useCallback(async () => {
-    const basePromise: Promise<Video[] | null> = keyword
-      ? client.searchVideos(keyword)
-      : groupIds.length === 0
-        ? client.listVideos()
-        : Promise.resolve(null);
-    const [groupList, base, groupLists] = await Promise.all([
-      client.listGroups(),
-      basePromise,
-      Promise.all(groupIds.map((id) => videosInGroup(id))),
-    ]);
+    return keyword ? client.searchVideos(keyword) : client.listVideos();
+  }, [keyword]);
 
-    let videos: Video[];
-    if (groupIds.length > 0) {
-      const union = new Map<number, Video>();
-      for (const list of groupLists) {
-        for (const video of list ?? []) union.set(video.id, video);
-      }
-      videos = keyword ? (base ?? []).filter((video) => union.has(video.id)) : [...union.values()];
-    } else {
-      videos = base ?? NO_VIDEOS;
-    }
-    return { videos, groups: groupList ?? NO_GROUPS };
-  }, [keyword, groupIds]);
-
-  const { data, loading, error, reload } = useLiveQuery(
-    fetchLibrary,
-    `library:${groupKey}:${keyword}`,
-    { keepPreviousData: true },
-  );
-  const baseVideos = data?.videos ?? NO_VIDEOS;
-  const groups = data?.groups ?? NO_GROUPS;
-
-  // A group deleted on the desktop must not strand the phone behind a 404: drop
-  // ids that no longer exist once the group list has loaded.
-  useEffect(() => {
-    if (!data) return;
-    const known = new Set(groups.map((group) => group.id));
-    const kept = filters.groupIds.filter((id) => known.has(id));
-    if (kept.length !== filters.groupIds.length) {
-      onFiltersChange({ ...filters, groupIds: kept });
-    }
-  }, [data, groups, filters, onFiltersChange]);
+  const { data, loading, error, reload } = useLiveQuery(fetchLibrary, `library:${keyword}`, {
+    keepPreviousData: true,
+  });
+  const baseVideos = data ?? NO_VIDEOS;
 
   const sorted = useMemo(() => {
     const copy = [...baseVideos];
@@ -170,13 +129,17 @@ export function LibraryView({
         sortKey,
         sortDir,
         keyword,
-        groupKey,
+        filters.tags.join(","),
         filters.actors.join(","),
         filters.disks.join(","),
       ].join("|"),
-    [sortKey, sortDir, keyword, groupKey, filters.actors, filters.disks],
+    [sortKey, sortDir, keyword, filters.tags, filters.actors, filters.disks],
   );
 
+  const tagOptions = useMemo(
+    () => withSelectedTags(collectTagOptions(baseVideos), filters.tags),
+    [baseVideos, filters.tags],
+  );
   const actorOptions = useMemo(
     () => withSelectedActors(collectActorOptions(baseVideos), filters.actors),
     [baseVideos, filters.actors],
@@ -184,10 +147,6 @@ export function LibraryView({
   const diskOptions = useMemo(
     () => withSelectedDisks(collectDiskOptions(baseVideos), filters.disks),
     [baseVideos, filters.disks],
-  );
-  const chips = useMemo(
-    () => buildFilterChips(filters, groups, diskOptions),
-    [filters, groups, diskOptions],
   );
   const shown = useMemo(() => filterVideos(sorted, filters), [sorted, filters]);
   const count = filterCount(filters);
@@ -206,9 +165,11 @@ export function LibraryView({
   const setSort = useCallback((key: SortKey) => {
     setSortKey(key);
     writeSortKey(key);
-    // Changing the field resets to the field's natural "most relevant" first.
-    setSortDir("desc");
-    writeSortDir("desc");
+    // Changing the field returns to that field's natural first direction
+    // (newest/largest first, A→Z for 文件名).
+    const dir = defaultSortDir(key);
+    setSortDir(dir);
+    writeSortDir(dir);
   }, []);
   const setDir = useCallback((dir: SortDir) => {
     setSortDir(dir);
@@ -297,27 +258,13 @@ export function LibraryView({
           variant="transparent"
         />
 
-        {chips.length > 0 ? (
-          <div className="mt-2 flex items-center gap-2">
-            <div className="filter-scroll flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
-              {chips.map((chip) => (
-                <AppliedChip
-                  chip={chip}
-                  key={chip.id}
-                  onRemove={() => onFiltersChange(removeFilterChip(filters, chip))}
-                />
-              ))}
-            </div>
-            <Button
-              className="h-7 shrink-0 rounded-full px-2 text-[11px] text-[var(--muted)]"
-              onClick={resetFilters}
-              size="sm"
-              variant="ghost"
-            >
-              清除
-            </Button>
-          </div>
-        ) : null}
+        <FilterChips
+          className="mt-2"
+          disks={diskOptions}
+          filters={filters}
+          onChange={onFiltersChange}
+          onClear={resetFilters}
+        />
       </div>
 
       <div className="scroll-area min-h-0 flex-1 px-3 pb-4 pt-2" data-scroll-key="main" ref={scrollRef}>
@@ -345,7 +292,7 @@ export function LibraryView({
             }
           />
         ) : shown.length === 0 ? (
-          <EmptyState description="试试减少演员或硬盘筛选" title="没有符合条件的视频" />
+          <EmptyState description="试试减少标签、演员或硬盘筛选" title="没有符合条件的视频" />
         ) : viewMode === "grid" ? (
           <VideoGrid
             actions={actions}
@@ -371,11 +318,11 @@ export function LibraryView({
         actors={actorOptions}
         disks={diskOptions}
         filters={filters}
-        groups={groups}
         onChange={onFiltersChange}
         onClose={() => onFilterOpenChange(false)}
         onReset={resetFilters}
         open={filterOpen}
+        tags={tagOptions}
       />
 
       <SortSheet
@@ -387,25 +334,5 @@ export function LibraryView({
         sortKey={sortKey}
       />
     </div>
-  );
-}
-
-function AppliedChip({ chip, onRemove }: { chip: FilterChip; onRemove: () => void }) {
-  return (
-    <span className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-[rgba(124,92,255,0.45)] bg-[rgba(124,92,255,0.14)] pl-2.5 pr-1">
-      <span className="text-[10px] leading-none text-[var(--muted)]">{chipKindLabel(chip.kind)}</span>
-      <span className="max-w-[9rem] truncate text-[11px] leading-none text-[var(--text)]">
-        {chip.label}
-      </span>
-      <IconButton
-        className="size-5 min-w-0 shrink-0 rounded-full p-0 text-[var(--muted)]"
-        icon={<Icon className="size-3" name="x" />}
-        label={`移除筛选：${chipKindLabel(chip.kind)} ${chip.label}`}
-        onClick={onRemove}
-        size="sm"
-        tooltip="移除筛选"
-        variant="ghost"
-      />
-    </span>
   );
 }

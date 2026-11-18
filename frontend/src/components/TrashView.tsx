@@ -301,7 +301,6 @@ function TrashRow({
       : video.deleteReason === "archived"
         ? "网盘归档"
         : "手动移入";
-  const groupNames = video.trashGroupNames ?? [];
   const deletedAt = video.deletedAt > 0 ? formatDateTime(video.deletedAt) : "未知时间";
   const remaining = remainingDays(video.deletedAt, retentionDays);
   const restoreBlocked = video.sourceId > 0 && !video.sourceEnabled;
@@ -318,9 +317,6 @@ function TrashRow({
               ? `归档于 ${deletedAt} · 长期保留${video.sourceName ? ` · ${video.sourceName}` : ""}`
               : `移入于 ${deletedAt} · ${remaining > 0 ? `${remaining} 天后自动清理` : "即将清理"}`}
           </span>
-          {groupNames.length > 0 ? (
-            <span className="mt-1 block truncate">原分组：{groupNames.join(" / ")}</span>
-          ) : null}
           <span className="mt-1 block truncate" title={video.remotePath || video.path}>
             {video.remotePath || video.path}
           </span>

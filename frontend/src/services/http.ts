@@ -14,7 +14,6 @@ import type {
   BackgroundTasks,
   ContentDuplicateGroup,
   ContentScanStatus,
-  Group,
   JavDetail,
   JavDuplicateGroup,
   JavTask,
@@ -69,14 +68,6 @@ export function listVideos(keyword?: string): Promise<Video[]> {
 
 export function getVideo(id: number): Promise<Video> {
   return request<Video>(`${API}/videos/${id}`);
-}
-
-export function listGroups(): Promise<Group[]> {
-  return request<Group[]>(`${API}/groups`);
-}
-
-export function videosInGroup(id: number): Promise<Video[]> {
-  return request<Video[]>(`${API}/groups/${id}/videos`);
 }
 
 /** The scraped metadata for a favorite, or null when it has not been scraped. */

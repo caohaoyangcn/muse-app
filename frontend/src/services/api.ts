@@ -1,5 +1,4 @@
 import {
-  AddVideoToGroup,
   AddVideos,
   AddWatchDir,
   AddCloudVideos,
@@ -10,11 +9,8 @@ import {
   CloudStorageAvailable,
   DeleteCloudConnection,
   CopyPath,
-  CreateGroup,
-  DeleteGroup,
   DeleteVideoPermanently,
   EmptyTrash as EmptyTrashBinding,
-  EnsureVideoIn4KGroup,
   GetTrashRetentionDays,
   GetServerPort,
   GetScrapeProxy,
@@ -26,7 +22,6 @@ import {
   OpenCloudPage,
   SaveCloudConnection,
   TestCloudConnection,
-  ListGroups,
   ListVideos,
   ListWatchDirs,
   LikeVideo,
@@ -41,24 +36,17 @@ import {
   RemoveVideo,
   RemoveWatchDir,
   RestoreVideo,
-  RenameGroup,
-  ReorderGroups,
   RescanWatchDirs,
   RefreshVolumes,
   SearchVideos,
   ServerStatus,
-  SetGroupParent,
   SetServerPort,
   SetScrapeProxy,
   SetTourSeen,
   SetVideoCover,
-  SetVideoGroups,
   StartServer,
   UpdateVideoInfo,
   StopServer,
-  SuggestGroupsForVideos,
-  VideoGroupIDs,
-  VideosInGroup,
   VideoJav,
   VideoJavTask,
   ListJavTaskOverviews,
@@ -107,11 +95,9 @@ import type {
   ActorProfile,
   ActorSummary,
   BackgroundTasks,
-  Group,
   ServerStartInfo,
   SimilarVideo,
   Video,
-  VideoGroupSuggestion,
   WatchedDir,
   JavDetail,
   JavTask,
@@ -320,37 +306,6 @@ export const scanFileStatuses = (): Promise<FileScanStatus> => ScanFileStatuses(
 export const fileScanStatus = (): Promise<FileScanStatus> => FileScanStatusBinding();
 
 export const pickVideoFiles = (): Promise<string[] | null> => PickVideoFiles();
-
-// ---- Grouping API (分组) ----
-
-export const listGroups = (): Promise<Group[]> => ListGroups();
-
-export const createGroup = (name: string): Promise<Group> => CreateGroup(name);
-
-export const renameGroup = (id: number, name: string): Promise<Group> => RenameGroup(id, name);
-
-export const deleteGroup = (id: number): Promise<void> => DeleteGroup(id);
-
-export const reorderGroups = (ids: number[]): Promise<void> => ReorderGroups(ids);
-
-export const setGroupParent = (id: number, parentId: number | null): Promise<Group> =>
-  SetGroupParent(id, parentId);
-
-export const videoGroupIDs = (videoId: number): Promise<number[]> => VideoGroupIDs(videoId);
-
-export const setVideoGroups = (videoId: number, groupIds: number[]): Promise<void> =>
-  SetVideoGroups(videoId, groupIds);
-
-export const addVideoToGroup = (videoId: number, groupId: number): Promise<void> =>
-  AddVideoToGroup(videoId, groupId);
-
-export const videosInGroup = (groupId: number): Promise<number[]> => VideosInGroup(groupId);
-
-export const suggestGroupsForVideos = (paths: string[]): Promise<VideoGroupSuggestion[]> =>
-  SuggestGroupsForVideos(paths);
-
-export const ensureVideoIn4KGroup = (videoId: number): Promise<void> =>
-  EnsureVideoIn4KGroup(videoId);
 
 // ---- Server mode (局域网访问) ----
 

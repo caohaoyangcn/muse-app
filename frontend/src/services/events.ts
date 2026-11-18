@@ -25,7 +25,6 @@ const EVENTS = [
   "video:removed", // a favorite was permanently deleted
   "video:trashed", // a favorite moved to the recycle bin
   "video:restored", // a favorite came back from the recycle bin
-  "group:changed",
   "watch:scanned", // a folder-watch pass imported or relinked files
   "cloud:status", // a WebDAV source became reachable or went offline
   "cloud:source:archived", // a source was retired and its favorites moved to the archive

@@ -9,7 +9,6 @@ import * as api from "./api";
 export const wailsClient: MuseClient = {
   listVideos: () => api.listVideos(),
   searchVideos: (keyword) => api.searchVideos(keyword),
-  listGroups: () => api.listGroups(),
   listActors: () => api.listActors(),
   videosByActor: (name) => api.videosByActor(name),
   similarVideos: (id, limit) => api.similarVideos(id, limit ?? 0),

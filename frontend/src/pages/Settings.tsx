@@ -119,7 +119,7 @@ function GuideSection({ onStartTour }: { onStartTour: () => void }) {
     <section className="max-w-[640px]">
       <h2 className="mb-1.5 text-base font-semibold">新手引导</h2>
       <p className="mb-5 max-w-[560px] leading-relaxed text-[var(--muted)]">
-        用一两分钟把界面和常用操作过一遍。引导会依次指给你看分组、添加视频、刮削、手机访问，
+        用一两分钟把界面和常用操作过一遍。引导会依次指给你看标签筛选、添加视频、刮削、手机访问，
         以及目录监控和代理这两处新手最容易卡住的地方。
       </p>
 
@@ -337,7 +337,7 @@ function TrashSection() {
     <section className="max-w-[640px]">
       <h2 className="mb-1.5 text-base font-semibold">回收站</h2>
       <p className="mb-5 max-w-[560px] leading-relaxed text-[var(--muted)]">
-        从收藏中移除的影片会先进入回收站，而不是立刻销毁记录。回收站保留收藏的标题、点赞、分组和刮削资料；
+        从收藏中移除的影片会先进入回收站，而不是立刻销毁记录。回收站保留收藏的标题、点赞和刮削资料；
         超过保留期后，应用会在启动时或后台定时检查中自动彻底清理。清理只删除 Muse 的记录与生成的缩略图/封面，
         <strong className="text-[var(--text)]">原始视频文件永远不会被删除</strong>。
       </p>

@@ -1,4 +1,4 @@
-import type { Group, Video } from "../types";
+import type { Video } from "../types";
 
 /**
  * Test fixtures for the view-model layer.
@@ -34,6 +34,7 @@ export function makeVideo(overrides: Partial<Video> = {}): Video {
     javTitle: "",
     javTitleZh: "",
     actors: [],
+    tags: [],
     mosaicRestored: false,
     customCoverAt: 0,
     likeCount: 0,
@@ -53,19 +54,6 @@ export function makeVideo(overrides: Partial<Video> = {}): Video {
     deleteReason: "",
     archiveSourceName: "",
     trashGroupNames: [],
-    ...overrides,
-  };
-}
-
-export function makeGroup(overrides: Partial<Group> = {}): Group {
-  return {
-    id: 1,
-    name: "分组",
-    position: 0,
-    parentId: undefined,
-    videoCount: 0,
-    createdAt: 1_700_000_000_000,
-    updatedAt: 1_700_000_000_000,
     ...overrides,
   };
 }

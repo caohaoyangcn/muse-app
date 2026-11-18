@@ -1,18 +1,9 @@
 import type { CardSize, SortDir, SortKey, ViewMode } from "../types";
 import { cn } from "../lib/utils";
+import { SORT_FIELDS } from "../utils/sortOptions";
 import { ToggleButton, ToggleButtonGroup, Toolbar, toggleChipClass } from "../ui/astryx";
 import { Icon } from "../ui/icon";
 import ViewControls from "./ViewControls";
-
-// The sort fields with the direction each one starts in when first selected
-// (newest first, largest first, A→Z).
-const OPTIONS: { key: SortKey; label: string; defaultDir: SortDir }[] = [
-  { key: "createdAt", label: "添加时间", defaultDir: "desc" },
-  { key: "lastOpenedAt", label: "最近播放", defaultDir: "desc" },
-  { key: "fileSize", label: "文件大小", defaultDir: "desc" },
-  { key: "fileName", label: "文件名", defaultDir: "asc" },
-  { key: "likeCount", label: "点赞数", defaultDir: "desc" },
-];
 
 /**
  * Toolbar row for sort options. Clicking a field sorts by it (with that field's
@@ -49,7 +40,7 @@ export default function SortBar({
       onChange(sortBy, dir);
       return;
     }
-    const option = OPTIONS.find((candidate) => candidate.key === value);
+    const option = SORT_FIELDS.find((candidate) => candidate.key === value);
     if (option) onChange(option.key, option.defaultDir);
   };
 
@@ -79,7 +70,7 @@ export default function SortBar({
             type="single"
             value={sortBy}
           >
-            {OPTIONS.map((option) => {
+            {SORT_FIELDS.map((option) => {
               const active = option.key === sortBy;
               return (
                 <ToggleButton

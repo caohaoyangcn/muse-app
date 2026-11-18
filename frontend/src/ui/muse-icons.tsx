@@ -215,8 +215,27 @@ export function PlusIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export function StarIcon(props: SVGProps<SVGSVGElement>) {
+export function TagIcon(props: SVGProps<SVGSVGElement>) {
   return (
+    <svg
+      fill="none"
+      height="100%"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="100%"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path d="M3 12.1V4.5A1.5 1.5 0 0 1 4.5 3h7.6a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8l-6.1 6.1a2 2 0 0 1-2.8 0l-7-7a2 2 0 0 1-.6-1.4Z"/>
+      <circle cx="8" cy="8" r="1.3"/>
+    </svg>
+  );
+}
+
+export function StarIcon(props: SVGProps<SVGSVGElement>) {  return (
     <svg
       fill="none"
       height="100%"

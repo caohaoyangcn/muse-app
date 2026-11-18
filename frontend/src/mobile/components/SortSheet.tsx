@@ -11,7 +11,7 @@ import {
 import { Icon } from "../../ui/icon";
 import { BottomSheet } from "../../ui/sheet";
 import { SheetHeading } from "./SheetHeading";
-import { SORT_KEYS, SORT_LABELS } from "../sortOptions";
+import { SORT_KEYS, SORT_LABELS } from "../../utils/sortOptions";
 
 /**
  * The library's sort sheet — the toolbar's second control, separate from 筛选.

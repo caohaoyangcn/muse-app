@@ -230,11 +230,6 @@ function TrashRow({
               ? `${reason} · 长期保留${video.sourceName ? ` · ${video.sourceName}` : ""}`
               : `${reason} · ${remaining > 0 ? `${remaining} 天后清理` : "即将清理"}`}
           </span>
-          {(video.trashGroupNames?.length ?? 0) > 0 ? (
-            <span className="mt-0.5 block truncate">
-              原分组：{video.trashGroupNames?.join(" / ")}
-            </span>
-          ) : null}
         </>
       }
       endContent={

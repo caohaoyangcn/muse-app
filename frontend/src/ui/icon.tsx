@@ -15,6 +15,7 @@ import {
   ListIcon,
   PlusIcon,
   StarIcon,
+  TagIcon,
   UsersIcon,
 } from "./muse-icons";
 
@@ -40,6 +41,7 @@ registerIcons({
   "muse:list-checks": <ListChecksIcon />,
   "muse:plus": <PlusIcon />,
   "muse:star": <StarIcon />,
+  "muse:tag": <TagIcon />,
   "muse:users": <UsersIcon />,
 });
 
@@ -72,6 +74,7 @@ export type MuseIconName =
   | "list-checks"
   | "plus"
   | "star"
+  | "tag"
   | "users";
 
 export function Icon({

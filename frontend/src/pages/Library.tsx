@@ -6,16 +6,13 @@ import CloudBrowserDialog from "../components/CloudBrowserDialog";
 import ActorIndexView from "../components/ActorIndexView";
 import ConfirmDialog from "../components/ConfirmDialog";
 import ContextMenu, { type MenuAction } from "../components/ContextMenu";
-import DiskFilterBar from "../components/DiskFilterBar";
 import DropOverlay from "../components/DropOverlay";
 import DuplicateView from "../components/DuplicateView";
 import EditVideoDialog from "../components/EditVideoDialog";
 import { EmptyState, IconButton, Spinner } from "../ui/astryx";
 import ErrorBoundary from "../ui/error-boundary";
 import FileScanButton from "../components/FileScanButton";
-import GroupContextMenu, { type GroupMenuAction } from "../components/GroupContextMenu";
-import GroupDialog from "../components/GroupDialog";
-import GroupSuggestDialog, { type SuggestFile } from "../components/GroupSuggestDialog";
+import FilterDialog from "../components/FilterDialog";
 import SearchBar from "../components/SearchBar";
 import ServerBar from "../components/ServerBar";
 import Sidebar from "../components/Sidebar";
@@ -32,13 +29,12 @@ import VideoList from "../components/VideoList";
 import VideoDetailPanel from "../components/VideoDetailPanel";
 import RecentlyPlayedView from "../components/RecentlyPlayedView";
 import WorkspaceTabs, { type WorkspaceTabItem } from "../components/WorkspaceTabs";
-import { client, addVideoToGroup, addVideos, addWatchDir, copyPath, createGroup, deleteGroup, listCloudConnections, openContainingFolder, openCloudPage, openVideo, pickVideoFiles, pickWatchDir, refreshStatus, refreshVolumes, renameGroup, reorderGroups, setGroupParent, setVideoGroups, suggestGroupsForVideos, videosInGroup } from "../services/desktop";
+import { client, addVideos, addWatchDir, copyPath, listCloudConnections, openContainingFolder, openCloudPage, openVideo, pickVideoFiles, pickWatchDir, refreshStatus, refreshVolumes } from "../services/desktop";
 import { invalidate } from "../services/live";
 import { useLiveQuery } from "../hooks/useLiveQuery";
 import type {
   AddVideoResult,
   CardSize,
-  Group,
   SortDir,
   SortKey,
   Video,
@@ -48,18 +44,28 @@ import type {
 } from "../types";
 import { actorTabID, actorTabName } from "../types";
 import { baseName } from "../utils/format";
-import { beginVideoDrag } from "../utils/dragGhost";
 import {
   collectDiskOptions,
-  filterVideosByDisk,
-  withSelectedDisks,
-  type DiskOption,
 } from "../utils/diskFilter";
-import { filterVideosByKeyword } from "../utils/videoFilter";
+import {
+  buildFilterChips,
+  chipKindLabel,
+  collectActorOptions,
+  collectTagOptions,
+  filterCount,
+  filterVideos,
+  NO_FILTERS,
+  toggleFilterValue,
+  withSelectedActors,
+  withSelectedDisks,
+  withSelectedTags,
+  type LibraryFilters,
+} from "../utils/libraryFilter";
 import { groupRecentlyPlayed } from "../utils/recent";
 import { compareLastOpened } from "../utils/sortVideos";
 import { planVideoTabGroups } from "../utils/tabGroups";
 import { videoDisplayName } from "../utils/videoName";
+import { FilterChips } from "../views/library/FilterChips";
 import {
   readCardSize,
   readSortDir,
@@ -91,7 +97,6 @@ const MAX_OPEN_TABS = 12;
 // Stable identities for the empty answers, so the memos below do not recompute
 // on every render before the first read lands.
 const NO_VIDEOS: Video[] = [];
-const NO_GROUPS: Group[] = [];
 
 export default function Library({
   onOpenSettings,
@@ -105,14 +110,14 @@ export default function Library({
   // per keystroke; cleared instantly.
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [filter, setFilter] = useState<ViewFilter>({ kind: "all" });
-  // Keyword typed into the group view's own filter box. Separate from the
-  // header `keyword`, which stays a whole-library query: this one only narrows
-  // the group already on screen.
-  const [groupKeyword, setGroupKeyword] = useState("");
+  // Tags, actors and disks narrow the loaded list. They live in the shell (not
+  // localStorage) because they describe the current view, not a display
+  // preference; a user switching views starts from the unfiltered list.
+  const [filters, setFilters] = useState<LibraryFilters>(NO_FILTERS);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [menu, setMenu] = useState<{ x: number; y: number; video: Video } | null>(null);
-  const [groupMenu, setGroupMenu] = useState<{ x: number; y: number; group: Group } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Video | null>(null);
   const [missingOpen, setMissingOpen] = useState<Video | null>(null);
   const [editVideo, setEditVideo] = useState<Video | null>(null);
@@ -161,11 +166,6 @@ export default function Library({
   // must show the box has rendered (the box is unmounted on some panels).
   const [searchFocusToken, setSearchFocusToken] = useState(0);
   const [dragActive, setDragActive] = useState(false);
-  const [groupDialog, setGroupDialog] = useState<
-    { mode: "create" } | { mode: "rename"; group: Group } | null
-  >(null);
-  const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
-  const [suggestFiles, setSuggestFiles] = useState<SuggestFile[] | null>(null);
   const [addSourceOpen, setAddSourceOpen] = useState(false);
   const [cloudBrowserOpen, setCloudBrowserOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -179,10 +179,6 @@ export default function Library({
   const [view, setView] = useState<ViewMode>(readViewMode);
   // Card width in px, shared by both view modes and remembered the same way.
   const [cardSize, setCardSize] = useState<CardSize>(readCardSize);
-  // 硬盘筛选：canonical volume key -> root as the read model spelled it. Kept in
-  // component state (not localStorage) because it is a way of looking at the
-  // list, not a display preference; it starts at "全部".
-  const [selectedDisks, setSelectedDisks] = useState<Map<string, string>>(() => new Map());
 
   const toastSeq = useRef(0);
   const reportSeq = useRef(0);
@@ -220,14 +216,10 @@ export default function Library({
     return () => window.clearTimeout(timer);
   }, [keyword]);
 
-  // The list read model: the whole library, or one group's members. A search
-  // replaces the source with its results, as before.
+  // The list read model: the whole library or a search result. Tags, actors
+  // and disks narrow it locally; there is no server-side group selection.
   const fetchLibraryVideos = useCallback(async (view: ViewFilter, search: string) => {
     const found = search ? await client.searchVideos(search) : await client.listVideos();
-    if (view.kind === "group") {
-      const ids = new Set(await videosInGroup(view.id));
-      return found.filter((v) => ids.has(v.id));
-    }
     // 最近播放 is a history: a search narrows it instead of escaping to the
     // whole library, so the heading always describes what is on screen.
     if (view.kind === "recent") return found.filter((v) => v.lastOpenedAt > 0);
@@ -247,7 +239,7 @@ export default function Library({
   // covers even when a panel owns the content.
   const library = useLiveQuery(
     () => fetchLibraryVideos(filter, debouncedKeyword),
-    `library:${filter.kind}:${filter.kind === "group" ? filter.id : 0}:${debouncedKeyword}`,
+    `library:${filter.kind}:${debouncedKeyword}`,
     {
       enabled: !panelView || detailTabs.length > 0,
       keepPreviousData: true,
@@ -255,17 +247,12 @@ export default function Library({
     },
   );
 
-  const groupsQuery = useLiveQuery(client.listGroups, "groups", {
-    onError: (e) => pushNotice({ kind: "error", message: "加载分组失败", details: [String(e)] }),
-  });
-
   // Only the add-source dialog needs this summary. It is a local read (the
   // backend never touches the network here), so it is cheap enough to keep
   // mounted and refresh after cloud:status invalidations.
   const cloudQuery = useLiveQuery(listCloudConnections, "cloud-connections");
 
   const videos = library.data ?? NO_VIDEOS;
-  const groups = groupsQuery.data ?? NO_GROUPS;
   const loading = library.loading;
 
   // The list is the only read model carrying a full record, so it is what keeps
@@ -645,49 +632,28 @@ export default function Library({
     writeSortDir(dir);
   }, []);
 
-  // Each chip toggles one disk independently, so the result is the union of
-  // the selected disks. Clicking "全部" clears the whole set.
-  const toggleDisk = useCallback((option: DiskOption) => {
-    setSelectedDisks((prev) => {
-      const next = new Map(prev);
-      if (next.has(option.key)) next.delete(option.key);
-      else next.set(option.key, option.root);
-      return next;
-    });
+  // Every condition runs over the already-loaded list. Options come from the
+  // unfiltered list (before tags/actors/disks), so a user can always add a
+  // condition even when the current intersection is empty.
+  const tagOptions = useMemo(
+    () => withSelectedTags(collectTagOptions(videos), filters.tags),
+    [videos, filters.tags],
+  );
+  const actorOptions = useMemo(
+    () => withSelectedActors(collectActorOptions(videos), filters.actors),
+    [videos, filters.actors],
+  );
+  const diskOptions = useMemo(
+    () => withSelectedDisks(collectDiskOptions(videos), filters.disks),
+    [videos, filters.disks],
+  );
+  const shownVideos = useMemo(() => filterVideos(sortedVideos, filters), [sortedVideos, filters]);
+
+  const toggleTag = useCallback((tag: string) => {
+    setFilters((prev) => ({ ...prev, tags: toggleFilterValue(prev.tags, tag) }));
   }, []);
 
-  const clearDisks = useCallback(() => setSelectedDisks(new Map()), []);
-
-  // The empty-result screen can clear everything that narrowed the list at
-  // once, including the group view's own keyword.
-  const clearViewFilters = useCallback(() => {
-    setGroupKeyword("");
-    setSelectedDisks(new Map());
-  }, []);
-
-  // The group view's own keyword narrows the list already loaded for that group.
-  // Only group views have the box; every other view sees the unfiltered list.
-  const visibleVideos = useMemo(
-    () => (filter.kind === "group" ? filterVideosByKeyword(sortedVideos, groupKeyword) : sortedVideos),
-    [sortedVideos, groupKeyword, filter.kind],
-  );
-  const groupFiltering = filter.kind === "group" && groupKeyword.trim() !== "";
-
-  // 硬盘筛选 works on the loaded list, like the group keyword and the sort. The
-  // options describe the disks that list currently holds; a selected disk that
-  // a group or a search no longer contains stays selected (and visible with a
-  // zero count) until the user clears it.
-  const diskOptions = useMemo(() => collectDiskOptions(videos), [videos]);
-  const diskBarOptions = useMemo(
-    () => withSelectedDisks(diskOptions, selectedDisks),
-    [diskOptions, selectedDisks],
-  );
-  const selectedDiskKeys = useMemo(() => new Set(selectedDisks.keys()), [selectedDisks]);
-  const diskFiltering = selectedDisks.size > 0;
-  const shownVideos = useMemo(
-    () => filterVideosByDisk(visibleVideos, selectedDiskKeys),
-    [visibleVideos, selectedDiskKeys],
-  );
+  const clearViewFilters = useCallback(() => setFilters(NO_FILTERS), []);
 
   // The age buckets are relative to "now", so a page left open has to move an
   // entry across a boundary eventually. A minute is far below the smallest
@@ -705,22 +671,14 @@ export default function Library({
     [filter.kind, shownVideos, recentNow],
   );
 
-  const selectedDiskLabels = useMemo(
-    () => diskBarOptions.filter((disk) => selectedDiskKeys.has(disk.key)).map((disk) => disk.label),
-    [diskBarOptions, selectedDiskKeys],
+  const filtering = filterCount(filters) > 0;
+  const filterSummary = useMemo(
+    () =>
+      buildFilterChips(filters, diskOptions)
+        .map((chip) => `${chipKindLabel(chip.kind)} ${chip.label}`)
+        .join("、"),
+    [filters, diskOptions],
   );
-  const filtering = groupFiltering || diskFiltering;
-  const filterSummary = [
-    groupFiltering ? `关键词“${groupKeyword.trim()}”` : "",
-    diskFiltering ? `硬盘 ${selectedDiskLabels.join("、")}` : "",
-  ].filter(Boolean).join(" 和 ");
-
-  // Switching groups (or leaving the group views) must not carry the previous
-  // group's filter along; re-clicking the same group deliberately keeps it.
-  const activeGroupKey = filter.kind === "group" ? filter.id : null;
-  useEffect(() => {
-    setGroupKeyword("");
-  }, [activeGroupKey]);
 
   // A filter can hide an already-selected card. Drop those ids so the "已选"
   // badge and any batch action only ever describe videos the user can see.
@@ -789,8 +747,8 @@ export default function Library({
   }, []);
 
   // The list re-reads itself when `filter` (part of the query key) changes:
-  // clicking a group shows its videos immediately, and clicking All Favorites
-  // returns to the full library.
+  // 最近播放 and 全部收藏 each load their own source list; tags/actors/disks then
+  // narrow it locally.
 
   const showAddSummary = useCallback(
     (results: AddVideoResult[] | null) => {
@@ -830,35 +788,6 @@ export default function Library({
     [pushNotice],
   );
 
-  // After a batch add, infer per-file group suggestions from file names and open
-  // the suggestion carousel for files that have any. Resolution-based grouping
-  // (4K) is handled automatically by the backend, so only name matches appear.
-  const showGroupSuggestions = useCallback(
-    async (results: AddVideoResult[]) => {
-      // A reconnected file is not a new one: it went through these rules when it
-      // was first added, so suggesting its groups again is noise.
-      const added = results.filter((r) => r.success && r.videoId && !r.relocated);
-      if (added.length === 0) return;
-      try {
-        const byPath = new Map(added.map((r) => [r.path, r.videoId!]));
-        const suggestions = await suggestGroupsForVideos(added.map((r) => r.path));
-        const files: SuggestFile[] = suggestions
-          .filter((s) => s.suggested.length > 0)
-          .map((s) => {
-            const videoId = byPath.get(s.path) ?? 0;
-            if (!videoId) return null;
-            return { videoId, path: s.path, fileName: s.fileName, suggested: s.suggested };
-          })
-          .filter((f): f is SuggestFile => f !== null);
-        if (files.length > 0) setSuggestFiles(files);
-      } catch (e) {
-        // Suggestions are purely additive — a failure never blocks the add flow.
-        pushNotice({ kind: "error", message: "获取分组建议失败", details: [String(e)] });
-      }
-    },
-    [pushNotice],
-  );
-
   // Data freshness is handled once in services/events.ts; this subscription is
   // only what the user needs to be *told* about a volume reconciliation that
   // removed records (or deliberately kept them).
@@ -889,16 +818,6 @@ export default function Library({
     );
     return off;
   }, [pushNotice]);
-
-  const handleApplySuggestedGroups = useCallback(
-    async (videoId: number, groupIds: number[]) => {
-      // The video is freshly added, so each group is an independent, idempotent
-      // add (allows a file's existing memberships to be preserved).
-      await Promise.all(groupIds.map((gid) => addVideoToGroup(videoId, gid)));
-      invalidate();
-    },
-    [],
-  );
 
   // Data freshness is handled once in services/events.ts; this subscription is
   // only what the user needs to be *told* about a folder-watch pass.
@@ -947,14 +866,13 @@ export default function Library({
       try {
         const results = await addVideos(validPaths);
         showAddSummary(results);
-        void showGroupSuggestions(results);
         invalidate();
       } catch (e) {
         pushNotice({ kind: "error", message: "添加视频失败", details: [String(e)] });
       }
     }, true);
     return () => OnFileDropOff();
-  }, [showAddSummary, showGroupSuggestions, pushNotice]);
+  }, [showAddSummary, pushNotice]);
 
   // Drag-over visuals for file drops.
   useEffect(() => {
@@ -1000,7 +918,6 @@ export default function Library({
       if (paths && paths.length > 0) {
         const results = await addVideos(paths);
         showAddSummary(results);
-        void showGroupSuggestions(results);
         invalidate();
       }
     } catch (e) {
@@ -1050,7 +967,6 @@ export default function Library({
 
   const handleCloudAdded = (results: AddVideoResult[]) => {
     showAddSummary(results);
-    void showGroupSuggestions(results);
     invalidate();
   };
 
@@ -1130,7 +1046,7 @@ export default function Library({
       const panelView = filter.kind === "scrapeTasks" || filter.kind === "tasks" ||
         filter.kind === "actors" || filter.kind === "duplicates";
       if (
-        activeTab !== "library" || panelView || menu || groupMenu || groupDialog || deleteGroupTarget || suggestFiles ||
+        activeTab !== "library" || panelView || menu || filterOpen ||
         removeTarget || editVideo || tabMenu
       ) {
         return;
@@ -1213,8 +1129,7 @@ export default function Library({
     return () => window.removeEventListener("keydown", onKey);
   }, [
     selectedIds, shownVideos, view, filter, handleOpen, openDetail, activeTab,
-    menu, groupMenu, groupDialog, deleteGroupTarget, suggestFiles,
-    removeTarget, editVideo, tabMenu,
+    menu, filterOpen, removeTarget, editVideo, tabMenu,
   ]);
 
   // ---- Workspace tab navigation ----
@@ -1225,10 +1140,7 @@ export default function Library({
   // dialog keeps the keys for itself.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (
-        menu || groupMenu || tabMenu || groupDialog || deleteGroupTarget || suggestFiles ||
-        removeTarget || editVideo
-      ) {
+      if (menu || tabMenu || filterOpen || removeTarget || editVideo) {
         return;
       }
       const el = document.activeElement as HTMLElement | null;
@@ -1257,8 +1169,8 @@ export default function Library({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
-    goBack, goForward, cycleTab, menu, groupMenu, tabMenu, groupDialog, deleteGroupTarget,
-    suggestFiles, removeTarget, editVideo,
+    goBack, goForward, cycleTab, menu, tabMenu, filterOpen,
+    removeTarget, editVideo,
   ]);
 
   // ---- Ctrl/Cmd+F: find a video ----
@@ -1273,15 +1185,12 @@ export default function Library({
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
       if (e.key.toLowerCase() !== "f") return;
-      if (
-        menu || groupMenu || tabMenu || groupDialog || deleteGroupTarget || suggestFiles ||
-        removeTarget || editVideo
-      ) {
+      if (menu || tabMenu || filterOpen || removeTarget || editVideo) {
         return;
       }
       e.preventDefault();
       if (activeTab !== "library") selectTab("library");
-      if (filter.kind !== "all" && filter.kind !== "group" && filter.kind !== "recent") {
+      if (filter.kind !== "all" && filter.kind !== "recent") {
         setFilter({ kind: "all" });
       }
       setSearchFocusToken((n) => n + 1);
@@ -1289,8 +1198,8 @@ export default function Library({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
-    activeTab, filter.kind, selectTab, menu, groupMenu, tabMenu, groupDialog,
-    deleteGroupTarget, suggestFiles, removeTarget, editVideo,
+    activeTab, filter.kind, selectTab, menu, tabMenu, filterOpen,
+    removeTarget, editVideo,
   ]);
 
   const handleMenuAction = (action: MenuAction, video: Video) => {
@@ -1326,7 +1235,7 @@ export default function Library({
 
   // A failed removal means the record it named is not in the library any more,
   // so the screens showing it have to follow the backend: close its detail tab
-  // and re-read the list, groups and duplicate panels.
+  // and re-read the list and duplicate panels.
   const dropStaleCard = useCallback((id: number) => {
     closeDetail(id);
     dropFromSelection(id);
@@ -1342,8 +1251,8 @@ export default function Library({
       await client.removeVideo(target.id);
       closeDetail(target.id);
       pushNotice({ kind: "info", message: `已将“${videoDisplayName(target)}”移入回收站` });
-      // The removed video may have belonged to groups, and its card has to
-      // leave the grid, the sidebar counts and any open panel.
+      // The removed video's card has to leave the grid, the sidebar counts and
+      // any open panel.
       invalidate();
     } catch (e) {
       // The list this card came from is evidently out of date: the backend
@@ -1373,94 +1282,6 @@ export default function Library({
     }
   };
 
-  // ---- Group handlers ----
-
-  const handleCreateGroup = async (name: string) => {
-    setGroupDialog(null);
-    try {
-      await createGroup(name);
-      pushNotice({ kind: "success", message: `已创建分组“${name}”` });
-      invalidate();
-    } catch (e) {
-      pushNotice({ kind: "error", message: "创建分组失败", details: [String(e)] });
-    }
-  };
-
-  const handleRenameGroup = async (name: string) => {
-    const g = groupDialog?.mode === "rename" ? groupDialog.group : null;
-    setGroupDialog(null);
-    if (!g) return;
-    try {
-      await renameGroup(g.id, name);
-      pushNotice({ kind: "success", message: `已重命名为“${name}”` });
-      invalidate();
-    } catch (e) {
-      pushNotice({ kind: "error", message: "重命名分组失败", details: [String(e)] });
-    }
-  };
-
-  const confirmDeleteGroup = async () => {
-    if (!deleteGroupTarget) return;
-    const target = deleteGroupTarget;
-    setDeleteGroupTarget(null);
-    try {
-      await deleteGroup(target.id);
-      pushNotice({ kind: "info", message: `已删除分组“${target.name}”` });
-      // If the active view was this group, fall back to All Favorites.
-      setFilter((f) => (f.kind === "group" && f.id === target.id ? { kind: "all" } : f));
-      invalidate();
-    } catch (e) {
-      pushNotice({ kind: "error", message: "删除分组失败", details: [String(e)] });
-    }
-  };
-
-  const handleReorderGroups = async (order: Group[]) => {
-    groupsQuery.mutate(order); // optimistic UI
-    try {
-      await reorderGroups(order.map((g) => g.id));
-    } catch (e) {
-      pushNotice({ kind: "error", message: "调整顺序失败", details: [String(e)] });
-      groupsQuery.reload(); // restore authoritative order
-    }
-  };
-
-  // Parent/child relation (drag nesting or context-menu flyout). ParentId null
-  // detaches the group to the top level. Refreshes sidebar counts + the active
-  // view (whose video set is transitive through the hierarchy).
-  const handleSetGroupParent = useCallback(
-    async (id: number, parentId: number | null) => {
-      await setGroupParent(id, parentId);
-      invalidate();
-    },
-    [],
-  );
-
-  // The sidebar right-click menu delegates rename/delete to the existing
-  // dialogs; parent/child editing stays inside the flyout.
-  const handleGroupMenuAction = (action: GroupMenuAction) => {
-    const target = groupMenu?.group;
-    if (!target) return;
-    setGroupMenu(null);
-    if (action.kind === "rename") setGroupDialog({ mode: "rename", group: target });
-    else if (action.kind === "delete") setDeleteGroupTarget(target);
-  };
-
-  // Live-save: called on every group toggle from the context-menu flyout.
-  // Membership persists immediately; the grid and sidebar counts refresh.
-  const handleSaveGroups = useCallback(
-    async (videoId: number, groupIds: number[]) => {
-      await setVideoGroups(videoId, groupIds);
-      invalidate();
-    },
-    [],
-  );
-
-  // Start a drag from a card. The shared helper carries either the single id
-  // or the whole multi-selection and paints the custom drag ghost.
-  const handleVideoDragStart = (e: React.DragEvent, video: Video) => {
-    beginVideoDrag(e, video, selectedIds);
-  };
-
   // Like a video: the backend increments its counter (repeated likes stack).
   // The click only writes; the live query re-reads the count.
   const handleLike = useCallback(
@@ -1472,16 +1293,12 @@ export default function Library({
     [pushNotice],
   );
 
-  // Identity of the paged list. A different filter, sort, keyword or disk
+  // Identity of the paged list. A different filter, sort, keyword or condition
   // selection is a different list, and each one remembers how far it was paged.
   // The view mode is deliberately not part of it: grid and list use the same
   // page size, so switching between them keeps the same items on screen.
   const filterIdentity =
-    filter.kind === "group"
-      ? `group:${filter.id}`
-      : filter.kind === "scrapeTasks"
-        ? `scrapeTasks:${filter.status}`
-        : filter.kind;
+    filter.kind === "scrapeTasks" ? `scrapeTasks:${filter.status}` : filter.kind;
   const libraryKey = useMemo(
     () =>
       [
@@ -1490,10 +1307,11 @@ export default function Library({
         debouncedKeyword,
         sortBy,
         sortDir,
-        groupKeyword,
-        [...selectedDisks.keys()].sort().join(","),
+        [...filters.tags].sort().join(","),
+        [...filters.actors].sort().join(","),
+        [...filters.disks].sort().join(","),
       ].join("|"),
-    [filterIdentity, debouncedKeyword, sortBy, sortDir, groupKeyword, selectedDisks],
+    [filterIdentity, debouncedKeyword, sortBy, sortDir, filters],
   );
 
   // A new list starts at its top, not at whatever offset the previous one had
@@ -1511,7 +1329,7 @@ export default function Library({
 
   // Both views (grid/list) share the exact same data and interaction wiring.
   // `videos` is passed separately: the 最近播放 view renders one instance per
-  // age group. Declared after handleVideoDragStart, which it references.
+  // age group. Declared after the handlers it references.
   const videoItemProps = {
     memoryKey: libraryKey,
     selectedIds,
@@ -1522,42 +1340,17 @@ export default function Library({
       e.preventDefault();
       setMenu({ x: e.clientX, y: e.clientY, video: v });
     },
-    onDragStart: handleVideoDragStart,
     onLike: handleLike,
     // Card width in px, applied by both the card and the row renderers.
     cardSize,
   };
 
-  // Dropping a video onto a group adds it to that group (idempotent: already
-  // grouped videos produce no side effect). A drop carries either a single
-  // video or a multi-selected batch.
-  const handleDropVideo = async (group: Group, videoIds: number[]) => {
-    const batch = videoIds.length > 1;
-    const n = videoIds.length;
-    try {
-      await Promise.all(videoIds.map((videoId) => addVideoToGroup(videoId, group.id)));
-      if (batch) pushNotice({ kind: "success", message: `已将 ${n} 个视频添加到“${group.name}”` });
-      invalidate();
-    } catch (e) {
-      pushNotice({ kind: "error", message: "添加视频到分组失败", details: [String(e)] });
-    }
-  };
-
-  const activeGroupTitle =
-    filter.kind === "group" ? groups.find((g) => g.id === filter.id)?.name : null;
-
   // The list's own heading. It is the one piece of the toolbar that says where
   // the reader is; the count beside it stays secondary text.
-  const viewTitle =
-    filter.kind === "group"
-      ? (activeGroupTitle ?? "分组")
-      : filter.kind === "recent"
-        ? "最近播放"
-        : "全部收藏";
+  const viewTitle = filter.kind === "recent" ? "最近播放" : "全部收藏";
   const viewCountText = filtering
     ? `匹配 ${shownVideos.length} / 共 ${videos.length} 个视频`
     : `${videos.length} 个视频`;
-  const showDiskBar = diskBarOptions.length > 1 || selectedDisks.size > 0;
 
   // The actor currently shown in an actor tab, if the active tab is one.
   const activeActorName = actorTabName(activeTab);
@@ -1714,18 +1507,12 @@ export default function Library({
 
       <div className="flex min-h-0 flex-1">
         <Sidebar
-          groups={groups}
           filter={filter}
-          onCreate={() => setGroupDialog({ mode: "create" })}
+          filters={filters}
+          onOpenFilters={() => setFilterOpen(true)}
           onSelect={selectFilter}
-          onReorder={handleReorderGroups}
-          onSetParent={handleSetGroupParent}
-          onDropVideo={(group, videoIds) => void handleDropVideo(group, videoIds)}
-          onGroupContextMenu={(e, g) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setGroupMenu({ x: e.clientX, y: e.clientY, group: g });
-          }}
+          onToggleTag={toggleTag}
+          tagOptions={tagOptions}
         />
 
         <main
@@ -1803,43 +1590,39 @@ export default function Library({
                   </h2>
                   <span className="text-xs text-[var(--muted)]">{viewCountText}</span>
                   <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <Button
+                      aria-label={
+                        filterCount(filters) === 0
+                          ? "筛选"
+                          : `筛选，已选 ${filterCount(filters)} 个条件`
+                      }
+                      onClick={() => setFilterOpen(true)}
+                      size="sm"
+                      variant={filterCount(filters) > 0 ? "primary" : "default"}
+                    >
+                      筛选
+                      {filterCount(filters) > 0 ? (
+                        <span className="ml-1 tabular-nums">{filterCount(filters)}</span>
+                      ) : null}
+                    </Button>
                     <FileScanButton onReport={pushReport} />
-                    {filter.kind === "group" && (
-                      <SearchBar
-                        value={groupKeyword}
-                        onChange={setGroupKeyword}
-                        placeholder="筛选本组视频"
-                      />
-                    )}
                     {selectedIds.size > 0 && (
                       <span className="inline-flex items-center gap-2 rounded-full border border-[rgba(124,92,255,0.35)] bg-[rgba(124,92,255,0.12)] py-0.5 pl-3 pr-1.5">
                         <span className="whitespace-nowrap text-xs text-[var(--text)]">已选 {selectedIds.size} 个</span>
                         <Button size="sm" onClick={() => setSelectedIds(new Set())}>
                           取消选择
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => setGroupDialog({ mode: "create" })}
-                          title="先创建一个分组，再把选中的视频拖进去"
-                        >
-                          + 新建分组
-                        </Button>
                       </span>
                     )}
                   </div>
                 </div>
-                {showDiskBar && (
-                  <div className="mb-2 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    <DiskFilterBar
-                      options={diskBarOptions}
-                      selected={selectedDiskKeys}
-                      onToggle={toggleDisk}
-                      onClear={clearDisks}
-                      className="w-max"
-                    />
-                  </div>
-                )}
+                <FilterChips
+                  className="mb-2"
+                  disks={diskOptions}
+                  filters={filters}
+                  onChange={setFilters}
+                  onClear={clearViewFilters}
+                />
                 {filter.kind === "recent" ? (
                   <div className="mb-2 mt-2 flex justify-end">
                     <ViewControls
@@ -1945,24 +1728,21 @@ export default function Library({
           x={menu.x}
           y={menu.y}
           video={menu.video}
-          groups={groups}
           onAction={handleMenuAction}
-          onSaveGroups={handleSaveGroups}
           onClose={() => setMenu(null)}
         />
       )}
 
-      {groupMenu && (
-        <GroupContextMenu
-          x={groupMenu.x}
-          y={groupMenu.y}
-          group={groupMenu.group}
-          groups={groups}
-          onAction={handleGroupMenuAction}
-          onSetParent={handleSetGroupParent}
-          onClose={() => setGroupMenu(null)}
-        />
-      )}
+      <FilterDialog
+        actors={actorOptions}
+        disks={diskOptions}
+        filters={filters}
+        onChange={setFilters}
+        onClose={() => setFilterOpen(false)}
+        onReset={clearViewFilters}
+        open={filterOpen}
+        tags={tagOptions}
+      />
 
       {tabMenu && (
         <TabContextMenu
@@ -2012,37 +1792,6 @@ export default function Library({
             setEditVideo(v);
             invalidate();
           }}
-        />
-      )}
-
-      {groupDialog && (
-        <GroupDialog
-          title={groupDialog.mode === "create" ? "新建分组" : "重命名分组"}
-          initialName={groupDialog.mode === "rename" ? groupDialog.group.name : ""}
-          confirmLabel={groupDialog.mode === "create" ? "创建" : "重命名"}
-          cancelLabel="取消"
-          onConfirm={groupDialog.mode === "create" ? handleCreateGroup : handleRenameGroup}
-          onCancel={() => setGroupDialog(null)}
-        />
-      )}
-
-      {deleteGroupTarget && (
-        <ConfirmDialog
-          title="删除分组"
-          message={`确定删除分组“${deleteGroupTarget.name}”吗？\n\n组内视频会被保留——仅删除该分组。其子分组会变为顶层分组。`}
-          confirmLabel="删除分组"
-          cancelLabel="取消"
-          danger
-          onConfirm={() => void confirmDeleteGroup()}
-          onCancel={() => setDeleteGroupTarget(null)}
-        />
-      )}
-
-      {suggestFiles && (
-        <GroupSuggestDialog
-          files={suggestFiles}
-          onApplyGroups={handleApplySuggestedGroups}
-          onClose={() => setSuggestFiles(null)}
         />
       )}
 

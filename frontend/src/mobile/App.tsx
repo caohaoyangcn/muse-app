@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Video } from "../types";
-import { NO_FILTERS, type LibraryFilters } from "./libraryFilters";
+import { NO_FILTERS, type LibraryFilters } from "../utils/libraryFilter";
 import ErrorBoundary from "../ui/error-boundary";
 import { Drawer, DrawerHeader, DrawerRow, DrawerSection } from "../ui/drawer";
 import { IconButton } from "../ui/astryx";
@@ -644,7 +644,7 @@ export default function App() {
         </nav>
 
         <div className="border-t border-[var(--border)] px-4 py-3 text-[11px] leading-relaxed text-[var(--muted)]">
-          刮削、添加收藏与分组整理在桌面端完成。
+          刮削与添加收藏在桌面端完成；标签筛选两端都可以用。
         </div>
       </Drawer>
 
