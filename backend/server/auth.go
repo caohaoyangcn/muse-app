@@ -27,9 +27,10 @@ const (
 
 	// loginMaxFailures/loginWindow throttle password guessing. The key has 80
 	// bits of entropy, so this only stops a noisy client from hammering the
-	// log; it is not what makes guessing infeasible.
-	loginMaxFailures = 5
-	loginWindow      = 5 * time.Minute
+	// log; it is not what makes guessing infeasible. The allowance is generous
+	// enough for a few typos in the 16-character key.
+	loginMaxFailures = 10
+	loginWindow      = 10 * time.Minute
 	maxLoginTracked  = 4096
 )
 
