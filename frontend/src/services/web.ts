@@ -4,4 +4,15 @@
 // 但桌面端用另一套实现**的东西：媒体 URL 拼装、按 id 取单条收藏、播放记账。
 // 错误类型 `ApiError` 也在此，壳用它判断"服务端给了可展示的文案"。
 export { client } from "./client";
-export { ApiError, coverURL, getVideo, markVideoOpened } from "./http";
+export {
+  ApiError,
+  UnauthorizedError,
+  coverURL,
+  currentAccessKey,
+  getVideo,
+  loginWithKey,
+  logout,
+  markVideoOpened,
+  onSessionLost,
+  sessionKey,
+} from "./http";

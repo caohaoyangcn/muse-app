@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "./App";
+import { AuthGate } from "./AuthGate";
 import ErrorBoundary from "../ui/error-boundary";
 import { AppTheme } from "../ui/theme";
 import { configureClient } from "../services/client";
@@ -16,7 +17,9 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AppTheme>
       <ErrorBoundary scope="Muse Video" variant="page">
-        <App />
+        <AuthGate>
+          <App />
+        </AuthGate>
       </ErrorBoundary>
     </AppTheme>
   </StrictMode>,

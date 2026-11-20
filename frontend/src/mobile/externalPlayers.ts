@@ -1,4 +1,5 @@
 import type { Video } from "../types";
+import { currentAccessKey } from "../services/web";
 
 export type ExternalPlayerID = "infuse" | "vlc";
 
@@ -37,9 +38,18 @@ export function isIOSDevice(): boolean {
   return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
-/** Absolute URL fetched by the native player over the same LAN connection. */
+/**
+ * Absolute URL fetched by the native player over the same LAN connection.
+ *
+ * A native player cannot send the session cookie, so the access key travels in
+ * the query string. The server only accepts a query key on `/stream/`, which is
+ * exactly this URL; rotating the key invalidates copied links.
+ */
 export function externalStreamURL(videoID: number): string {
-  return new URL(`/stream/video/${videoID}`, window.location.origin).toString();
+  const url = new URL(`/stream/video/${videoID}`, window.location.origin);
+  const key = currentAccessKey();
+  if (key) url.searchParams.set("key", key);
+  return url.toString();
 }
 
 export function playerByID(id: ExternalPlayerID): ExternalPlayer {

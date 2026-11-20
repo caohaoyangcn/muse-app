@@ -28,6 +28,31 @@ const API = "/api";
 /** An error carrying the server's user-facing message (the `error` field). */
 export class ApiError extends Error {}
 
+/**
+ * A 401: the LAN shell must stop showing data and ask for the access key again.
+ * A subclass so existing `instanceof ApiError` handling keeps working.
+ */
+export class UnauthorizedError extends ApiError {}
+
+// The access key is kept in memory only. The server's HttpOnly cookie
+// authenticates every request; this copy exists so a stream URL handed to a
+// native player (which cannot send that cookie) can carry it.
+let accessKey = "";
+let sessionLost: (() => void) | null = null;
+
+/** The key of the current session, or "" before login. */
+export function currentAccessKey(): string {
+  return accessKey;
+}
+
+/** Registers the shell's reaction to a 401. Returns an unsubscribe function. */
+export function onSessionLost(listener: () => void): () => void {
+  sessionLost = listener;
+  return () => {
+    if (sessionLost === listener) sessionLost = null;
+  };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
@@ -45,10 +70,76 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // Non-JSON error body: keep the status-based message.
     }
+    if (res.status === 401 && !path.startsWith(`${API}/session`)) {
+      sessionLost?.();
+      throw new UnauthorizedError(message);
+    }
     throw new ApiError(message);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+// ---------- session ----------
+
+/**
+ * Asks the server whether this browser already holds the key. Returns the key
+ * (needed for external-player URLs) or null when the login screen must show.
+ */
+export async function sessionKey(): Promise<string | null> {
+  let res: Response;
+  try {
+    res = await fetch(`${API}/session`, { cache: "no-store" });
+  } catch {
+    throw new ApiError("无法连接到服务，请确认桌面端局域网服务仍在运行");
+  }
+  if (res.status === 401) {
+    accessKey = "";
+    return null;
+  }
+  if (!res.ok) {
+    throw new ApiError(`请求失败（${res.status}）`);
+  }
+  const body = (await res.json()) as { authenticated?: boolean; key?: string };
+  if (!body?.authenticated) {
+    accessKey = "";
+    return null;
+  }
+  accessKey = body.key ?? "";
+  return accessKey;
+}
+
+/** Proves the access key; the server installs the HttpOnly session cookie. */
+export async function loginWithKey(key: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(`${API}/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+  } catch {
+    throw new ApiError("无法连接到服务，请确认桌面端局域网服务仍在运行");
+  }
+  if (!res.ok) {
+    let message = res.status === 401 ? "访问口令错误" : `请求失败（${res.status}）`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body?.error) message = body.error;
+    } catch {
+      // Non-JSON error body: keep the status-based message.
+    }
+    throw new ApiError(message);
+  }
+  const body = (await res.json()) as { key?: string };
+  accessKey = body?.key ?? "";
+  return accessKey;
+}
+
+/** Ends this browser's session. The shell returns to the login screen. */
+export function logout(): void {
+  accessKey = "";
+  void fetch(`${API}/session`, { method: "DELETE" }).catch(() => undefined);
 }
 
 function jsonRequest<T>(path: string, method: string, body?: unknown): Promise<T> {
