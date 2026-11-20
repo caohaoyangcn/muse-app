@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { client, checkJavCodes, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getLLMSettings, setLLMSettings, clearLLMAPIKey, testLLMSettings, translateMissingTitles, retranslateAllTitles, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
+import { client, checkJavCodes, getServerPort, serverStatus, setServerPort, listWatchDirs, addWatchDir, removeWatchDir, pickWatchDir, rescanWatchDirs, getJavBusCookieStatus, getLanAccessKey, rotateLanAccessKey, setJavBusCookie, clearJavBusCookie, getFC2CookieStatus, setFC2Cookie, clearFC2Cookie, getLLMSettings, setLLMSettings, clearLLMAPIKey, testLLMSettings, translateMissingTitles, retranslateAllTitles, getScrapeProxy, setScrapeProxy, getTrashRetentionDays, setTrashRetentionDays, purgeExpiredTrash, scrapeVideosJav, listCloudConnections, archiveCloudConnection, enableCloudConnection, saveCloudConnection, deleteCloudConnection, testCloudConnection, cloudStorageAvailable } from "../services/desktop";
 import type {
   CloudConnection,
   CloudConnectionInput,
@@ -174,11 +174,24 @@ function ServerSection() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [accessKey, setAccessKey] = useState("");
+  const [revealKey, setRevealKey] = useState(false);
+  const [keyCopied, setKeyCopied] = useState(false);
+  const [keyNotice, setKeyNotice] = useState<string | null>(null);
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const [rotating, setRotating] = useState(false);
+  const [confirmRotate, setConfirmRotate] = useState(false);
+
   const load = useCallback(async () => {
     try {
-      const [current, status] = await Promise.all([getServerPort(), serverStatus()]);
+      const [current, status, key] = await Promise.all([
+        getServerPort(),
+        serverStatus(),
+        getLanAccessKey(),
+      ]);
       setPort(String(current));
       setRunning(status?.running ?? false);
+      setAccessKey(key ?? "");
     } catch (e) {
       setError(String(e));
     } finally {
@@ -209,11 +222,38 @@ function ServerSection() {
     }
   };
 
+  const copyKey = async () => {
+    try {
+      await navigator.clipboard.writeText(accessKey);
+      setKeyCopied(true);
+      window.setTimeout(() => setKeyCopied(false), 1500);
+    } catch {
+      setKeyError("复制失败，请点击「显示」后手动选择口令");
+    }
+  };
+
+  const rotate = async () => {
+    setConfirmRotate(false);
+    setRotating(true);
+    setKeyError(null);
+    setKeyNotice(null);
+    try {
+      const next = await rotateLanAccessKey();
+      setAccessKey(next);
+      setRevealKey(true);
+      setKeyNotice("已更换口令。所有手机和已复制的播放地址需要重新输入新口令。");
+    } catch (e) {
+      setKeyError(String(e));
+    } finally {
+      setRotating(false);
+    }
+  };
+
   return (
     <section className="max-w-[640px]">
       <h2 className="mb-1.5 text-base font-semibold">服务器</h2>
       <p className="mb-5 max-w-[560px] leading-relaxed text-[var(--muted)]">
-        应用启动时会自动开启局域网 Web 服务器，顶部会显示手机可访问的地址。服务器使用固定端口，方便你记住访问地址；修改端口后需重新启动服务器才生效。
+        应用启动时会自动开启局域网 Web 服务器，顶部会显示手机可访问的地址（含访问口令）。服务器使用固定端口，方便你记住访问地址；修改端口后需重新启动服务器才生效。
       </p>
 
       {loading ? (
@@ -261,10 +301,61 @@ function ServerSection() {
           )}
           {saved && <p className="mt-2.5 text-[13px] text-[#7ad9a2]">已保存 ✓</p>}
           {error && <p className="mt-2.5 text-[13px] text-[var(--danger)]">{error}</p>}
+
+          <div className="mt-8 border-t border-[var(--border)] pt-6">
+            <h3 className="mb-1.5 text-sm font-semibold">访问口令</h3>
+            <p className="mb-3 max-w-[520px] text-[13px] leading-relaxed text-[var(--muted)]">
+              浏览、串流、缩略图和所有写操作都需要这个口令。手机首次打开时输入一次，之后由浏览器记住；口令只在这台电脑上显示。
+            </p>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <code className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2 font-mono text-sm tracking-[0.08em]">
+                {accessKey
+                  ? revealKey
+                    ? groupedKey(accessKey)
+                    : "••••-••••-••••-••••"
+                  : "加载中…"}
+              </code>
+              <Button onClick={() => setRevealKey((value) => !value)} disabled={!accessKey}>
+                {revealKey ? "隐藏" : "显示"}
+              </Button>
+              <Button onClick={() => void copyKey()} disabled={!accessKey}>
+                {keyCopied ? "已复制 ✓" : "复制"}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => setConfirmRotate(true)}
+                disabled={!accessKey || rotating}
+              >
+                {rotating ? "更换中…" : "更换口令"}
+              </Button>
+            </div>
+            {keyNotice && <p className="mt-2.5 text-[13px] text-[#7ad9a2]">{keyNotice}</p>}
+            {keyError && <p className="mt-2.5 text-[13px] text-[var(--danger)]">{keyError}</p>}
+            <p className="mt-2.5 text-[13px] text-[var(--muted)]">
+              轮换后所有设备与已复制的播放地址立即失效，适合怀疑口令外泄时使用。
+            </p>
+          </div>
         </div>
+      )}
+
+      {confirmRotate && (
+        <ConfirmDialog
+          title="更换访问口令"
+          message="所有手机、平板和已复制的播放地址会立即失效，需要在下次访问时输入新口令。确定更换？"
+          confirmLabel="更换口令"
+          cancelLabel="取消"
+          danger
+          onConfirm={() => void rotate()}
+          onCancel={() => setConfirmRotate(false)}
+        />
       )}
     </section>
   );
+}
+
+/** Displays the key in the groups the phone form shows, for easier transcribing. */
+function groupedKey(key: string): string {
+  return key.toUpperCase().replace(/(.{4})(?=.)/g, "$1-");
 }
 
 function TrashSection() {

@@ -39,6 +39,7 @@ import {
   RestoreVideo,
   RescanWatchDirs,
   RefreshVolumes,
+  RotateLanAccessKey,
   SearchVideos,
   ServerStatus,
   SetServerPort,
@@ -78,6 +79,7 @@ import {
   SetTrashRetentionDays,
   ClearJavBusCookie,
   GetJavBusCookieStatus,
+  GetLanAccessKey,
   SetJavBusCookie,
   ClearLLMAPIKey,
   GetLLMSettings,
@@ -316,6 +318,12 @@ export const startServer = (port: number): Promise<ServerStartInfo> => StartServ
 export const stopServer = (): Promise<void> => StopServer();
 
 export const serverStatus = (): Promise<ServerStartInfo> => ServerStatus();
+
+/** 局域网访问口令：手机首次访问时输入一次，之后由浏览器会话记住。 */
+export const getLanAccessKey = (): Promise<string> => GetLanAccessKey();
+
+/** 更换访问口令；所有已登录设备与已复制的播放地址立即失效。 */
+export const rotateLanAccessKey = (): Promise<string> => RotateLanAccessKey();
 
 // ---- Settings (设置) ----
 export const getServerPort = (): Promise<number> => GetServerPort();

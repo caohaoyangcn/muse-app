@@ -63,6 +63,20 @@ export default function ServerBar() {
   };
 
   const url = info?.urls?.find((u) => !u.startsWith("http://localhost:"));
+  // The address the phone should open carries the key: the mobile shell logs in
+  // on arrival and then drops the parameter from the address bar, so the user
+  // never has to type the 16 characters. The bare IP still works, but lands on
+  // the login form.
+  const loginURL = (() => {
+    if (!url) return "";
+    try {
+      const target = new URL(`${url}/`);
+      if (info?.key) target.searchParams.set("key", info.key);
+      return target.toString();
+    } catch {
+      return url;
+    }
+  })();
   const noLanAddress = info?.running && !url;
   const startError = info?.error && info.error !== "not running" ? info.error : "";
 
@@ -74,12 +88,12 @@ export default function ServerBar() {
             <Button
               className="max-w-[260px] truncate border-[var(--border)] text-xs"
               disabled={copied}
-              onClick={() => void copy(url)}
+              onClick={() => void copy(loginURL)}
               size="sm"
-              title={`${url} — 点击复制`}
+              title={`${loginURL} — 点击复制含访问口令的手机地址`}
               variant="ghost"
             >
-              {copied ? "已复制 ✓" : `📱 ${url.replace(/^https?:\/\//, "")}`}
+              {copied ? "已复制（含口令）✓" : `📱 ${url.replace(/^https?:\/\//, "")}`}
             </Button>
           ) : (
             <span
