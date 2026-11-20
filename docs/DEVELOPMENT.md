@@ -153,6 +153,10 @@ npm run build:mobile   # 产物写入 backend/server/webui/（入库，go:embed 
 
 读写端点均为 `api.Library` 门面的薄封装，桌面端与移动端共用同一份业务逻辑。
 
+**会话**
+
+- `GET /api/session`（已登录返回 `{authenticated, key}`，未登录 401）、`POST /api/session`（`{"key": "…"}` 换取 HttpOnly Cookie）、`DELETE /api/session`（清除 Cookie）
+
 **读**
 
 - `GET /api/videos`（支持 `?search=`）、`GET /api/videos/{id}`
@@ -172,7 +176,9 @@ npm run build:mobile   # 产物写入 backend/server/webui/（入库，go:embed 
 - `GET /stream/video/{id}`（Range；始终返回原始文件，由专用播放器客户端解码）
 - `GET /thumbnails/{id}`、`GET /covers/jav/{id}`、`GET /avatars/{name}`
 
-> ⚠️ 写端点**无鉴权**，同网段任何设备可调用（见 `TODO.md`）。
+> 🔐 `/api/*`（除 `/api/session` 与只读的 `/api/extension/check`）、`/stream/*`、`/thumbnails/*`、`/covers/*`、`/avatars/*` 都需要访问口令：HttpOnly Cookie `muse_lan_key`、`Authorization: Bearer <key>`，或**仅限 `/stream/`** 的 `?key=`（给 Infuse / VLC 这类不能带 Cookie 的播放器）。SPA 外壳与静态资源公开，否则登录页加载不出来。
+>
+> 口令由 `settings.LanAccessKey()` 首次生成并持久化（16 位 base32，80 bit），桌面「设置 → 服务器」可查看、复制与轮换（`RotateLanAccessKey`）；轮换后旧 Cookie 与已复制的播放地址立即失效。设计见 [`docs/spec/lan-auth.md`](spec/lan-auth.md)。
 
 ## 构建 macOS 版
 

@@ -138,6 +138,13 @@ npm run build:mobile      # frontend/ 下
 - **默认播放器**：首次点击播放打开选择面板，用户选择后写入 `localStorage`；后续优先自动尝试该客户端，2 秒内未观察到页面隐藏则回退到选择面板。
 - **安装检测边界**：浏览器没有枚举已安装 App 的 API，因此不能宣称“已检测到客户端”；页面隐藏只表示很可能成功交给客户端，失败时仍提供重试、切换和复制地址。
 
+### 会话与访问口令
+
+- 除 SPA 外壳/静态资源、`/api/session` 和只读的 `/api/extension/check` 外，所有端点都要求访问口令；完整规则见 [`lan-auth.md`](lan-auth.md)。
+- 首次打开桌面复制的 `/?key=…` 链接时，`AuthGate` 调用 `POST /api/session` 换取 HttpOnly Cookie，随后用 `history.replaceState` 把 key 从地址栏移除；直接打开裸地址则显示口令表单。
+- 同源 `<img>`（缩略图、封面）与 `fetch` 自动携带 Cookie，因此媒体 URL 不需要带口令；只有交给 Infuse / VLC 的串流 URL 由 `externalStreamURL` 追加 `?key=`（服务端只在该前缀接受 query 口令）。
+- 任何请求收到 401 都会卸下整个壳并回到登录页（口令被轮换或 Cookie 失效），避免继续展示过期数据。
+
 ## 7. 与桌面端的能力差异
 
 | 能力 | 桌面 | 移动 |
@@ -175,7 +182,7 @@ npm run build:mobile      # frontend/ 下
 
 ## 9. 已知限制
 
-- **写端点无鉴权**：同网段任何设备都能调用写端点（含 `DELETE /api/videos/{id}`）。这是既有缺口（见 `TODO.md`），移动端新增的移除入口扩大了暴露面，应优先补口令。
+- **访问口令经明文 HTTP 传输**：局域网传输没有 TLS，同一网络里的主动嗅探者仍可能看到口令与视频内容；口令挡住的是“同网段随手访问/误连”，不替代可信网络。
 - **仅支持 iOS 外部播放器**：首版支持 iPhone/iPad 上的 Infuse、VLC；Android、PC 浏览器不执行自动跳转，只提供复制地址。
 - **无法真正检测安装状态**：iOS 不允许网页枚举已安装 App；未安装、用户取消系统提示或启动过慢时，都会进入回退选择面板。
 - **网易爆米花暂不支持直跳**：官方公开的是添加 WebDAV/Emby 数据源的 Universal Link，没有单视频 URL 播放协议，因此不作为播放器入口。

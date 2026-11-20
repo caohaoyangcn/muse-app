@@ -11,8 +11,9 @@ export const DEFAULT_PORT = 8899;
 export const DEFAULT_MUSE_BASE = `http://${DEFAULT_HOST}:${DEFAULT_PORT}`;
 
 // The loopback hosts the extension will talk to. A remote host is refused: the
-// LAN server is unauthenticated, so pointing the extension at another machine
-// would hand the library to that machine's network too.
+// extension is read-only and only meaningful on the machine running Muse, so
+// pointing it at another machine would leak that library to this machine's
+// network.
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 
 // checkTimeoutMs bounds one query. Muse answers from its own database, so a

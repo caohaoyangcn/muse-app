@@ -67,9 +67,9 @@
   - ✅ Web API 读端点：`/api/videos`（`?search=`）、`/api/videos/{id}`、`/api/videos/{id}/jav`、`/api/videos/{id}/jav/task`、`/api/jav/tasks`、`/api/actors`、`/api/actors/videos?name=`。
   - ✅ Web API 写端点：`POST /api/videos`、`DELETE /api/videos/{id}`、`PUT /api/videos/{id}/info`、`POST|DELETE /api/videos/{id}/likes`。
   - ✅ 移动端界面：浏览/搜索/标签·演员·硬盘筛选/排序/网格列表切换、详情（元数据/演员/标签/文件信息）、iOS 外部播放器跳转（Infuse/VLC）、演员索引与作品页、刮削任务看板、标题备注编辑、点赞、移除收藏。
-  - ⚠️ 写端点无鉴权（见下方「局域网服务」）；桌面专属能力（发起刮削、封面选帧、演员合并、添加收藏、目录监控、设置）在移动端不提供。
-  - 设计文档：`docs/spec/mobile-web-design.md`。
-  - 后续可扩展：鉴权/口令、HTTPS、更多具备公开播放协议的专用客户端。
+  - ✅ 访问口令保护：浏览、写、串流与生成图片都需要口令；桌面顶部复制的链接自带口令，手机首次打开自动登录。桌面专属能力（发起刮削、封面选帧、演员合并、添加收藏、目录监控、设置）在移动端不提供。
+  - 设计文档：`docs/spec/mobile-web-design.md`、`docs/spec/lan-auth.md`。
+  - 后续可扩展：HTTPS、更多具备公开播放协议的专用客户端。
 
 - [x] **JavDB 浏览器扩展（卡片一键查收藏）**
   - ✅ `browser-extension/`（Manifest V3，无构建步骤）：JavDB 影片卡片右上角角标，悬停查询该番号是否已收藏，点开可见命中文件并跳转 Muse 详情。
@@ -135,10 +135,12 @@
 
 ### 局域网服务
 
-- [ ] **写端点鉴权 / 默认不开放写**（优先级提升）
-  - `backend/server/server.go` 暴露了全部写端点（`DELETE /api/videos/{id}`、`PUT /api/videos/{id}/info`、`POST /api/videos/{id}/likes` 等）。同网段任何设备可直接调用，包括删除收藏。
-  - 移动端重建后已把这些写操作**变成了用户可见的 UI 入口**（详情页点赞/编辑、卡片菜单移除），暴露面比此前「无 UI 按钮」时更大，因此建议优先处理。
-  - 建议：默认关闭写端点或加简单口令（读与串流保持开放即可满足浏览需求）。
+- [x] **写端点鉴权 / 默认不开放写**（优先级提升）
+  - ✅ 已改为**全接口访问口令**（不只写端点）：`/api/*`、`/stream/*`、`/thumbnails/*`、`/covers/*`、`/avatars/*` 都需要 16 位随机口令；手机通过带 `?key=` 的链接自动登录并拿到 HttpOnly Cookie，外部播放器 URL 由客户端追加 `?key=`。
+  - ✅ 口令在 `backend/accesskey` 生成（80 bit），`settings.LanAccessKey()` 持久化；桌面「设置 → 服务器」可查看、复制、轮换（`RotateLanAccessKey`），轮换后所有设备与已复制链接立即失效。
+  - ✅ 只读的 `/api/extension/check` 保持免口令（loopback Host + JavDB CORS 限制），登录握手 `/api/session` 公开；SPA 外壳公开以便渲染登录页。
+  - ✅ 失败登录按 IP 限流，Cookie 为 HttpOnly + SameSite=Lax，写请求校验 Origin。设计：`docs/spec/lan-auth.md`。
+  - 仍未做：HTTPS；口令以明文经局域网 HTTP 传输。
 - [x] **移动端外部播放器跳转（Infuse / VLC）**
   - ✅ `GET /stream/video/{id}` 始终返回原始文件并支持 Range；删除服务端 remux、转码、状态接口和本地 `/media` 预览服务。
   - ✅ iOS 首次播放选择默认客户端，之后自动尝试；无法确认启动时回退到选择面板，可重试、切换或复制播放地址。

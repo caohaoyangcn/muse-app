@@ -8,7 +8,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - `backend/api/` —— 唯一的业务门面 `Library`，桌面端与局域网 HTTP 服务共用
 - `backend/database/` —— SQLite 打开与 schema 迁移
 - `backend/video/`、`backend/jav/`、`backend/watch/`、`backend/thumbnail/`、`backend/settings/` —— 各领域模型的 model/repository/service 代码，测试（`*_test.go`）与源码同目录
-- `backend/server/` —— 局域网 Web 服务（SPA + JSON API + Range 串流）；`webui/` 内嵌静态资源
+- `backend/server/` —— 局域网 Web 服务（SPA + JSON API + Range 串流，数据端点受访问口令保护）；`webui/` 内嵌静态资源
 - `frontend/src/` —— 两种客户端共用一份源码：`ui/` 是跨平台基元层（`Button`、`Input`、`Dialog` 等），`components/` 是桌面专属业务组件，`mobile/` 是局域网移动壳；`services/client.ts` 是两端共用契约、`services/desktop.ts` / `services/web.ts` 是平台门面（壳的唯一取数入口），`types.ts`、`utils/`、`hooks/` 为共享代码；`frontend/wailsjs/` 为生成产物，勿手改
 - `browser-extension/` —— JavDB 浏览器扩展（MV3，无构建步骤）：番号只读页面渲染的 `.video-title strong`，不做正则解析；它只调用只读端点 `POST /api/extension/check`（见 `docs/spec/javdb-browser-extension.md`）。改站点匹配域名时必须同步 `backend/server/extension.go` 的来源白名单，`scripts/check-extension.mjs` 会检查
 - `docs/spec/` 与根目录 `spec-v1.md` / `spec-v1.1.md` —— 设计文档
@@ -52,6 +52,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 ## 开发注意事项
 
 - 新业务逻辑一律经由 `api.Library`，避免桌面端与 HTTP 行为漂移；平台专属能力保留在各自分层中
+- 局域网数据端点默认受访问口令保护（`backend/server/auth.go` 的 `withLANAuth`，默认拒绝）：新增 `/api`、串流或媒体路由会自动被保护，需要公开的豁免必须写清楚理由并在 `backend/server/auth_test.go` 补回归。设计见 `docs/spec/lan-auth.md`
 - 删除收藏只删除数据库记录与生成的缩略图——绝不触碰底层视频文件
 - 跨平台基元一律放 `frontend/src/ui/`，桌面 `components/` 与移动 `mobile/` 都从这里取；不要在业务文件里手搭按钮、对话框、提示条。`ui/` 只依赖 React、`lib/utils`、静态资源（图标等）与 `@astryxdesign/*`——设计系统只经 `ui/` 暴露，业务文件不得直接 import（`scripts/check-shared-ui.mjs` 会拦），layer 顺序与 token 桥接见 `docs/spec/astryx-design-system.md`
 - 带框封面一律用 `frontend/src/ui/cover.tsx` 的 `CoverImage`：`portrait`（竖版，右半封面）或 `landscape`（横版，完整封面+封底），不要手写 `<img>` 自己决定裁切。按原比例展示整张图的场景（详情大图、封面查看器、编辑预览）走白名单；新增裸封面 `<img>` 会被 `scripts/check-shared-ui.mjs` 拦下

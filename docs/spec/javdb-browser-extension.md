@@ -141,7 +141,12 @@ Origin: https://javdb.com
 - `localhost` / `127.0.0.1` / `[::1]`（开发时的本地样例页）
 
 其余来源一律不写头（浏览器自行拦截）；来自非法来源的预检回 `403`。响应始终带
-`Vary: Origin`，且**不允许凭据**（端点不收 Cookie，服务端也没有会话）。
+`Vary: Origin`，且**不允许凭据**（端点不收 Cookie，服务端也不为此端点建立会话）。
+
+`/api/extension/check` 是 LAN 访问口令的**唯一数据端点豁免**：它只读、不写库，并且
+还有 loopback/LAN Host 检查与上面的来源白名单。其余 `/api/*`、串流与图片都要求口令
+（见 [`lan-auth.md`](lan-auth.md)）；扩展的「打开详情」会进入登录页，同一浏览器登录
+一次即可。
 
 ### 域名白名单有两处，含义不同
 
@@ -158,7 +163,7 @@ Origin: https://javdb.com
 `scripts/check-extension.mjs` 同时校验三件事（CI 与打包脚本都会跑）：
 match pattern 语法合法、manifest 里每个 host 在服务端都被允许、编号镜像规则仍在。
 
-现有 `/api/*` 保持同源行为，有回归测试锁死（`TestAPIExtensionCORSIsScoped`）。
+其余 `/api/*` 保持同源行为并需要 LAN 访问口令，CORS 只在扩展端点回写（`TestAPIExtensionCORSIsScoped` 锁死 CORS 面；`backend/server/auth_test.go` 锁死口令豁免）。
 
 ## 6. 扩展行为
 
