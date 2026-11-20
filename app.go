@@ -707,7 +707,43 @@ func (a *App) StartServer(port int) (server.StartInfo, error) {
 			port = configured
 		}
 	}
+	// The key is loaded before the listener exists, so there is no window in
+	// which the LAN API answers unauthenticated. A settings read failure stops
+	// the start instead of silently serving the library to the network.
+	if a.server.AccessKey() == "" && a.settings != nil {
+		key, err := a.settings.LanAccessKey()
+		if err != nil {
+			return server.StartInfo{}, fmt.Errorf("无法读取局域网访问口令: %w", err)
+		}
+		a.server.SetAccessKey(key)
+	}
 	return a.server.Start(port)
+}
+
+// GetLanAccessKey returns the secret a phone enters once to use the LAN web UI.
+// It is displayed in Settings > 服务器 and embedded in the URL the header copies.
+func (a *App) GetLanAccessKey() (string, error) {
+	if a.settings == nil {
+		return "", fmt.Errorf("设置存储未初始化")
+	}
+	return a.settings.LanAccessKey()
+}
+
+// RotateLanAccessKey replaces the key everywhere: the stored value, the running
+// server and therefore every issued cookie. Devices must enter the new key on
+// their next request, and previously copied stream URLs stop working.
+func (a *App) RotateLanAccessKey() (string, error) {
+	if a.settings == nil {
+		return "", fmt.Errorf("设置存储未初始化")
+	}
+	key, err := a.settings.RotateLanAccessKey()
+	if err != nil {
+		return "", err
+	}
+	if a.server != nil {
+		a.server.SetAccessKey(key)
+	}
+	return key, nil
 }
 
 // GetServerPort returns the current fixed LAN server port (the configured

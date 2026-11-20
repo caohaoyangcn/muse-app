@@ -73,6 +73,8 @@ export function GetJavBusCookieStatus():Promise<main.JavBusCookieStatus>;
 
 export function GetLLMSettings():Promise<main.LLMSettings>;
 
+export function GetLanAccessKey():Promise<string>;
+
 export function GetScrapeProxy():Promise<string>;
 
 export function GetServerPort():Promise<number>;
@@ -136,6 +138,8 @@ export function RestoreVideo(arg1:number):Promise<void>;
 export function RetranslateAllTitles():Promise<number>;
 
 export function ReverifyContentDuplicate(arg1:string):Promise<void>;
+
+export function RotateLanAccessKey():Promise<string>;
 
 export function SaveCloudConnection(arg1:cloud.ConnectionInput):Promise<cloud.ConnectionView>;
 

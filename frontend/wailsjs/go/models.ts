@@ -670,6 +670,7 @@ export namespace server {
 	    urls: string[];
 	    local: string;
 	    port: number;
+	    key?: string;
 	    error?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -682,6 +683,7 @@ export namespace server {
 	        this.urls = source["urls"];
 	        this.local = source["local"];
 	        this.port = source["port"];
+	        this.key = source["key"];
 	        this.error = source["error"];
 	    }
 	}

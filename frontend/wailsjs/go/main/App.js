@@ -126,6 +126,10 @@ export function GetLLMSettings() {
   return window['go']['main']['App']['GetLLMSettings']();
 }
 
+export function GetLanAccessKey() {
+  return window['go']['main']['App']['GetLanAccessKey']();
+}
+
 export function GetScrapeProxy() {
   return window['go']['main']['App']['GetScrapeProxy']();
 }
@@ -252,6 +256,10 @@ export function RetranslateAllTitles() {
 
 export function ReverifyContentDuplicate(arg1) {
   return window['go']['main']['App']['ReverifyContentDuplicate'](arg1);
+}
+
+export function RotateLanAccessKey() {
+  return window['go']['main']['App']['RotateLanAccessKey']();
 }
 
 export function SaveCloudConnection(arg1) {

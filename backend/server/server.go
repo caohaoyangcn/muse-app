@@ -37,6 +37,14 @@ type Server struct {
 	addr     string // bound host:port, e.g. 0.0.0.0:8090
 	listen   func(network, address string) (net.Listener, error)
 	firewall func(context.Context, int) error
+
+	// The LAN access key every data request must prove. Empty disables the
+	// check (tests/embedding); the desktop app always configures one before
+	// Start, so a shipped app is never in that state.
+	keyMu     sync.RWMutex
+	accessKey string
+	loginMu   sync.Mutex
+	logins    *loginLimiter
 }
 
 // StartInfo is returned by Start/Status for the frontend to display the
@@ -46,13 +54,22 @@ type StartInfo struct {
 	URLs    []string `json:"urls"`  // LAN-accessible base URLs (http://<lan-ip>:<port>)
 	Local   string   `json:"local"` // localhost base URL
 	Port    int      `json:"port"`
-	Error   string   `json:"error,omitempty"`
+	// Key is the access key a phone must present. It is only filled while the
+	// server runs, and only travels over the desktop app's Wails binding — never
+	// through the LAN API.
+	Key   string `json:"key,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // New creates a Server bound to the shared business façade. dataDir is used
 // only to resolve the thumbnail directory (a small reuse of the app's layout).
 func New(lib *api.Library, dataDir string, log *slog.Logger) *Server {
-	return &Server{lib: lib, dataDir: dataDir, log: log, listen: net.Listen, firewall: platform.EnsureInboundRuleContext}
+	return &Server{
+		lib: lib, dataDir: dataDir, log: log,
+		listen:   net.Listen,
+		firewall: platform.EnsureInboundRuleContext,
+		logins:   newLoginLimiter(),
+	}
 }
 
 // Start binds the HTTP server on 0.0.0.0:port so devices on the same network
@@ -101,6 +118,12 @@ func (s *Server) Start(port int) (StartInfo, error) {
 	}
 
 	info := s.infoLocked()
+	if s.AccessKey() == "" && s.log != nil {
+		// Fail loudly rather than silently: an unguarded server on a LAN is the
+		// exact state this feature exists to prevent. It should only be reached
+		// by tests or an embedding caller.
+		s.log.Warn("web server started without an access key; the LAN API is unauthenticated")
+	}
 	s.log.Info("web server started", "local", info.Local, "urls", info.URLs)
 	return info, nil
 }
@@ -176,17 +199,28 @@ func (s *Server) infoLocked() StartInfo {
 	info.URLs = urls
 	info.Local = local
 	info.Port = port
+	info.Key = s.AccessKey()
 	return info
 }
 
 // routes wires all HTTP endpoints. The SPA lives under "/" and the mobile app
 // requests JSON/streams via the /api and /stream prefixes. Every endpoint is a
 // thin adapter over the shared api.Library façade so the desktop and web
-// transports cannot drift; the LAN API is intentionally unauthenticated (see
-// TODO.md), so the write endpoints below are reachable by any device on the
-// same network.
+// transports cannot drift.
+//
+// The LAN API is guarded by an access key (see auth.go): /api/*, /stream/*,
+// /thumbnails/*, /covers/* and /avatars/* all require it, while the SPA shell,
+// its assets and the /api/session handshake stay public so a phone can render
+// the login screen. The one other public data route is the read-only JavDB
+// extension check, which has its own host and origin guards (extension.go).
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
+
+	// Session handshake: the phone proves the key here and receives the cookie
+	// the protected routes look for.
+	mux.HandleFunc("GET /api/session", s.handleSessionStatus)
+	mux.HandleFunc("POST /api/session", s.handleSessionLogin)
+	mux.HandleFunc("DELETE /api/session", s.handleSessionLogout)
 
 	// Reads.
 	mux.HandleFunc("GET /api/videos", s.handleListVideos)
@@ -252,7 +286,7 @@ func (s *Server) routes() http.Handler {
 	// Index + static web UI.
 	mux.HandleFunc("/", s.handleStatic)
 
-	return logRequests(s.log, mux)
+	return logRequests(s.log, withSecurityHeaders(s.withLANAuth(mux)))
 }
 
 func (s *Server) handleListVideos(w http.ResponseWriter, r *http.Request) {

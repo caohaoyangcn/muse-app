@@ -11,9 +11,10 @@ import (
 
 // The browser extension is the only cross-origin client the LAN server has:
 // a content script on javdb.com calls this one endpoint. Everything else in the
-// API stays same-origin (unauthenticated, on purpose — see TODO.md), so CORS is
-// scoped to the extension endpoint and to JavDB's own origins rather than being
-// added to /api/*.
+// API is same-origin and requires the LAN access key (auth.go). This endpoint is
+// deliberately exempt: it is read-only, and it is refused unless the request was
+// addressed to a loopback/LAN host and carries a JavDB origin, so CORS stays
+// scoped to it rather than being added to /api/*.
 //
 // The origin list is duplicated in browser-extension/manifest.json
 // (content_scripts[].matches). Both must change together when JavDB moves to a
