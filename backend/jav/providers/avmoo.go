@@ -152,6 +152,28 @@ type avmooStarSize struct {
 	Hip    string `json:"H"`
 }
 
+// UnmarshalJSON reads both shapes Avmoo uses for a performer's measurements: an
+// object when they are known, and an empty array (`"size": []`) when the profile
+// has none yet. Measurements are optional enrichment, so any shape that is not
+// the object form is treated as "unknown" rather than failing the movie payload
+// — a strict decode used to abort the whole lookup, and with it the scrape, for
+// every title whose cast included an unmeasured performer.
+func (s *avmooStarSize) UnmarshalJSON(data []byte) error {
+	*s = avmooStarSize{}
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return nil
+	}
+	// A local type keeps the decoder from recursing into this method.
+	type plain avmooStarSize
+	var decoded plain
+	if err := json.Unmarshal(trimmed, &decoded); err != nil {
+		return err
+	}
+	*s = avmooStarSize(decoded)
+	return nil
+}
+
 type avmooName struct {
 	Name   string `json:"name"`
 	NameJA string `json:"name_ja"`

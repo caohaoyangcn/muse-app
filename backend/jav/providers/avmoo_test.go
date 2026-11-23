@@ -178,6 +178,50 @@ func TestAvmooLookupMapsStarProfiles(t *testing.T) {
 	}
 }
 
+// Avmoo sends `"size": []` — an empty array, not an object — for a performer
+// whose measurements it does not know. The cast list must still decode: a
+// strict struct decode fails the whole movie payload, and with it the scrape of
+// every title that performer appears in.
+func TestAvmooLookupToleratesUnknownStarMeasurements(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/cn/search/SNOS-455":
+			w.Header().Add("Set-Cookie", "session=secret; Path=/")
+			_, _ = fmt.Fprint(w, `<meta name="csrf-token" content="token">`)
+		case "/jav/data/api/search":
+			writeAvmooEnvelope(t, w, []map[string]any{{"movieId": "movie-455", "movieFanHao": "SNOS-455"}})
+		case "/jav/data/api/getMovie":
+			writeAvmooEnvelope(t, w, map[string]any{
+				"movieId": "movie-455", "movieFanHao": "SNOS-455", "title": "SNOS-455",
+				"star": []map[string]any{
+					{"starId": "nxavmyk", "starName": "榊原萌", "avatarUrl": "https://example.invalid/moe.jpg", "size": []any{}},
+					{"starId": "nxyzzbk", "starName": "明里つむぎ", "size": map[string]any{"T": "155"}},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	metadata, err := newAvmooTestProvider(server).Lookup(context.Background(), "SNOS-455")
+	if err != nil {
+		t.Fatalf("lookup with an unmeasured performer: %v", err)
+	}
+	if !equalStrings(metadata.Actors, []string{"榊原萌", "明里つむぎ"}) {
+		t.Fatalf("actors=%v", metadata.Actors)
+	}
+	if len(metadata.ActorProfiles) != 2 {
+		t.Fatalf("profiles=%+v, want two", metadata.ActorProfiles)
+	}
+	if profile := metadata.ActorProfiles[0]; profile.HeightCM != nil || profile.BustCM != nil || profile.Cup != "" {
+		t.Fatalf("unmeasured profile kept measurements: %+v", profile)
+	}
+	if profile := metadata.ActorProfiles[1]; profile.HeightCM == nil || *profile.HeightCM != 155 {
+		t.Fatalf("measured profile lost its height: %+v", profile)
+	}
+}
+
 // A cast list without profiles (a name-only payload) stays exactly as before:
 // names only, no empty profile rows.
 func TestAvmooLookupKeepsNameOnlyCastWithoutProfiles(t *testing.T) {
