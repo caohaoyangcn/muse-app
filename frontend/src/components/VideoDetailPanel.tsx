@@ -12,6 +12,7 @@ import {
 } from "../utils/format";
 import { formatDateTime, formatReleaseDate } from "../utils/datetime";
 import { videoDisplayName } from "../utils/videoName";
+import { providerDisplayName } from "../utils/providerName";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import {
@@ -43,12 +44,12 @@ const statusLabels: Record<string, string> = {
 
 const errorLabels: Record<string, string> = {
   no_code: "文件名中没有识别到番号。",
-  not_found: "JavBus 中没有找到对应作品。",
+  not_found: "数据源中没有找到对应作品。",
   provider_auth: "JavBus 需要有效 Cookie 或 Cookie 已过期。",
-  blocked: "JavBus 拒绝了请求，请检查 Cookie 或稍后重试。",
+  blocked: "请求被数据源拒绝，请检查 Cookie 或稍后重试。",
   rate_limited: "请求过于频繁，任务会在稍后自动重试。",
   network: "网络请求失败，任务会在稍后自动重试。",
-  parse: "JavBus 页面结构无法识别。",
+  parse: "数据源返回的内容无法解析。",
 };
 
 function valueOrUnknown(value?: string | number | null): string {
@@ -147,6 +148,17 @@ export default function VideoDetailPanel({
         : "尚未翻译";
   const remote = video.sourceId > 0;
   const sourceOffline = remote && video.sourceOffline === true;
+  // The provider that answered this scrape, not the one that was tried first:
+  // a JavBus miss falls back to Avmoo, and the cover line must follow the result.
+  const providerLabel = providerDisplayName(detail?.provider);
+  const coverSourceLabel =
+    video.coverSource === "scraped"
+      ? providerLabel
+        ? `${providerLabel} 刮削`
+        : "刮削"
+      : video.coverSource === "custom_frame"
+        ? "用户自定义"
+        : "自动帧";
   const metadataRows = useMemo<[string, string][]>(() => {
     // 路径 is rendered separately so it can be clicked to reveal the file.
     const rows: [string, string][] = [
@@ -293,12 +305,12 @@ export default function VideoDetailPanel({
                 <img className="max-h-[420px] max-w-full object-contain" src={videoCoverURL(video)} alt="当前封面" />
               </ClickableCard>
               <p className="mt-2 text-xs text-[var(--muted)]">
-                当前封面：{video.coverSource === "scraped" ? "JavBus 刮削" : video.coverSource === "custom_frame" ? "用户自定义" : "自动帧"}
+                当前封面：{coverSourceLabel}
               </p>
             </div>
 
             <div className="min-w-0">
-              <h3 className="mb-3 text-sm font-semibold">JavBus 元数据</h3>
+              <h3 className="mb-3 text-sm font-semibold">刮削元数据</h3>
               {detail ? (
                 <MetadataList columns={2} label={{ position: "top" }}>
                   {([
@@ -309,7 +321,7 @@ export default function VideoDetailPanel({
                     ["系列", valueOrUnknown(detail.series)],
                     ["发行日期", formatReleaseDate(detail.releaseUnix)],
                     ["时长", detail.durationMin ? `${detail.durationMin} 分钟` : "未提供"],
-                    ["数据来源", valueOrUnknown(detail.provider)],
+                    ["数据来源", providerLabel || "未提供"],
                     ["抓取时间", formatDateTime(detail.fetchedAt)],
                     ["是否无码", detail.isUncensored === undefined ? "未提供" : detail.isUncensored ? "是" : "否"],
                   ] as [string, string][]).map(([label, value]) => (
