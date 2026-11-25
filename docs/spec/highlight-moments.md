@@ -1,8 +1,8 @@
-# 精彩时刻：时刻截图与时间段循环 GIF
+# 精彩时刻：时刻截图与时间段循环视频
 
 **状态：已实现（2026-11-25，schema v31）。**
 
-**目标：** 在影片详情中记录「精彩时刻」。用户输入一个时刻，生成一帧截图；输入一个时间段，生成循环 GIF。生成走后台任务队列，不阻塞界面，进度出现在现有「后台任务」看板。
+**目标：** 在影片详情中记录「精彩时刻」。用户输入一个时刻，生成一帧截图；输入一个时间段，生成循环视频（MP4）。生成走后台任务队列，不阻塞界面，进度出现在现有「后台任务」看板。
 
 **核心约束：** 仍然遵守「收藏 ≠ 文件」。只读取源视频生成派生图片，绝不复制、移动、修改或删除源视频；删除精彩时刻只删记录与生成文件。
 
@@ -15,17 +15,18 @@
 | 增删平台 | 桌面端新增、重试、删除；移动端只读，不新增 HTTP 写端点 |
 | 数量 | 每部影片不设上限，全局队列不设硬上限 |
 | 输入 | 时/分/秒三个数字框 × 开始（必填）+ 结束（可选） |
-| 识别 | 结束三个框全空 = 时刻截图；任一格有值 = 时间段 GIF |
+| 识别 | 结束三个框全空 = 时刻截图；任一格有值 = 时间段循环视频 |
 | 精度 | 整数秒；分/秒 0–59，小时不限 |
-| 校验 | 实时提示 + 禁用保存，不自动改写输入；范围 1–10 秒、结束晚于开始、不超视频时长 |
+| 校验 | 实时提示 + 禁用保存，不自动改写输入；范围 1–20 秒、结束晚于开始、不超视频时长 |
 | 展示 | 只在详情页，网格卡片不出现 |
 | 生成 | 后台单 worker，保存后立即关闭弹窗 |
+| 快速时长 | 填好开始时间后可用 +5 / +10 / +15 / +20 秒一键设结束时间（不可用则置灰，不夹取） |
 | 预览 | 保存前可用同一条 ffmpeg 指令生成一次真实预览；确认后保存直接采纳该文件，不再重复编码 |
 | 取消 | 删除排队中/生成中的条目即取消；不提供独立取消按钮 |
 | 恢复 | `queued` / `running` 重启后自动重排；连续中断 3 次标失败 |
 | 失败 | 桌面保留失败卡 + 重试/删除；移动端隐藏失败条目 |
 | 编辑 | 不支持编辑时间，只能删除后重新添加 |
-| GIF | 480 宽 / 50 fps / 128 色；8 MB 软上限，优先降到 25 fps，不降分辨率/颜色 |
+| 时间段 | MP4（H.264，静音循环）/ 480 宽 / 60 fps / CRF 26；一次编码，不做体积回退 |
 | 任务看板 | 新增「精彩时刻生成」行，完成后保留至下一轮或应用重启 |
 | 手机刷新 | 仅存在排队/生成中条目时每 3 秒轮询 |
 
@@ -43,12 +44,12 @@
    没预览就保存时，详情出现「排队中」占位卡，后台任务看板出现进度行，worker 完成后替换为截图。
    标签「时刻 1:30」。
 
-### 2.2 新增时间段（GIF）
+### 2.2 新增时间段（循环视频）
 
-1. 填写开始和结束时间，范围在 1–10 秒内。
-2. 输入器实时显示「将生成循环 GIF：1:30–1:35（5 秒）」。
-3. （可选）点「预览」：用正式保存时的同一条 ffmpeg 指令（同样 50 fps、同样 8 MB 回退）生成一次，
-   弹窗里直接播放循环 GIF，并标出「时间段 1:30–1:35 · 50 fps · 1.7 MB」。
+1. 填写开始时间；结束时间可以手填，也可以点 +5 / +10 / +15 / +20 秒快速设置。范围 1–20 秒。
+2. 输入器实时显示「将生成循环视频：1:30–1:35（5 秒）」。
+3. （可选）点「预览」：用正式保存时的同一条 ffmpeg 指令（同样 60 fps）生成一次，
+   弹窗里直接播放循环视频，并标出「时间段 1:30–1:35 · 60 fps · 750 KB」。
 4. 保存后：采纳预览则立即出现同一条目；否则走后台上生成。标签「时间段 1:30–1:35 · 5 秒」。
 5. 改时间 = 换了问题：旧预览当场作废并删除，需要重新预览。关闭弹窗（取消 / Esc / 遮罩）
    也会丢弃未保存的预览。
@@ -62,7 +63,7 @@
 
 ### 2.4 删除
 
-- 删除任意状态都需二次确认，文案说明只删除生成的截图/GIF，不影响源视频。
+- 删除任意状态都需二次确认，文案说明只删除生成的截图/视频，不影响源视频。
 - 删除排队中条目：直接移出队列。
 - 删除生成中条目：当前 ffmpeg 跑完但结果丢弃并清理。
 - 删除已完成条目：删除记录与文件。
@@ -84,6 +85,7 @@
 ```text
 开始时间（必填）   [ 时 ] : [ 分 ] : [ 秒 ]
 结束时间（可选）   [ 时 ] : [ 分 ] : [ 秒 ]   [清空结束时间]
+常用时长                                     [ +5 秒 ] [ +10 秒 ] [ +15 秒 ] [ +20 秒 ]
 ```
 
 - 只接受数字，`inputMode="numeric"`。
@@ -92,6 +94,9 @@
 - 结束任一框有值（包括 0）→ 时间段；空着的子字段按 0 解释。
 - 「清空结束时间」把三个结束框恢复为空，回到时刻模式。
 - 不做自动跳格，避免输入分钟时被强行移走焦点。
+- 开始时间是合法时刻后，「常用时长」那一行才出现：点 +N 秒把结束时间设成「开始 + N 秒」
+  （写进那三格，走与手填完全相同的校验路径）。会超出视频结尾或超过 20 秒的按钮**置灰并说明原因**，
+  不做夹取——把 +20 秒悄悄改成 +7 秒，等于保存了一段用户没要的时长。
 
 ### 3.2 实时校验
 
@@ -103,7 +108,7 @@
 | 分或秒 > 59 | 分/秒需在 0–59 |
 | 结束有值且 `end <= start` | 结束时间必须晚于开始时间 |
 | 时间段长度 < 1 秒 | 时间段至少 1 秒 |
-| 时间段长度 > 10 秒 | 时间段最长 10 秒（当前 N 秒） |
+| 时间段长度 > 20 秒 | 时间段最长 20 秒（当前 N 秒） |
 | 已知视频时长且 `start >= duration` | 开始时间超出视频时长 |
 | 已知视频时长且 `end > duration` | 结束时间超出视频时长 |
 
@@ -117,7 +122,7 @@
 
 - `startMs < 0`
 - 已知时长时 `startMs >= durationMs`
-- `endMs > 0` 时：`endMs <= startMs`、`endMs-startMs < 1000`、`> 10000`
+- `endMs > 0` 时：`endMs <= startMs`、`endMs-startMs < 1000`、`> 20000`
 - 已知时长时 `endMs > durationMs`
 
 常量：
@@ -125,7 +130,7 @@
 ```go
 const (
     MinHighlightRangeMs int64 = 1000
-    MaxHighlightRangeMs int64 = 10000
+    MaxHighlightRangeMs int64 = 20000
 )
 ```
 
@@ -246,7 +251,7 @@ func (s *Service) CloseHighlights()
 2. 校验时间（见 §3.3）。
 3. `processor.MediaPath(v)` 确认媒体可读；缺失、卷离线、远程离线返回明确中文错误。
 4. 生成唯一媒体路径：
-   `highlights/h-<videoID>-<unixNano>-<seq>.<jpg|gif>`。
+   `highlights/h-<videoID>-<unixNano>-<seq>.<jpg|mp4>`。
    `seq` 为进程内原子序号。路径在入队前写入数据库，清扫会把生成中的文件视为有主文件。
 5. 插入 `status=queued` 行；入队；`noteQueued` 启动或延续本轮任务计数；发出 `video:highlight:updated` 和节流的 `tasks:updated`。
 6. 立即返回该行；弹窗关闭。
@@ -280,7 +285,7 @@ func (s *Service) CloseHighlights()
    - 文件缺失 / 卷离线 / 远程离线 → 标 failed 对应中文原因。
 4. 调用生成器（服务 context）：
    - 时刻：截图。
-   - 时间段：GIF；生成后检查大小，超过 8 MB 且当前 50 fps → 用 25 fps 重新生成一次（覆盖同一路径）；仍超则接受。
+   - 时间段：MP4（H.264，静音，60 fps，480 宽）。一次编码，没有体积回退——20 秒上限下实测约 750 KB，降帧降质都换不回有意义的东西。
 5. 若服务 context 被取消（退出）→ 不更新行，保持 `running`。
 6. 成功：`FinishHighlight(ready)`；返回 false 表示行已被删，删除生成文件；否则计完成。
 7. 失败：删除半成品；`FinishHighlight(failed, error)`；返回 false 时删除文件；否则计失败。
@@ -373,42 +378,46 @@ tasks.Task{
 -frames:v 1 -vf scale=1280:-2 -q:v 3 <out.jpg>
 ```
 
-### 7.2 GIF
+### 7.2 时间段（循环视频）
 
-- 输出 `<base>.gif`，宽 480，默认 50 fps，128 色。
+- 输出 `<base>.mp4`，宽 480，60 fps，H.264（yuv420p），静音，可循环播放。
 - ffmpeg 参数：
 
 ```text
 -y -hide_banner -loglevel error
 -ss <start> -t <duration> -i <video>
--an -loop 0
--vf "fps=<fps>,scale=480:-2:flags=lanczos,
-     split[s0][s1];
-     [s0]palettegen=max_colors=128:stats_mode=diff[p];
-     [s1][p]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle"
--gifflags +transdiff
-<out.gif>
+-an
+-vf "fps=60,scale=480:-2:flags=lanczos,setsar=1"
+-c:v libx264 -preset medium -crf 26 -pix_fmt yuv420p
+-movflags +faststart
+<out.mp4>
 ```
 
-- 滤镜字符串实际写成一个参数，不能有换行。
-- 8 MB 软上限：
-  - 50 fps 生成后 `os.Stat` 超限 → 用 25 fps 重新生成一次，覆盖同一路径。
-  - 25 fps 仍超限 → 保留文件，不自动降分辨率或颜色。
-- 超时：本地 60 秒，远程 90 秒；每次尝试独立计时。
+- 一次编码，没有体积回退：20 秒、480 宽、60 fps 实测约 750 KB（0.9 秒完成），远低于 GIF 时代
+  触发降级的量级，降帧只会换来一段更差的片段。
+- `setsar=1` 去掉非方形象素比，浏览器不会把画面拉宽。
+- `+faststart` 把索引搬到文件头，手机在局域网里边下边放。
+- 超时：本地 60 秒，远程 90 秒。
 - 失败删除半成品文件。
 
-### 7.3 为什么这样压缩
+### 7.3 为什么是 MP4 而不是 GIF
 
-- `diff_mode=rectangle` 只编码变化区域，通常能显著减小体积，不改变单帧画质。
-- `stats_mode=diff` 把调色板集中在变化区域，减少无关区域的色彩损失。
-- `+transdiff` 启用 GIF 帧间透明差分。
-- 8 MB 超限时优先降 fps（50 → 25），保持分辨率与颜色；这是不牺牲单帧画质的降级方式。
-- GIF 本身最多 256 色，128 色是体积与画质的折中。
-- **默认 50 fps 是 GIF 的天花板**：GIF 每帧延迟以 1/100 秒存储，50 fps 正好 2 cs，是浏览器
-  认可的最短延迟。再快就写不出来了——60 fps 会被写成 1 cs / 2 cs 交替，而小于 2 cs 的延迟会被
-  Chromium / Firefox 钳制成 10 cs（100 ms），于是每隔一帧冻结 0.1 秒，比 25 fps 还卡。体积也不是
-  瓶颈：未变化区域透明传输，实测 5 秒、480 宽：25 fps 834 KB、50 fps 978 KB（10 秒约 1.7 MB）。
+第一版是 GIF。它能用，但有两个封顶：**帧率**和**体积**。
 
+- **帧率**：GIF 每帧延迟以 1/100 秒存储，50 fps 正好 2 cs，是浏览器认可的最短延迟；再快就写成
+  1 cs / 2 cs 交替，而小于 2 cs 会被 Chromium / Firefox 钳制成 10 cs（100 ms），于是每隔一帧
+  冻结 0.1 秒，比 25 fps 还卡。60 fps 的 GIF 是做不到的，不是参数问题。
+- **体积**：GIF 没有真正的帧间预测（只有"这块没变就透明"），熵编码是 LZW，128 色 + 抖动又把
+  画面打成高频噪点。同样 10 秒、480 宽、MP4 60 fps 比 GIF 25 fps 小 **20 倍上下**（普通画面
+  1.5 MB → 77 KB；满屏颗粒 18 MB → 762 KB）。
+
+换 MP4 后 60 fps 是真 60 fps，全彩，无抖动，编码也快得多。代价是播放端从 `<img>` 变成
+`<video autoplay muted loop playsinline>`：静音是浏览器自动播放的前提，`playsinline` 防止 iOS
+抢全屏，低电量模式下自动播放被拒时盖一个播放按钮兜底（`ui/clip.tsx` 的 `LoopingClip`）。
+
+**升级兼容**：MP4 之前生成的 `.gif` 条目照常显示（媒体路由与清扫的白名单保留 `gif`）。只有
+被重试或重启恢复的旧条目会在生成前换成新的 `.mp4` 文件名——否则 MP4 字节会顶着 `.gif` 扩展名
+被服务成错误的 Content-Type。
 ---
 
 ## 8. 传输与前端
@@ -429,7 +438,7 @@ DeleteVideoHighlight(videoID, highlightID int64) error
 ### 8.2 局域网 HTTP（只读）
 
 - `GET /api/videos/{id}/highlights` → 返回全部状态（移动端自行过滤 failed）。
-- `GET /highlights/{file}` → 严格匹配 `^h-\d+-\d+-\d+\.(jpg|gif)$` 后 `http.ServeFile`，`Cache-Control: no-cache`。
+- `GET /highlights/{file}` → 严格匹配 `^h-\d+-\d+-\d+\.(jpg|gif|mp4)$` 后 `http.ServeFile`，`Cache-Control: no-cache`。
 - 两个端点都自动受 `backend/server/auth.go` 的 `withLANAuth` 保护，不申请公开豁免；移动端沿用现有局域网访问口令。
 - 不新增 HTTP 写端点。
 
@@ -464,8 +473,8 @@ DeleteVideoHighlight(videoID, highlightID int64) error
 - 两行时间器，实时结果显示与错误（见 §3）。
 - 保存按钮在任一错误时禁用。
 - **预览**：`预览` 按钮调用 `previewVideoHighlight`，用与保存完全相同的 ffmpeg 指令渲染一次
-  （同一帧率、同一 8 MB 回退），结果以 `<img>` 显示（GIF 自己会循环），下方标出
-  「时间段 1:30–1:35 · 50 fps · 1.7 MB」/「时刻 1:30 · 340 KB」。
+  （同一帧率、同一条编码指令），结果用 `<video>` 播放（`LoopingClip`），下方标出
+  「时间段 1:30–1:35 · 60 fps · 750 KB」/「时刻 1:30 · 340 KB」。
   预览是**同步**调用（本地 1–2 秒、最坏十几秒），期间按钮显示「生成预览中…」，
   此时保存禁用，避免保存一张还没确认的图。
 - 改时间、清空结束时间都会作废并删除旧预览（`discardVideoHighlightPreview`），
@@ -484,9 +493,10 @@ DeleteVideoHighlight(videoID, highlightID int64) error
 `components/HighlightMomentsSection.tsx`，挂载在 `VideoDetailPanel` 顶部封面/元数据之后：
 
 - 网格展示全部状态：
-  - `ready`：`<img src={highlightURL(h)} loading="lazy">`，点击打开大图 Dialog。
+  - `ready`：时间段用 `<LoopingClip src={highlightURL(h)}>`（`<video autoplay muted loop playsinline>`，
+    只在该卡片可见时播放），时刻用 `<img src={highlightURL(h)} loading="lazy">`；点击打开大图 Dialog。
   - `queued`：「排队中」+ Spinner。
-  - `running`：「正在生成 GIF…」或「正在截取…」+ Spinner。
+  - `running`：「正在生成视频…」或「正在截取…」+ Spinner。
   - `failed`：「生成失败」+ 错误文案 + 「重试」「删除」。
 - 每条提供删除，经 `ConfirmDialog` 确认；排队/生成中删除即取消。
 - 空状态「还没有精彩时刻」；读取失败显示 Banner + 重试。
@@ -509,14 +519,16 @@ DeleteVideoHighlight(videoID, highlightID int64) error
 ### 9.1 文件布局
 
 ```text
-<dataDir>/highlights/h-<videoID>-<unixNano>-<seq>.jpg
-<dataDir>/highlights/h-<videoID>-<unixNano>-<seq>.gif
-<dataDir>/preview/p-<videoID>-<startMs>-<endMs>-<unixNano>-<seq>.<jpg|gif>
+<dataDir>/highlights/h-<videoID>-<unixNano>-<seq>.jpg            # 时刻
+<dataDir>/highlights/h-<videoID>-<unixNano>-<seq>.mp4            # 时间段
+<dataDir>/highlights/h-<videoID>-<unixNano>-<seq>.gif            # MP4 之前生成的时间段，只读兼容
+<dataDir>/preview/p-<videoID>-<startMs>-<endMs>-<unixNano>-<seq>.<jpg|mp4>
 ```
 
 - 归属由 `video_highlights.media_path` 声明，而不是文件名里的 id。
 - 路径在插入 queued 行时写入，生成中的文件不会被清扫误删。
-- 同一路径在 25 fps 重试时覆盖，不再新增行。
+- 同一路径重试时覆盖，不再新增行；`.gif` 旧条目被重试或恢复时，会在生成前换成新的
+  `.mp4` 文件名（`SetHighlightMediaPath`），避免 MP4 字节顶着 GIF 扩展名被服务成错误的类型。
 - `preview/` 里的文件**不属于任何行**：它只在弹窗打开期间有意义。文件名里带着请求
   （`videoID`/`startMs`/`endMs`），所以"采纳"这一步可以校验"这张图是不是为这组时间生成的"，
   而不必相信前端。
@@ -528,7 +540,7 @@ DeleteVideoHighlight(videoID, highlightID int64) error
 扩展 `video.RemoveOrphanedImages`：
 
 1. 读取 `ListHighlightMediaPaths()`，建立 basename 集合。
-2. 扫描 `highlights/`，只处理 `^h-\d+-\d+-\d+\.(jpg|gif)$`。
+2. 扫描 `highlights/`，只处理 `^h-\d+-\d+-\d+\.(jpg|gif|mp4)$`。
 3. 保留集合内文件；删除孤儿；其他命名与目录一律保留。
 4. `Scanned / Removed / Bytes` 计入总结果。
 
@@ -557,7 +569,7 @@ DeleteVideoHighlight(videoID, highlightID int64) error
 - 迁移：v28 → v29 建表/索引/约束；重复迁移幂等。
 - 仓库：增删查、Claim/Finish/Retry、Recover（running 中断计数、3 次失败）、级联删除、媒体路径列表。
 - 服务：
-  - 新增校验（负数、结束 ≤ 开始、< 1 秒、> 10 秒、超时长）；
+  - 新增校验（负数、结束 ≤ 开始、< 1 秒、> 20 秒、超时长）；
   - 插入 queued、入队、立即返回；
   - worker 成功 → ready，文件存在，事件与任务计数；
   - worker 失败 → failed + error，半成品清理；
@@ -565,17 +577,20 @@ DeleteVideoHighlight(videoID, highlightID int64) error
   - 删除 queued/running/ready/failed 的文件与计数；
   - worker 发现行被删时丢弃结果；
   - 退出取消保持 running，重启恢复；
-  - 8 MB 阈值：假生成器先写超限文件，断言用回退帧率重试；再超限则接受；
+  - 时间段只编码一次（12 MB 的文件也不触发第二次尝试），帧率固定为 60，落盘扩展名是 `.mp4`；
   - 任务状态：运行/完成/失败/取消计数与文案。
 - 预览：
   - 渲染不产生行、不进队列、不动任务计数；
-  - 预览带回了请求与帧率（超限时是回退后的帧率），失败时不留半成品；
+  - 预览带回了请求与帧率，失败时不留半成品；
   - 采纳预览：文件移入 `highlights/`、行直接 `ready`、没有第二次编码；
   - 时间不匹配 / 文件不存在 / 路径穿越一律拒绝且不写行；
   - 丢弃只删预览目录里的文件；启动清空旧预览；孤儿清扫不碰 `preview/`。
 - 清扫：queued/running 文件保留、孤儿删除、非应用命名保留。
-- `thumbnail` 集成测试：真实 ffmpeg 生成 JPEG/GIF，断言 JPEG 魔数、GIF 魔数与 `NETSCAPE2.0` 循环块。
-- 服务集成测试（`highlights_integration_test.go`，`-tags integration`）：真实 ffmpeg 经 `video.Service` 生成 2 秒区间，断言每帧延迟正好 0.02 s（50 fps 的 2 cs，浏览器认可的最短延迟）与帧数约 100——常量对了不等于 ffmpeg 写对了。
+- `thumbnail` 集成测试：真实 ffmpeg 生成 JPEG 与 MP4，断言 JPEG 魔数、MP4 的 `ftyp`、
+  h264 / 60 fps / 帧数 / 时长，以及「没有音轨」。
+- 服务集成测试（`highlights_integration_test.go`，`-tags integration`）：真实 ffmpeg 经
+  `video.Service` 生成 2 秒区间，断言 `.mp4` 魔数、h264、60 fps 与帧数——常量对了不等于
+  ffmpeg 写对了。
 - API/服务：`BackgroundTasks` 包含「精彩时刻生成」行。
 - HTTP：列表返回状态、媒体文件可访问、非法文件名 404。
 
@@ -583,9 +598,12 @@ DeleteVideoHighlight(videoID, highlightID int64) error
 
 - `utils/highlightTime.test.ts`：
   - 时/分/秒转毫秒；
-  - 结束 ≤ 开始、> 10 秒、超时长、分/秒越界；
+  - 结束 ≤ 开始、> 20 秒、超时长、分/秒越界；常用时长的可用性（超出视频结尾或超过上限时置灰）；
   - 标签格式；
   - 预览与请求的匹配（改开始 / 改结束 / 时刻）；
+  - 常用时长按钮的可用性（超出视频结尾或上限时置灰）；
+  - 毫秒 → 时/分/秒的拆解（含与 `timePartsToMs` 的互逆）；
+  - 时间段 / 时刻的判定（决定用 `<video>` 还是 `<img>`）；
   - pending/ready 判断；
   - 移动端过滤 failed。
 - `npm run lint` 校验 manifest 与跨平台目录规则。
@@ -597,7 +615,7 @@ DeleteVideoHighlight(videoID, highlightID int64) error
 ## 11. 实施清单
 
 - [x] 数据库迁移 v31、`Highlight` 模型、仓库方法与迁移/仓库测试。
-- [x] `backend/thumbnail` 截图/GIF 生成器与集成测试。
+- [x] `backend/thumbnail` 截图/循环视频生成器与集成测试。
 - [x] `video.Service` 校验、队列、worker、恢复、任务状态与服务测试。
 - [x] `api.Library` 门面、`BackgroundTasks` 投影、`app.go`、`main.go` 启停与资源路由。
 - [x] HTTP 只读端点/媒体服务与服务器测试。
@@ -627,10 +645,11 @@ npm run build:all
 - **不做通用任务调度器。** 任务看板仍是只读投影；精彩时刻的执行器归 `video.Service`，状态落在自己的表里。
 - **移动端不提供写操作。** 新增、重试、删除只在桌面端；失败条目在移动端隐藏。
 - **不自动重试明确失败。** 源损坏、超时等确定性错误交给用户手动重试；只有崩溃中断自动重排。
-- **8 MB 是软上限。** 25 fps 仍超限时保留文件，不再自动降颜色/分辨率。
-- **GIF 仍是 256 色上限。** 不引入 ffmpeg 之外的压缩工具。
+- **没有体积回退。** 20 秒、480 宽、60 fps 的 MP4 约 750 KB，降帧降质换不回有意义的东西；
+  第一版 GIF 的 8 MB 软上限随格式一起删掉了。
+- **不做多分辨率/多码率。** 480 宽是固定档；想更清晰只能整体上调这个常量（现在体积不再是瓶颈）。
 - **不支持编辑。** 修改时间只能删除后重新添加。
-- **不设数量上限。** 10 秒上限与用户逐条输入控制体积。
+- **不设数量上限。** 20 秒上限与用户逐条输入控制体积。
 - **回滚不清理新目录。** 旧版本不会删除 `highlights/`，升级后继续使用。
 
 ---
@@ -668,8 +687,8 @@ npm run build:all
 ### 13.5 可替换的接缝
 
 `video.Service` 的 `highlightState` 持有两个 ffmpeg 生成函数和一个 `fileSize`，默认分别接到
-`backend/thumbnail` 与 `os.Stat`。测试据此描述"成功 / 失败 / 超过 8 MB / 卡住直到关闭"，不必真的
-跑 ffmpeg，也不必写 8 MB 的文件。
+`backend/thumbnail` 与 `os.Stat`。测试据此描述"成功 / 失败 / 卡住直到关闭"，不必真的跑 ffmpeg，
+也不必写几 MB 的文件。
 
 ### 13.6 生成目录按需创建
 
@@ -689,11 +708,11 @@ npm run build:all
 `video.ValidHighlightFileName` 是唯一实现，桌面 `AssetServer` 的 `/highlights/` 与局域网
 `GET /highlights/{name}` 都调用它，清扫用的也是同一个正则——三处各写一遍迟早会漂移。
 
-### 13.9 帧率：10 → 25 → 50 fps（2026-11-25 两次修订）
+### 13.9 帧率：10 → 25 → 50 fps（2026-11-25，**已被 13.11 取代**）
 
-第一版按设计用了 10 fps，实际用起来"一顿一顿"：GIF 的帧延迟是 1/100 秒，10 fps 就是每帧
-100 ms，运动画面的不连续非常明显。先改到 25 fps，随后按用户要求提到 **50 fps——GIF 的物理
-上限**：每帧正好 2 cs，是浏览器认可的最短延迟。
+这一节记录的是 GIF 时代的历史：先 10 fps，因运动画面"一顿一顿"提到 25，再按用户要求提到
+**50 fps——GIF 的物理上限**（每帧正好 2 cs，浏览器认可的最短延迟）。60 fps 在 GIF 里写不出来，
+原因见下表，这也是后来换 MP4 的直接动机。
 
 **为什么不能 60 fps**（实测同一段 5 秒素材，`fps=60`）：
 
@@ -724,7 +743,7 @@ Chromium 与 Firefox 都有一条硬规则：延迟小于 2 cs 的帧按 10 cs �
    `videoID/startMs/endMs` 与请求一致后 `os.Rename` 到 `highlights/`，直接写一条 `ready`
    行。所以"确认的那张图"与"存下来的那张图"是同一个文件，也不会把同一段区间编码两遍。
    校验失败（预览已被清理）时前端退回普通 `addVideoHighlight`，保存不会因此失败。
-3. **预览是同步调用。** 普通内容 1–2 秒，满屏颗粒的 10 秒区间最坏十几秒；期间弹窗显示
+3. **预览是同步调用。** 普通内容 1–3 秒，最坏的 20 秒区间约一两秒（h264 比 GIF 快得多）；期间弹窗显示
    「生成预览中…」并禁用保存，避免存下一张还没确认的图。同一时刻只允许一个预览在跑
    （`previewMu`），两个弹窗同时预览只会让双方都更慢。
 
@@ -735,3 +754,27 @@ Chromium 与 Firefox 都有一条硬规则：延迟小于 2 cs 的帧按 10 cs �
 `preview/` 因此不能交给孤儿清扫（那里的文件天生没有行）。它的生命周期是：关闭弹窗/改时间
 即时删除 → 应用启动清空上一个进程的残留。`TestImageSweepLeavesPreviewsAlone` 钉住前者与
 清扫的边界。
+
+### 13.11 换成 MP4、上限提到 20 秒、加常用时长（2026-11-26）
+
+用户在看过 GIF 之后问「gif 反而比 mp4 要大吗？」，随后要求换成 MP4、最长允许 20 秒，并能在
+填好开始时间后用 5 / 10 / 15 / 20 秒一键设置结束时间。三处一起改：
+
+1. **容器**：时间段从 GIF 改为 MP4（H.264，yuv420p，静音，60 fps，480 宽，CRF 26，`+faststart`）。
+   60 fps 现在是真的 60 fps；体积同内容小 20 倍上下（10 秒实测：GIF 50 fps 1.73 MB → MP4 60 fps
+   77 KB～750 KB，取决于画面）。`backend/thumbnail` 的 `GenerateHighlightClip` 取代了
+   `GenerateHighlightGIF`，滤镜链、调色板与 `-gifflags` 一并删除。
+2. **上限 10 → 20 秒**：`MaxHighlightRangeMs = 20000`，前后端与文案同步。20 秒 60 fps 实测
+   750 KB、编码 0.9 秒，所以 **8 MB 软上限与降帧重试被删掉**——一个只为 GIF 的体积问题而存在的
+   机制。`generateHighlight` 现在只编码一次，并把实际帧率返回给预览显示。
+3. **常用时长**：`HIGHLIGHT_DURATION_PRESETS = [5,10,15,20]`，点一下把结束时间设成
+   「开始 + N 秒」，写入同样的三个输入框，走同样的校验。会超出视频结尾或上限的按钮置灰
+   （`canUseHighlightPreset`），**不夹取**——悄悄把 +20 秒改成 +7 秒等于保存了用户没要的时长。
+
+播放端随之从 `<img>` 换成 `ui/clip.tsx` 的 `LoopingClip`（`<video muted loop playsInline>`）：
+静音是自动播放的前提，`playsInline` 防止 iOS 抢全屏，自动播放被拒时盖一个播放按钮，滚出视口
+就暂停（网格里同时播放十几个 60 fps 片段会白烧 CPU）。时刻仍是 `<img>`——静止图用视频没有意义。
+
+**兼容**：MP4 之前生成的 `.gif` 条目照常显示，`ValidHighlightFileName` 与清扫正则都保留 `gif`；
+被重试/恢复的旧条目在生成前用 `SetHighlightMediaPath` 换成新的 `.mp4` 名字，否则 MP4 字节会
+顶着 `.gif` 扩展名被服务成错误的 Content-Type。

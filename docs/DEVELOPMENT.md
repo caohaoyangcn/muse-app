@@ -125,7 +125,7 @@ macOS:   ~/Library/Application Support/Muse/
 
 ├── app.db          # SQLite 收藏库
 ├── thumbnails\     # 缩略图（thumbnails/<id>.jpg）
-├── highlights\     # 精彩时刻（highlights/h-<影片id>-<纳秒>-<序号>.<jpg|gif>）
+├── highlights\     # 精彩时刻（highlights/h-<影片id>-<纳秒>-<序号>.<jpg|mp4>）
 ├── preview\        # 待确认的精彩时刻预览（关闭弹窗或重启即清空）
 ├── covers\jav\     # 刮削封面（covers/jav/<id>.jpg）
 ├── avatars\        # 演员头像（avatars/<star_id>.jpg）
@@ -146,7 +146,7 @@ cd frontend
 npm run build:mobile   # 产物写入 backend/server/webui/（入库，go:embed 依赖）
 ```
 
-移动端刻意不做：发起刮削、封面选帧、演员合并、添加收藏、目录监控与设置。这些依赖原生文件对话框、ffmpeg 交互或服务器文件系统。标签/演员/硬盘筛选两端都有。精彩时刻在移动端只读（可查看截图与 GIF，不能新增/重试/删除）。
+移动端刻意不做：发起刮削、封面选帧、演员合并、添加收藏、目录监控与设置。这些依赖原生文件对话框、ffmpeg 交互或服务器文件系统。标签/演员/硬盘筛选两端都有。精彩时刻在移动端只读（可查看截图与循环视频，不能新增/重试/删除）。
 
 播放由客户端完成：`GET /stream/video/{id}` 始终以 HTTP Range 传输原始文件，Muse 不做服务端转码或重封装；iPhone/iPad 可跳转 Infuse / VLC，其他设备复制播放地址。
 
@@ -179,7 +179,7 @@ npm run build:mobile   # 产物写入 backend/server/webui/（入库，go:embed 
 
 - `GET /stream/video/{id}`（Range；始终返回原始文件，由专用播放器客户端解码）
 - `GET /thumbnails/{id}`、`GET /covers/jav/{id}`、`GET /avatars/{name}`
-- `GET /highlights/{name}`（精彩时刻截图/GIF；只接受 `h-<数字>-<数字>-<数字>.(jpg|gif)`）
+- `GET /highlights/{name}`（精彩时刻截图/循环视频；只接受 `h-<数字>-<数字>-<数字>.(jpg|mp4)`，以及 MP4 之前生成的 `.gif`）
 
 > 🔐 `/api/*`（除 `/api/session` 与只读的 `/api/extension/check`）、`/stream/*`、`/thumbnails/*`、`/covers/*`、`/avatars/*`、`/highlights/*` 都需要访问口令：HttpOnly Cookie `muse_lan_key`、`Authorization: Bearer <key>`，或**仅限 `/stream/`** 的 `?key=`（给 Infuse / VLC 这类不能带 Cookie 的播放器）。SPA 外壳与静态资源公开，否则登录页加载不出来。
 >
@@ -224,7 +224,7 @@ SmartScreen、杀软误报、防火墙、`shared` / `static` 两种 FFmpeg 打�
 - [`guided-tour.md`](spec/guided-tour.md)：新手引导
 - [`volume-offline.md`](spec/volume-offline.md)：卷离线与缺失文件
 - [`generated-images.md`](spec/generated-images.md)：生成图片的生命周期
-- [`highlight-moments.md`](spec/highlight-moments.md)：精彩时刻（时刻截图 / 时间段 GIF，后台生成）
+- [`highlight-moments.md`](spec/highlight-moments.md)：精彩时刻（时刻截图 / 时间段循环视频，后台生成）
 
 ## 提交约定
 

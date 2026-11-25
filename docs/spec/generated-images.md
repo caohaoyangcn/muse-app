@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `<dataDir>/thumbnails/<id>.jpg` | `backend/thumbnail`（自动缩略图 / 自定义封面帧） | 记录 id |
 | `<dataDir>/covers/jav/<id>.jpg` | `backend/jav`（刮削封面下载） | 记录 id |
-| `<dataDir>/highlights/h-<videoID>-<unixNano>-<seq>.<jpg\|gif>` | `backend/thumbnail`（精彩时刻，见 `highlight-moments.md`） | 生成时的唯一名 |
+| `<dataDir>/highlights/h-<videoID>-<unixNano>-<seq>.<jpg\|mp4>` | `backend/thumbnail`（精彩时刻，见 `highlight-moments.md`） | 生成时的唯一名 |
 
 前两者的命名规则相同且**只由记录 id 决定**：`<id>.jpg`。这是清理能够安全进行的全部依据——
 文件名就是归属声明。
@@ -42,7 +42,7 @@
 
 `video.Service.RemoveOrphanedImages()` 读取 `videos` 的全量 id，遍历前两个目录删除 `<id>.jpg`
 且 id 不在集合中的文件；再读取 `video_highlights.media_path` 建立 basename 集合，遍历
-`highlights/` 删除形如 `h-<数字>-<数字>-<数字>.(jpg|gif)` 且不在集合中的文件。返回
+`highlights/` 删除形如 `h-<数字>-<数字>-<数字>.(jpg|mp4)`（以及 MP4 之前生成的 `.gif`）且不在集合中的文件。返回
 `{Scanned, Removed, Bytes}`（两个目录的结果合并）。
 
 触发点：
@@ -58,7 +58,7 @@
 
 - 只认 `<十进制正整数>.jpg`。`abc.jpg`、`999.png`、`999.jpg.bak`、`.cover-*`、`0.jpg`、`-5.jpg`、
   以及名字是图片的**目录**，全部原样保留。
-- `highlights/` 只认 `h-<数字>-<数字>-<数字>.(jpg|gif)`；其它命名（`h-1-2.jpg`、`h-1-2-3.png`、
+- `highlights/` 只认 `h-<数字>-<数字>-<数字>.(jpg|mp4)`，外加早期生成的 `.gif`；其它命名（`h-1-2.jpg`、`h-1-2-3.png`、
   `h-1-2-3.gif.bak`、以点开头的临时文件）一律保留。排队中/生成中的行也带着 `media_path`，
   所以**正在生成的半成品不会被当成孤儿**。
 - 只遍历 `thumbnails/`、`covers/jav/` 与 `highlights/`，不递归，不碰数据目录里的其它内容。
