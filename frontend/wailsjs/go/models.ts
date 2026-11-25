@@ -1069,6 +1069,40 @@ export namespace video {
 	        this.FullHashAt = source["FullHashAt"];
 	    }
 	}
+	export class Highlight {
+	    id: number;
+	    videoId: number;
+	    kind: string;
+	    startMs: number;
+	    endMs: number;
+	    mediaPath: string;
+	    status: string;
+	    error: string;
+	    interruptions?: number;
+	    createdAt: number;
+	    updatedAt: number;
+	    finishedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Highlight(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.videoId = source["videoId"];
+	        this.kind = source["kind"];
+	        this.startMs = source["startMs"];
+	        this.endMs = source["endMs"];
+	        this.mediaPath = source["mediaPath"];
+	        this.status = source["status"];
+	        this.error = source["error"];
+	        this.interruptions = source["interruptions"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.finishedAt = source["finishedAt"];
+	    }
+	}
 	export class Service {
 	
 	

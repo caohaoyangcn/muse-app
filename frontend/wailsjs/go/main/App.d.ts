@@ -19,6 +19,8 @@ export function AddCloudVideos(arg1:number,arg2:Array<string>):Promise<Array<vid
 
 export function AddVideo(arg1:string):Promise<video.Video>;
 
+export function AddVideoHighlight(arg1:number,arg2:number,arg3:number):Promise<video.Highlight>;
+
 export function AddVideos(arg1:Array<string>):Promise<Array<video.AddVideoResult>>;
 
 export function AddWatchDir(arg1:string):Promise<watch.WatchedDir>;
@@ -52,6 +54,8 @@ export function ContentScanStatus():Promise<video.ContentScanStatus>;
 export function CopyPath(arg1:number):Promise<void>;
 
 export function DeleteCloudConnection(arg1:number):Promise<void>;
+
+export function DeleteVideoHighlight(arg1:number,arg2:number):Promise<void>;
 
 export function DeleteVideoPermanently(arg1:number):Promise<void>;
 
@@ -103,6 +107,8 @@ export function ListJavTaskOverviews():Promise<Array<jav.TaskOverview>>;
 
 export function ListTrash():Promise<api.TrashSnapshot>;
 
+export function ListVideoHighlights(arg1:number):Promise<Array<video.Highlight>>;
+
 export function ListVideos():Promise<Array<video.Video>>;
 
 export function ListWatchDirs():Promise<Array<watch.WatchedDir>>;
@@ -136,6 +142,8 @@ export function ResetVideoCover(arg1:number):Promise<video.Video>;
 export function RestoreVideo(arg1:number):Promise<void>;
 
 export function RetranslateAllTitles():Promise<number>;
+
+export function RetryVideoHighlight(arg1:number,arg2:number):Promise<void>;
 
 export function ReverifyContentDuplicate(arg1:string):Promise<void>;
 

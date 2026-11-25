@@ -18,6 +18,10 @@ export function AddVideo(arg1) {
   return window['go']['main']['App']['AddVideo'](arg1);
 }
 
+export function AddVideoHighlight(arg1, arg2, arg3) {
+  return window['go']['main']['App']['AddVideoHighlight'](arg1, arg2, arg3);
+}
+
 export function AddVideos(arg1) {
   return window['go']['main']['App']['AddVideos'](arg1);
 }
@@ -84,6 +88,10 @@ export function CopyPath(arg1) {
 
 export function DeleteCloudConnection(arg1) {
   return window['go']['main']['App']['DeleteCloudConnection'](arg1);
+}
+
+export function DeleteVideoHighlight(arg1, arg2) {
+  return window['go']['main']['App']['DeleteVideoHighlight'](arg1, arg2);
 }
 
 export function DeleteVideoPermanently(arg1) {
@@ -186,6 +194,10 @@ export function ListTrash() {
   return window['go']['main']['App']['ListTrash']();
 }
 
+export function ListVideoHighlights(arg1) {
+  return window['go']['main']['App']['ListVideoHighlights'](arg1);
+}
+
 export function ListVideos() {
   return window['go']['main']['App']['ListVideos']();
 }
@@ -252,6 +264,10 @@ export function RestoreVideo(arg1) {
 
 export function RetranslateAllTitles() {
   return window['go']['main']['App']['RetranslateAllTitles']();
+}
+
+export function RetryVideoHighlight(arg1, arg2) {
+  return window['go']['main']['App']['RetryVideoHighlight'](arg1, arg2);
 }
 
 export function ReverifyContentDuplicate(arg1) {
