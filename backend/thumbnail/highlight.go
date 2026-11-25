@@ -28,8 +28,10 @@ const (
 	// HighlightMomentWidth is the width of a saved moment frame. The height
 	// follows the source aspect ratio.
 	HighlightMomentWidth = 1280
-	// HighlightGIFWidth is the width of a looping GIF. 480 keeps a ten-second
-	// loop inside the size ceiling on ordinary material.
+	// HighlightGIFWidth is the width of a looping GIF. 480 is the size/quality
+	// compromise: at the 50 fps ceiling a ten-second ordinary range lands around
+	// 1.7 MB, comfortably inside the ceiling, and the same range at 640 would be
+	// roughly twice that.
 	HighlightGIFWidth = 480
 	// HighlightGIFColors caps the GIF palette. GIF itself allows 256; 128 is
 	// the size/quality compromise the spec picked.

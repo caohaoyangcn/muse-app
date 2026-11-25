@@ -539,13 +539,17 @@ func TestHighlightRecoveryGivesUpAfterRepeatedInterruptions(t *testing.T) {
 }
 
 // The frame rate is a product decision the user feels rather than a
-// technical one, so it is pinned here: 10 fps read as visibly choppy on motion.
-// The GIF delay is stored in hundredths of a second, so the default also has to
-// divide 100 or every frame gets rounded and the loop plays at a different
-// speed than requested.
+// technical one, so it is pinned here. The GIF delay is stored in hundredths of
+// a second: the default must divide 100 (or every frame gets rounded), and it
+// must stay at or under 50 fps, because a delay below 2 cs is clamped to 10 cs
+// by browsers and the loop would play slower than a lower frame rate would.
 func TestHighlightGIFFrameRatesAreSmooth(t *testing.T) {
 	if highlightGIFDefaultFPS < 20 {
-		t.Errorf("default%dfps is too choppy; 20 or more is the floor", highlightGIFDefaultFPS)
+		t.Errorf("default %d fps is too choppy; 20 or more is the floor", highlightGIFDefaultFPS)
+	}
+	if highlightGIFDefaultFPS > 50 {
+		t.Errorf("default %d fps cannot be expressed in GIF centiseconds; "+
+			"frames under 2 cs are clamped to 100 ms", highlightGIFDefaultFPS)
 	}
 	if 100%highlightGIFDefaultFPS != 0 {
 		t.Errorf("default %d fps does not divide 100 cs; frame delays would be rounded",
