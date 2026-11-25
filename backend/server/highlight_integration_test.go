@@ -95,6 +95,15 @@ func (r *stubVideoRepo) FinishHighlight(id int64, status, errMsg string, finishe
 	return true, nil
 }
 
+func (r *stubVideoRepo) SetHighlightMediaPath(id int64, mediaPath string) (bool, error) {
+	h, err := r.GetHighlight(id)
+	if err != nil {
+		return false, nil
+	}
+	h.MediaPath = mediaPath
+	return true, nil
+}
+
 func (r *stubVideoRepo) RetryHighlight(videoID, id int64) (bool, error) {
 	h, err := r.GetVideoHighlight(videoID, id)
 	if err != nil || h.Status != video.HighlightStatusFailed {

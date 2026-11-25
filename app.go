@@ -518,7 +518,7 @@ func (a *App) ListVideoHighlights(videoID int64) ([]video.Highlight, error) {
 	return a.lib.ListVideoHighlights(videoID)
 }
 
-// AddVideoHighlight queues a screenshot (endMs == 0) or a looping GIF of a time
+// AddVideoHighlight queues a screenshot (endMs == 0) or a looping clip of a time
 // range. It returns immediately; the image arrives through a background event.
 func (a *App) AddVideoHighlight(videoID, startMs, endMs int64) (*video.Highlight, error) {
 	return a.lib.AddVideoHighlight(videoID, startMs, endMs)

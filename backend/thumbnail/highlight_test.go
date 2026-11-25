@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// The ffmpeg command lines are the product here: the frame size, the frame rate
-// and the difference-based filter chain are all in the arguments, so a test that
-// only checked "some file appeared" would let a quality regression through.
+// The ffmpeg command lines are the product here: the frame size, the frame rate,
+// the codec settings and the audio drop are all in the arguments, so a test that
+// only checked "some file appeared" would let a quality or size regression through.
 
 func TestMomentArgsSeekBeforeInput(t *testing.T) {
 	args := MomentArgs(`D:\v\a.mp4`, 90_000, `D:\data\highlights\h-1-2-3.jpg`)
@@ -41,8 +41,8 @@ func TestMomentArgsSkipZeroSeek(t *testing.T) {
 	}
 }
 
-func TestGIFArgsUseOneLineDifferenceFilter(t *testing.T) {
-	args := GIFArgs("a.mp4", 90_000, 95_000, 10, "out.gif")
+func TestClipArgsProduceALoopableMutedMP4(t *testing.T) {
+	args := ClipArgs("a.mp4", 90_000, 105_000, 60, "out.mp4")
 
 	ss := indexOf(args, "-ss")
 	duration := indexOf(args, "-t")
@@ -50,45 +50,39 @@ func TestGIFArgsUseOneLineDifferenceFilter(t *testing.T) {
 	if ss < 0 || duration < 0 || input < 0 || ss > input || duration > input {
 		t.Fatalf("args = %v, want -ss and -t before -i", args)
 	}
-	if args[ss+1] != "90.000" || args[duration+1] != "5.000" {
-		t.Errorf("start/duration = %q/%q, want 90.000/5.000", args[ss+1], args[duration+1])
+	if args[ss+1] != "90.000" || args[duration+1] != "15.000" {
+		t.Errorf("start/duration = %q/%q, want 90.000/15.000", args[ss+1], args[duration+1])
+	}
+	if indexOf(args, "-an") < 0 {
+		t.Errorf("args = %v, want the audio track dropped", args)
 	}
 
 	filter := args[indexOf(args, "-vf")+1]
-	if strings.Contains(filter, "\n") {
-		t.Errorf("filter %q must be a single line", filter)
-	}
-	for _, want := range []string{
-		"fps=10",
-		"scale=480:-2:flags=lanczos",
-		"palettegen=max_colors=128:stats_mode=diff",
-		"paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle",
-		"split[s0][s1]",
-	} {
+	for _, want := range []string{"fps=60", "scale=480:-2:flags=lanczos", "setsar=1"} {
 		if !strings.Contains(filter, want) {
-			t.Errorf("filter %q missing %q", filter, want)
+			t.Errorf("filter = %q missing %q", filter, want)
 		}
 	}
-	// A GIF with sound is a larger file for nothing; the loop flag is what makes
-	// it play as a loop outside the app.
+
+	// The codec settings are what make the file small, seekable and playable in
+	// any browser; none of them is optional.
 	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, "-an") {
-		t.Errorf("args = %v, want the audio track dropped", args)
-	}
-	if !strings.Contains(joined, "-loop 0") {
-		t.Errorf("args = %v, want an infinite loop", args)
-	}
-	if !strings.Contains(joined, "-gifflags +transdiff") {
-		t.Errorf("args = %v, want transparent frame differencing", args)
+	for _, want := range []string{
+		"-c:v libx264",
+		"-crf 26",
+		"-pix_fmt yuv420p",
+		"-movflags +faststart",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("args = %v missing %q", args, want)
+		}
 	}
 }
 
-func TestGIFFilterFollowsFrameRate(t *testing.T) {
-	// The worker's fallback rate must reach the filter, or the retry would
-	// rewrite the same file at the same speed it was rejected for.
-	args := GIFArgs("a.mp4", 0, 3000, 8, "out.gif")
-	if filter := args[indexOf(args, "-vf")+1]; !strings.Contains(filter, "fps=8") {
-		t.Errorf("filter = %q, want fps=8", filter)
+func TestClipFilterFollowsFrameRate(t *testing.T) {
+	args := ClipArgs("a.mp4", 0, 3000, 30, "out.mp4")
+	if filter := args[indexOf(args, "-vf")+1]; !strings.Contains(filter, "fps=30") {
+		t.Errorf("filter = %q, want fps=30", filter)
 	}
 }
 
@@ -96,7 +90,7 @@ func TestGenerateHighlightRequiresFFmpeg(t *testing.T) {
 	if err := GenerateHighlightMoment(t.Context(), "", "a.mp4", 0, t.TempDir()+"/out.jpg", 0); err != ErrFFmpegMissing {
 		t.Errorf("err = %v, want ErrFFmpegMissing", err)
 	}
-	if err := GenerateHighlightGIF(t.Context(), "", "a.mp4", 0, 1000, 10, t.TempDir()+"/out.gif", 0); err != ErrFFmpegMissing {
+	if err := GenerateHighlightClip(t.Context(), "", "a.mp4", 0, 1000, 60, t.TempDir()+"/out.mp4", 0); err != ErrFFmpegMissing {
 		t.Errorf("err = %v, want ErrFFmpegMissing", err)
 	}
 }

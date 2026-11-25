@@ -1534,7 +1534,7 @@ func (l *Library) ListVideoHighlights(videoID int64) ([]video.Highlight, error) 
 	return l.videos.ListHighlights(videoID)
 }
 
-// AddVideoHighlight queues a single frame (endMs == 0) or a looping GIF of a
+// AddVideoHighlight queues a single frame (endMs == 0) or a looping clip of a
 // time range. It returns as soon as the row is written: the image is produced by
 // the background generator and announced through video:highlight:updated.
 func (l *Library) AddVideoHighlight(videoID, startMs, endMs int64) (*video.Highlight, error) {
@@ -1562,7 +1562,7 @@ func (l *Library) DeleteVideoHighlight(videoID, highlightID int64) error {
 }
 
 // PreviewVideoHighlight renders the request into the preview folder without
-// recording anything, so the dialog can show the real GIF before it is saved.
+// recording anything, so the dialog can show the real clip before it is saved.
 func (l *Library) PreviewVideoHighlight(videoID, startMs, endMs int64) (*video.HighlightPreview, error) {
 	if l.videos == nil {
 		return nil, fmt.Errorf("视频服务未初始化")

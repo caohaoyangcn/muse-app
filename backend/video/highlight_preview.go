@@ -12,9 +12,9 @@ import (
 //
 // "Save" used to be the only way to see what a range would look like: the row was
 // queued and the image arrived a moment later. A preview renders the same file up
-// front, into preview/, and lets the dialog show the real GIF — same ffmpeg
-// command, same frame rate, same 8 MB retry — so the user confirms what they will
-// get instead of guessing from a time range.
+// front, into preview/, and lets the dialog show the real clip — same ffmpeg
+// command, same frame rate — so the user confirms what they will get instead of
+// guessing from a time range.
 //
 // A preview is not a row. It has no status, it is never queued, and the detail
 // section never shows it. Saving adopts it: the file moves into highlights/ and a

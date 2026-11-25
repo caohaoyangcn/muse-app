@@ -91,8 +91,8 @@ func NewService(repo VideoRepository, processor *Processor, dataDir string, log 
 	s.highlights.generateMoment = func(ctx context.Context, videoPath string, atMs int64, outPath string, timeout time.Duration) error {
 		return thumbnail.GenerateHighlightMoment(ctx, s.ffmpegBin(), videoPath, atMs, outPath, timeout)
 	}
-	s.highlights.generateGIF = func(ctx context.Context, videoPath string, startMs, endMs int64, fps int, outPath string, timeout time.Duration) error {
-		return thumbnail.GenerateHighlightGIF(ctx, s.ffmpegBin(), videoPath, startMs, endMs, fps, outPath, timeout)
+	s.highlights.generateClip = func(ctx context.Context, videoPath string, startMs, endMs int64, fps int, outPath string, timeout time.Duration) error {
+		return thumbnail.GenerateHighlightClip(ctx, s.ffmpegBin(), videoPath, startMs, endMs, fps, outPath, timeout)
 	}
 	s.highlights.fileSize = func(path string) (int64, error) {
 		info, err := os.Stat(path)

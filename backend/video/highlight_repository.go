@@ -152,6 +152,19 @@ func (r *sqliteRepository) FinishHighlight(id int64, status, errMsg string, fini
 	return n > 0, err
 }
 
+// SetHighlightMediaPath re-points one row at a new file name. rows-affected
+// false means the row is gone, which the caller treats like any other lost row.
+func (r *sqliteRepository) SetHighlightMediaPath(id int64, mediaPath string) (bool, error) {
+	res, err := r.db.Exec(
+		`UPDATE video_highlights SET media_path = ?, updated_at = ? WHERE id = ?`,
+		mediaPath, nowMillis(), id)
+	if err != nil {
+		return false, fmt.Errorf("set highlight media path: %w", err)
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 // RetryHighlight re-queues a failed row and clears the previous error. It only
 // matches failed rows: a ready row has nothing to retry, and a queued one is
 // already waiting.

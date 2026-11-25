@@ -7,13 +7,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
 
 // These tests run real ffmpeg. The unit tests above pin the arguments; these pin
-// that the arguments actually produce a JPEG and a looping GIF, because a filter
-// chain that ffmpeg rejects only fails at runtime.
+// that the arguments actually produce a JPEG and a playable MP4, because a filter
+// chain or an encoder setting that ffmpeg rejects only fails at runtime.
 
 func requireFFmpeg(t *testing.T) (ffmpegBin string, videoPath string) {
 	t.Helper()
@@ -24,12 +26,49 @@ func requireFFmpeg(t *testing.T) (ffmpegBin string, videoPath string) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "sample.mp4")
 	cmd := exec.Command(bin, "-y", "-hide_banner", "-loglevel", "error",
-		"-f", "lavfi", "-i", "testsrc=duration=4:size=320x240:rate=10",
+		"-f", "lavfi", "-i", "testsrc=duration=4:size=320x240:rate=30",
 		"-pix_fmt", "yuv420p", out)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("ffmpeg test clip: %v: %s", err, output)
 	}
 	return bin, out
+}
+
+// probeClip reports the codec, frame rate and duration of a rendered file.
+func probeClip(t *testing.T, path string) (codec string, fps float64, frames int, duration float64) {
+	t.Helper()
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("ffprobe not on PATH; skipping integration test")
+	}
+	out, err := exec.Command(ffprobe, "-v", "error", "-select_streams", "v:0",
+		"-show_entries", "stream=codec_name,avg_frame_rate,nb_frames,duration",
+		"-of", "default=nw=1", path).Output()
+	if err != nil {
+		t.Fatalf("ffprobe %s: %v", path, err)
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "codec_name":
+			codec = value
+		case "avg_frame_rate":
+			num, den, _ := strings.Cut(value, "/")
+			n, _ := strconv.ParseFloat(num, 64)
+			d, _ := strconv.ParseFloat(den, 64)
+			if d > 0 {
+				fps = n / d
+			}
+		case "nb_frames":
+			frames, _ = strconv.Atoi(value)
+		case "duration":
+			duration, _ = strconv.ParseFloat(value, 64)
+		}
+	}
+	return codec, fps, frames, duration
 }
 
 func TestGenerateHighlightMomentIntegration(t *testing.T) {
@@ -48,24 +87,40 @@ func TestGenerateHighlightMomentIntegration(t *testing.T) {
 	}
 }
 
-func TestGenerateHighlightGIFIntegration(t *testing.T) {
+func TestGenerateHighlightClipIntegration(t *testing.T) {
 	ffmpegBin, videoPath := requireFFmpeg(t)
-	out := filepath.Join(t.TempDir(), "range.gif")
+	out := filepath.Join(t.TempDir(), "range.mp4")
 
-	if err := GenerateHighlightGIF(t.Context(), ffmpegBin, videoPath, 1000, 3500, 10, out, time.Minute); err != nil {
-		t.Fatalf("generate gif: %v", err)
+	if err := GenerateHighlightClip(t.Context(), ffmpegBin, videoPath, 1000, 3500, 60, out, time.Minute); err != nil {
+		t.Fatalf("generate clip: %v", err)
 	}
 	data, err := os.ReadFile(out)
 	if err != nil {
-		t.Fatalf("read gif: %v", err)
+		t.Fatal(err)
 	}
-	if !bytes.HasPrefix(data, []byte("GIF89a")) {
-		t.Errorf("output is not a GIF89a file (first bytes %q)", data[:min(6, len(data))])
+	// An MP4 starts with a size field and the "ftyp" box; anything else means the
+	// bytes are not what the extension promises (which the media route relies on).
+	if len(data) < 12 || !bytes.Equal(data[4:8], []byte("ftyp")) {
+		t.Fatalf("output is not an MP4 (first bytes %q)", data[:min(12, len(data))])
 	}
-	// The NETSCAPE2.0 application extension is what makes the file loop. Without
-	// it a viewer plays the animation once and stops.
-	if !bytes.Contains(data, []byte("NETSCAPE2.0")) {
-		t.Error("GIF has no NETSCAPE2.0 loop block")
+
+	codec, fps, frames, duration := probeClip(t, out)
+	if codec != "h264" {
+		t.Errorf("codec = %q, want h264", codec)
+	}
+	if fps < 59 || fps > 61 {
+		t.Errorf("fps = %v, want 60", fps)
+	}
+	if frames < 140 || frames > 160 {
+		t.Errorf("frames = %d, want about 150 for a 2.5 s clip at 60 fps", frames)
+	}
+	if duration < 2.4 || duration > 2.6 {
+		t.Errorf("duration = %v s, want about 2.5", duration)
+	}
+	// No audio track: the UI plays this muted, and an audio stream would only add
+	// bytes (the argument itself is pinned by the unit test).
+	if hasAudio(t, out) {
+		t.Error("a highlight clip must be muted")
 	}
 }
 
@@ -99,4 +154,19 @@ func TestGenerateHighlightHonoursTimeout(t *testing.T) {
 	if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
 		t.Error("a timed-out attempt must not leave an output file behind")
 	}
+}
+
+// hasAudio reports whether the file carries an audio stream.
+func hasAudio(t *testing.T, path string) bool {
+	t.Helper()
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		return false
+	}
+	out, err := exec.Command(ffprobe, "-v", "error", "-select_streams", "a",
+		"-show_entries", "stream=index", "-of", "csv=p=0", path).Output()
+	if err != nil {
+		t.Fatalf("ffprobe audio: %v", err)
+	}
+	return strings.TrimSpace(string(out)) != ""
 }

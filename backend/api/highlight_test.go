@@ -93,6 +93,15 @@ func (r *memVideoRepo) FinishHighlight(id int64, status, errMsg string, finished
 	return true, nil
 }
 
+func (r *memVideoRepo) SetHighlightMediaPath(id int64, mediaPath string) (bool, error) {
+	h, err := r.GetHighlight(id)
+	if err != nil {
+		return false, nil
+	}
+	h.MediaPath = mediaPath
+	return true, nil
+}
+
 func (r *memVideoRepo) RetryHighlight(videoID, id int64) (bool, error) {
 	h, err := r.GetVideoHighlight(videoID, id)
 	if err != nil || h.Status != video.HighlightStatusFailed {
@@ -272,13 +281,13 @@ func TestHighlightPreviewPassThrough(t *testing.T) {
 		t.Error("an impossible range must be refused")
 	}
 	if _, err := lib.AddVideoHighlightFromPreview(videoID, 5000, 4000,
-		"preview/p-1-5000-4000-1-1.gif"); err == nil {
+		"preview/p-1-5000-4000-1-1.mp4"); err == nil {
 		t.Error("an impossible range must be refused")
 	}
 	// A preview that is not there cannot be adopted; the dialog falls back to the
 	// queue instead of failing the save.
 	if _, err := lib.AddVideoHighlightFromPreview(videoID, 1000, 6000,
-		"preview/p-1-1000-6000-1-1.gif"); err == nil {
+		"preview/p-1-1000-6000-1-1.mp4"); err == nil {
 		t.Error("a missing preview must be reported as stale")
 	}
 	// Discarding something that is not a preview is a no-op, not a delete.

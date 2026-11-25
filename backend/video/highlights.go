@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,25 +30,14 @@ const (
 	// takes the whole app down every time must stop being retried automatically.
 	highlightMaxInterruptions = 3
 
-	// highlightGIFMaxBytes is the 8 MB soft ceiling on a range GIF. It is soft:
-	// the fallback is one regeneration at a lower frame rate, and a file that is
-	// still too big is kept rather than degraded further.
-	highlightGIFMaxBytes = 8 * 1024 * 1024
-
-	// Frame rates for a range GIF: the default, and the one fallback used when
-	// the default file is over the ceiling. Dropping frames keeps every frame
-	// at full resolution and colour; lowering either would not.
+	// highlightClipFPS is the frame rate every range is rendered at.
 	//
-	// 50 is the format's ceiling, not an arbitrary preference. A GIF stores each
-	// frame's delay in hundredths of a second, so 50 fps is exactly 2 cs — the
-	// shortest delay browsers honour. Ask for more and ffmpeg writes 1 cs and
-	// 2 cs alternately, and a delay under 2 cs is clamped to 10 cs (100 ms) by
-	// Chromium and Firefox: a 60 fps request plays with every other frame frozen
-	// for a tenth of a second, which is worse than 25 fps ever was. Size is not
-	// what limits this — unchanged pixels ride along transparently, so a 5 s
-	// 480 px range measured 834 KB at 25 fps and 978 KB at 50.
-	highlightGIFDefaultFPS  = 50
-	highlightGIFFallbackFPS = 25
+	// It used to be two values (a default and a fallback) because a GIF stores
+	// frame delays in hundredths of a second and cannot express more than 50 fps.
+	// The range is an MP4 now, so 60 is simply "as smooth as the source can be",
+	// and there is no size fallback: a 20 s clip at 480 px lands around 750 KB,
+	// far below the point where degrading it would buy anything.
+	highlightClipFPS = 60
 
 	// highlightTasksUpdateInterval coalesces the dashboard event the same way the
 	// translation queue does: a burst of finished rows is one redraw.
@@ -206,10 +196,10 @@ type highlightState struct {
 	previewMu sync.Mutex
 
 	// Seams. wired by NewService to the real ffmpeg generator and os.Stat; tests
-	// replace them to describe a generator that succeeds, fails, overshoots the
-	// size ceiling or blocks until the app shuts down.
+	// replace them to describe a generator that succeeds, fails or blocks until
+	// the app shuts down.
 	generateMoment func(ctx context.Context, videoPath string, atMs int64, outPath string, timeout time.Duration) error
-	generateGIF    func(ctx context.Context, videoPath string, startMs, endMs int64, fps int, outPath string, timeout time.Duration) error
+	generateClip   func(ctx context.Context, videoPath string, startMs, endMs int64, fps int, outPath string, timeout time.Duration) error
 	fileSize       func(path string) (int64, error)
 }
 
@@ -477,6 +467,8 @@ func (s *Service) processHighlight(id int64) {
 		s.finishHighlight(h, HighlightStatusFailed, highlightErrDeletedVideo)
 		return
 	}
+	s.rewriteLegacyMediaPath(h)
+	s.setHighlightCurrent(v.FileName, h)
 	s.setHighlightCurrent(v.FileName, h)
 
 	// The disk may have been unplugged, the file deleted or the cloud source
@@ -507,13 +499,37 @@ func (s *Service) processHighlight(id int64) {
 	s.finishHighlight(h, HighlightStatusReady, "")
 }
 
-// generateHighlight renders the request at exactly one path: a moment is the
-// frame at StartMs, a range is the GIF of [StartMs, EndMs). The frame rate it
-// ended up with is returned (0 for a moment) so a preview can report it.
+// rewriteLegacyMediaPath gives a row whose recorded file name no longer matches
+// its kind a fresh name before it is rendered.
 //
-// The 8 MB ceiling is handled here rather than in the generator because only the
-// caller knows the request: a retry overwrites the same path, so the UI never
-// sees an intermediate file.
+// It exists for the one upgrade path this feature had: ranges were GIFs until the
+// switch to MP4, so a row that is retried or recovered after the upgrade still
+// points at a .gif. Rendering MP4 bytes into that name would serve them with the
+// wrong Content-Type — the file's extension is what both media routes use to
+// decide it.
+func (s *Service) rewriteLegacyMediaPath(h *Highlight) {
+	want := highlightFileExt(h.Kind)
+	if strings.EqualFold(filepath.Ext(h.MediaPath), want) {
+		return
+	}
+	rewritten := highlightMediaPath(h.VideoID, s.highlights.seq.Add(1), h.Kind)
+	ok, err := s.repo.SetHighlightMediaPath(h.ID, rewritten)
+	if err != nil {
+		s.log.Error("rewrite highlight media path failed", "id", h.ID, "err", err)
+		return
+	}
+	if !ok {
+		// The row is gone; the rest of processHighlight will find out through the
+		// final write and discard the result.
+		return
+	}
+	s.log.Info("highlight media path upgraded", "id", h.ID, "from", h.MediaPath, "to", rewritten)
+	h.MediaPath = rewritten
+}
+
+// generateHighlight renders the request at exactly one path: a moment is the
+// frame at StartMs, a range is the looping MP4 of [StartMs, EndMs). The frame
+// rate it was rendered at is returned (0 for a moment) so a preview can report it.
 func (s *Service) generateHighlight(ctx context.Context, v *Video, h *Highlight, media, outPath string) (int, error) {
 	timeout := highlightLocalTimeout
 	if v.IsRemote() {
@@ -522,19 +538,10 @@ func (s *Service) generateHighlight(ctx context.Context, v *Video, h *Highlight,
 	if h.Kind == HighlightKindMoment {
 		return 0, s.highlights.generateMoment(ctx, media, h.StartMs, outPath, timeout)
 	}
-	if err := s.highlights.generateGIF(ctx, media, h.StartMs, h.EndMs, highlightGIFDefaultFPS, outPath, timeout); err != nil {
+	if err := s.highlights.generateClip(ctx, media, h.StartMs, h.EndMs, highlightClipFPS, outPath, timeout); err != nil {
 		return 0, err
 	}
-	size, err := s.highlights.fileSize(outPath)
-	if err != nil || size <= highlightGIFMaxBytes {
-		return highlightGIFDefaultFPS, nil
-	}
-	s.log.Info("highlight gif over the size ceiling, retrying at a lower frame rate",
-		"id", h.ID, "bytes", size, "fps", highlightGIFFallbackFPS)
-	if err := s.highlights.generateGIF(ctx, media, h.StartMs, h.EndMs, highlightGIFFallbackFPS, outPath, timeout); err != nil {
-		return 0, err
-	}
-	return highlightGIFFallbackFPS, nil
+	return highlightClipFPS, nil
 }
 
 // highlightSource answers "can this favorite's bytes be read right now?" and

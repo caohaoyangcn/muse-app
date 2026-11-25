@@ -16,10 +16,17 @@ import (
 
 // 精彩时刻 generation (docs/spec/highlight-moments.md §7).
 //
-// Two products come out of ffmpeg here: a single frame saved as a JPEG, and a
-// time range saved as a looping GIF. Both read the source video and write one
-// derived file elsewhere; the source is never modified, which is the same
+// Two products come out of ffmpeg here: a single frame saved as a JPEG, and a time
+// range saved as a short, muted, looping MP4. Both read the source video and write
+// one derived file elsewhere; the source is never modified, which is the same
 // "收藏 ≠ 文件" contract the rest of the app keeps.
+//
+// The range used to be a GIF. A GIF stores frame delays in hundredths of a second
+// and caps out at 50 fps, so it cannot express a 60 fps loop at all — and it is
+// roughly twenty times larger than h264 at the same size and quality, because it
+// has no inter-frame prediction beyond "this rectangle is unchanged". An MP4 is
+// smaller, smoother, full colour, and cheap enough to encode that the 20 s ceiling
+// needs no size fallback.
 //
 // Unlike the cover extractor next door, the output path is decided by the caller
 // (the highlight row already recorded it), so nothing here invents a name.
@@ -28,14 +35,17 @@ const (
 	// HighlightMomentWidth is the width of a saved moment frame. The height
 	// follows the source aspect ratio.
 	HighlightMomentWidth = 1280
-	// HighlightGIFWidth is the width of a looping GIF. 480 is the size/quality
-	// compromise: at the 50 fps ceiling a ten-second ordinary range lands around
-	// 1.7 MB, comfortably inside the ceiling, and the same range at 640 would be
-	// roughly twice that.
-	HighlightGIFWidth = 480
-	// HighlightGIFColors caps the GIF palette. GIF itself allows 256; 128 is
-	// the size/quality compromise the spec picked.
-	HighlightGIFColors = 128
+	// HighlightClipWidth is the width of a looping range. 480 is the scale the
+	// GIF version established, kept so a saved highlight looks the same as it did
+	// before the switch; at 60 fps a 20 s range is around 750 KB, so this is now a
+	// quality/size choice rather than a hard limit.
+	HighlightClipWidth = 480
+	// clipCRF trades size for quality at a fixed quantiser. 26 is visually
+	// transparent at 480 px and keeps a 20 s range under a megabyte.
+	clipCRF = "26"
+	// clipPreset: medium is the default speed/size balance; these clips are short,
+	// so a faster preset would only save a fraction of a second.
+	clipPreset = "medium"
 )
 
 var (
@@ -67,35 +77,27 @@ func MomentArgs(videoPath string, atMs int64, outPath string) []string {
 	)
 }
 
-// GIFArgs is the ffmpeg command line for a time range.
+// ClipArgs is the ffmpeg command line for a time range.
 //
-// The filter chain is the compression story: the palette is built from the
-// difference between frames (stats_mode=diff) and applied with rectangle
-// differencing, so flat, unchanged areas cost almost nothing while single-frame
-// quality is untouched. +transdiff completes that by writing transparent frames
-// for the regions that did not change.
-func GIFArgs(videoPath string, startMs, endMs int64, fps int, outPath string) []string {
+// -an drops the audio: a muted loop is what the UI plays, and an audio track
+// would only add bytes. +faststart moves the index to the front so a phone can
+// start playing before the file has finished arriving over the LAN. setsar=1
+// removes any anamorphic pixel aspect so the browser does not stretch the frame.
+func ClipArgs(videoPath string, startMs, endMs int64, fps int, outPath string) []string {
 	return []string{
 		"-y", "-hide_banner", "-loglevel", "error",
 		"-ss", formatSeconds(startMs),
 		"-t", formatSeconds(endMs - startMs),
 		"-i", videoPath,
-		"-an", "-loop", "0",
-		"-vf", gifFilter(fps),
-		"-gifflags", "+transdiff",
+		"-an",
+		"-vf", fmt.Sprintf("fps=%d,scale=%d:-2:flags=lanczos,setsar=1", fps, HighlightClipWidth),
+		"-c:v", "libx264",
+		"-preset", clipPreset,
+		"-crf", clipCRF,
+		"-pix_fmt", "yuv420p",
+		"-movflags", "+faststart",
 		outPath,
 	}
-}
-
-// gifFilter is the single -vf argument. It has to stay on one line: ffmpeg
-// treats the whole string as one filter graph and does not accept newlines here.
-func gifFilter(fps int) string {
-	return fmt.Sprintf(
-		"fps=%d,scale=%d:-2:flags=lanczos,"+
-			"split[s0][s1];"+
-			"[s0]palettegen=max_colors=%d:stats_mode=diff[p];"+
-			"[s1][p]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle",
-		fps, HighlightGIFWidth, HighlightGIFColors)
 }
 
 // GenerateHighlightMoment writes the frame at atMs to outPath as a JPEG.
@@ -103,12 +105,9 @@ func GenerateHighlightMoment(ctx context.Context, ffmpegBin, videoPath string, a
 	return runHighlight(ctx, ffmpegBin, MomentArgs(videoPath, atMs, outPath), outPath, timeout)
 }
 
-// GenerateHighlightGIF writes [startMs, endMs) to outPath as a looping GIF.
-//
-// fps is a parameter rather than a constant because the worker regenerates at a
-// lower frame rate when the first file exceeds the size ceiling.
-func GenerateHighlightGIF(ctx context.Context, ffmpegBin, videoPath string, startMs, endMs int64, fps int, outPath string, timeout time.Duration) error {
-	return runHighlight(ctx, ffmpegBin, GIFArgs(videoPath, startMs, endMs, fps, outPath), outPath, timeout)
+// GenerateHighlightClip writes [startMs, endMs) to outPath as a looping MP4.
+func GenerateHighlightClip(ctx context.Context, ffmpegBin, videoPath string, startMs, endMs int64, fps int, outPath string, timeout time.Duration) error {
+	return runHighlight(ctx, ffmpegBin, ClipArgs(videoPath, startMs, endMs, fps, outPath), outPath, timeout)
 }
 
 // runHighlight executes one ffmpeg attempt and guarantees outPath is either a

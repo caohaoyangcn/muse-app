@@ -35,11 +35,11 @@ func newPreviewFixture(t *testing.T) *previewFixture {
 		f.mu.Unlock()
 		return writeHighlightFile(outPath, "jpeg")
 	}
-	svc.highlights.generateGIF = func(_ context.Context, _ string, _ int64, _ int64, _ int, outPath string, _ time.Duration) error {
+	svc.highlights.generateClip = func(_ context.Context, _ string, _ int64, _ int64, _ int, outPath string, _ time.Duration) error {
 		f.mu.Lock()
 		f.calls = append(f.calls, outPath)
 		f.mu.Unlock()
-		return writeHighlightFile(outPath, "gif")
+		return writeHighlightFile(outPath, "mp4")
 	}
 	return f
 }
@@ -66,8 +66,11 @@ func TestPreviewHighlightRendersWithoutRecording(t *testing.T) {
 	if !ValidHighlightPreviewFileName(filepath.Base(preview.Path)) {
 		t.Errorf("path = %q is not a preview name", preview.Path)
 	}
-	if preview.FPS != highlightGIFDefaultFPS {
-		t.Errorf("fps = %d, want the default %d", preview.FPS, highlightGIFDefaultFPS)
+	if preview.FPS != highlightClipFPS {
+		t.Errorf("fps = %d, want the clip rate %d", preview.FPS, highlightClipFPS)
+	}
+	if !strings.HasSuffix(preview.Path, ".mp4") {
+		t.Errorf("path = %q, want an MP4 the browser can play in a <video>", preview.Path)
 	}
 	if preview.Bytes <= 0 {
 		t.Errorf("bytes = %d, want the rendered size", preview.Bytes)
@@ -99,33 +102,32 @@ func TestPreviewHighlightMomentIsAStill(t *testing.T) {
 	}
 }
 
-func TestPreviewHighlightReportsTheRetriedFrameRate(t *testing.T) {
+// A clip preview is rendered once, at the clip frame rate: there is no size
+// fallback any more, so the rate a preview reports is the rate the saved file has.
+func TestPreviewHighlightRendersOneClipAtTheClipRate(t *testing.T) {
 	f := newPreviewFixture(t)
-	svc := f.svc
-	var rates []int
-	svc.highlights.generateGIF = func(_ context.Context, _ string, _ int64, _ int64, fps int, outPath string, _ time.Duration) error {
+	var (
+		mu    sync.Mutex
+		rates []int
+	)
+	f.svc.highlights.generateClip = func(_ context.Context, _ string, _ int64, _ int64, fps int, outPath string, _ time.Duration) error {
+		mu.Lock()
 		rates = append(rates, fps)
-		if err := writeHighlightFile(outPath, "gif"); err != nil {
-			return err
-		}
-		size := int64(highlightGIFMaxBytes + 1)
-		if len(rates) == 2 {
-			size = 1024
-		}
-		return os.Truncate(outPath, size)
+		mu.Unlock()
+		return writeHighlightFile(outPath, "mp4")
 	}
 
-	preview, err := svc.PreviewHighlight(f.video.ID, 1000, 6000)
+	preview, err := f.svc.PreviewHighlight(f.video.ID, 1000, 21_000)
 	if err != nil {
 		t.Fatalf("preview: %v", err)
 	}
-	// The dialog must show the frame rate the user will actually get, not the one
-	// that was asked for first.
-	if preview.FPS != highlightGIFFallbackFPS {
-		t.Errorf("fps = %d, want the fallback %d", preview.FPS, highlightGIFFallbackFPS)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(rates) != 1 || rates[0] != highlightClipFPS {
+		t.Errorf("renders = %v, want exactly one at %d fps", rates, highlightClipFPS)
 	}
-	if len(rates) != 2 {
-		t.Errorf("attempts = %v, want two", rates)
+	if preview.FPS != highlightClipFPS {
+		t.Errorf("fps = %d, want %d", preview.FPS, highlightClipFPS)
 	}
 }
 
@@ -150,7 +152,7 @@ func TestPreviewHighlightRejectsBadInput(t *testing.T) {
 
 func TestPreviewHighlightReportsGeneratorFailure(t *testing.T) {
 	f := newPreviewFixture(t)
-	f.svc.highlights.generateGIF = func(_ context.Context, _ string, _ int64, _ int64, _ int, outPath string, _ time.Duration) error {
+	f.svc.highlights.generateClip = func(_ context.Context, _ string, _ int64, _ int64, _ int, outPath string, _ time.Duration) error {
 		if err := writeHighlightFile(outPath, "half"); err != nil {
 			return err
 		}
@@ -228,7 +230,7 @@ func TestAddHighlightFromPreviewRejectsStaleInput(t *testing.T) {
 		{"other range", 30_000, 36_000, preview.Path, errHighlightPreviewStale},
 		{"other start", 31_000, 35_000, preview.Path, errHighlightPreviewStale},
 		{"moment instead of range", 30_000, 0, preview.Path, errHighlightPreviewStale},
-		{"unknown file", 30_000, 35_000, HighlightsPreviewDir + "/p-1-2-3-4-5.gif", errHighlightPreviewStale},
+		{"unknown file", 30_000, 35_000, HighlightsPreviewDir + "/p-1-2-3-4-5.mp4", errHighlightPreviewStale},
 		{"traversal", 30_000, 35_000, "../../etc/passwd", errHighlightPreviewStale},
 	}
 	for _, tc := range cases {

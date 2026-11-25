@@ -144,6 +144,10 @@ type VideoRepository interface {
 	// has been deleted, which is the worker's signal to discard the file it
 	// just generated.
 	FinishHighlight(id int64, status, errMsg string, finishedAt int64) (bool, error)
+	// SetHighlightMediaPath re-points a row at a new file name. It exists for one
+	// upgrade path: a range rendered before the switch to MP4 is named .gif, and
+	// has to be renamed before it is rendered again.
+	SetHighlightMediaPath(id int64, mediaPath string) (bool, error)
 	// RetryHighlight moves a failed row back to queued.
 	RetryHighlight(videoID, id int64) (bool, error)
 	// RecoverHighlights re-queues the rows a crash or a quit interrupted. A

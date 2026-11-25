@@ -3,8 +3,7 @@
 package video
 
 import (
-	"bytes"
-	"encoding/csv"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -12,10 +11,10 @@ import (
 	"testing"
 )
 
-// The unit tests pin the frame-rate constants; this one proves the real ffmpeg
-// honours them. A GIF's delay is stored in hundredths of a second, so "50 fps"
-// is only true if every frame lands on exactly 2 cs — and 2 cs is the shortest
-// delay browsers play instead of clamping to 100 ms.
+// The unit tests pin the frame rate and the command line; this one proves the real
+// ffmpeg and the service end up with a playable file. "Playable" is the part that
+// matters: the media routes decide the Content-Type from the extension, so an
+// .mp4 that is not an MP4 would be served as video and fail in the browser.
 
 func requireFFmpegTools(t *testing.T) (ffmpegBin, ffprobeBin string) {
 	t.Helper()
@@ -43,38 +42,48 @@ func makeHighlightClip(t *testing.T, ffmpegBin, dir string) string {
 	return out
 }
 
-// gifFrameDelays returns one frame's delay in seconds, deduplicated.
-func gifFrameDelays(t *testing.T, ffprobeBin, path string) (delays []float64, frames int) {
-	t.Helper()
-	out, err := exec.Command(ffprobeBin, "-v", "error", "-select_streams", "v:0",
-		"-show_entries", "frame=duration_time", "-of", "csv=p=0", path).Output()
-	if err != nil {
-		t.Fatalf("ffprobe frames: %v", err)
-	}
-	seen := map[float64]struct{}{}
-	reader := csv.NewReader(bytes.NewReader(out))
-	records, err := reader.ReadAll()
-	if err != nil {
-		t.Fatalf("parse ffprobe output: %v", err)
-	}
-	for _, record := range records {
-		if len(record) == 0 || strings.TrimSpace(record[0]) == "" {
-			continue
-		}
-		value, err := strconv.ParseFloat(strings.TrimSpace(record[0]), 64)
-		if err != nil {
-			continue
-		}
-		frames++
-		seen[value] = struct{}{}
-	}
-	for value := range seen {
-		delays = append(delays, value)
-	}
-	return delays, frames
+// clipStream is what ffprobe reports about the rendered file's video stream.
+type clipStream struct {
+	codec    string
+	fps      float64
+	frames   int
+	duration float64
 }
 
-func TestServiceGeneratesGIFAtTheDefaultFrameRate(t *testing.T) {
+func probeClipStream(t *testing.T, ffprobeBin, path string) clipStream {
+	t.Helper()
+	out, err := exec.Command(ffprobeBin, "-v", "error", "-select_streams", "v:0",
+		"-show_entries", "stream=codec_name,avg_frame_rate,nb_frames,duration",
+		"-of", "default=nw=1", path).Output()
+	if err != nil {
+		t.Fatalf("ffprobe clip: %v", err)
+	}
+	var got clipStream
+	for _, line := range strings.Split(string(out), "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "codec_name":
+			got.codec = value
+		case "avg_frame_rate":
+			num, den, _ := strings.Cut(value, "/")
+			n, _ := strconv.ParseFloat(num, 64)
+			d, _ := strconv.ParseFloat(den, 64)
+			if d > 0 {
+				got.fps = n / d
+			}
+		case "nb_frames":
+			got.frames, _ = strconv.Atoi(value)
+		case "duration":
+			got.duration, _ = strconv.ParseFloat(value, 64)
+		}
+	}
+	return got
+}
+
+func TestServiceRendersAPlayableClip(t *testing.T) {
 	ffmpegBin, ffprobeBin := requireFFmpegTools(t)
 	svc, dir := newTestService(t)
 	t.Cleanup(svc.CloseHighlights)
@@ -98,17 +107,32 @@ func TestServiceGeneratesGIFAtTheDefaultFrameRate(t *testing.T) {
 	svc.StartHighlights()
 	ready := waitForHighlight(t, svc, v.ID, h.ID, HighlightStatusReady)
 
+	if !strings.HasSuffix(ready.MediaPath, ".mp4") {
+		t.Fatalf("media path = %q, want .mp4", ready.MediaPath)
+	}
 	path := svc.highlightPath(ready)
-	delays, frames := gifFrameDelays(t, ffprobeBin, path)
-	if len(delays) != 1 {
-		t.Fatalf("frame delays = %v, want one constant delay at the default rate", delays)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read clip: %v", err)
 	}
-	if diff := delays[0] - 0.02; diff > 0.0001 || diff < -0.0001 {
-		t.Errorf("delay = %v s, want 0.02 s (50 fps is the shortest delay browsers honour)", delays[0])
+	// A size field followed by the "ftyp" box is what every MP4 starts with.
+	if len(data) < 12 || string(data[4:8]) != "ftyp" {
+		t.Fatalf("output is not an MP4 (first bytes %q)", data[:min(12, len(data))])
 	}
-	// Two seconds at 50 fps. The seek and the exact cut leave a frame or two of
-	// slack; what must not happen is 10 fps (20 frames) or a stalled encode.
-	if frames < 90 || frames > 110 {
-		t.Errorf("frames = %d, want about 100 for a 2 s range at 50 fps", frames)
+
+	got := probeClipStream(t, ffprobeBin, path)
+	if got.codec != "h264" {
+		t.Errorf("codec = %q, want h264", got.codec)
+	}
+	if got.fps < 59 || got.fps > 61 {
+		t.Errorf("fps = %v, want %d", got.fps, highlightClipFPS)
+	}
+	// Two seconds at the clip rate. The seek and the exact cut leave a frame or
+	// two of slack; what must not happen is a stalled or truncated encode.
+	if got.frames < 110 || got.frames > 130 {
+		t.Errorf("frames = %d, want about %d for a 2 s range", got.frames, 2*highlightClipFPS)
+	}
+	if got.duration < 1.9 || got.duration > 2.1 {
+		t.Errorf("duration = %v s, want about 2", got.duration)
 	}
 }

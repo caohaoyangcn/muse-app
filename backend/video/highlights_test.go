@@ -113,7 +113,7 @@ func TestAddHighlightValidation(t *testing.T) {
 		{"end before start", 5_000, 4_000, "结束时间必须晚于开始时间"},
 		{"end at start", 5_000, 5_000, "结束时间必须晚于开始时间"},
 		{"range under a second", 5_000, 5_500, "时间段至少 1 秒"},
-		{"range over ten seconds", 5_000, 16_000, "时间段最长 10 秒（当前 11 秒）"},
+		{"range over twenty seconds", 5_000, 26_000, "时间段最长 20 秒（当前 21 秒）"},
 		{"end past the duration", 118_000, 121_000, "结束时间超出视频时长"},
 	}
 	for _, tc := range cases {
@@ -133,12 +133,12 @@ func TestAddHighlightValidation(t *testing.T) {
 		t.Errorf("highlights after rejected requests = %+v (err %v), want none", list, err)
 	}
 
-	// The boundaries themselves are valid: a moment at 0 and a ten-second range.
+	// The boundaries themselves are valid: a moment at 0 and a twenty-second range.
 	if _, err := svc.AddHighlight(v.ID, 0, 0); err != nil {
 		t.Errorf("moment at 0: %v", err)
 	}
-	if _, err := svc.AddHighlight(v.ID, 30_000, 40_000); err != nil {
-		t.Errorf("ten-second range: %v", err)
+	if _, err := svc.AddHighlight(v.ID, 30_000, 50_000); err != nil {
+		t.Errorf("twenty-second range: %v", err)
 	}
 	// An unknown duration skips the duration checks instead of guessing.
 	short, err := svc.repo.Get(v.ID)
@@ -538,112 +538,46 @@ func TestHighlightRecoveryGivesUpAfterRepeatedInterruptions(t *testing.T) {
 	}
 }
 
-// The frame rate is a product decision the user feels rather than a
-// technical one, so it is pinned here. The GIF delay is stored in hundredths of
-// a second: the default must divide 100 (or every frame gets rounded), and it
-// must stay at or under 50 fps, because a delay below 2 cs is clamped to 10 cs
-// by browsers and the loop would play slower than a lower frame rate would.
-func TestHighlightGIFFrameRatesAreSmooth(t *testing.T) {
-	if highlightGIFDefaultFPS < 20 {
-		t.Errorf("default %d fps is too choppy; 20 or more is the floor", highlightGIFDefaultFPS)
-	}
-	if highlightGIFDefaultFPS > 50 {
-		t.Errorf("default %d fps cannot be expressed in GIF centiseconds; "+
-			"frames under 2 cs are clamped to 100 ms", highlightGIFDefaultFPS)
-	}
-	if 100%highlightGIFDefaultFPS != 0 {
-		t.Errorf("default %d fps does not divide 100 cs; frame delays would be rounded",
-			highlightGIFDefaultFPS)
-	}
-	if highlightGIFFallbackFPS >= highlightGIFDefaultFPS {
-		t.Errorf("fallback %d fps must be below the default %d fps",
-			highlightGIFFallbackFPS, highlightGIFDefaultFPS)
-	}
-	if highlightGIFFallbackFPS < 12 {
-		t.Errorf("fallback %d fps is a slideshow; the size retry should not go that low",
-			highlightGIFFallbackFPS)
-	}
-}
-
-// TestHighlightGIFRetriesAtLowerFrameRate pins the 8 MB ceiling: the first file
-// over the line is regenerated once at the fallback rate, at the same path.
-func TestHighlightGIFRetriesAtLowerFrameRate(t *testing.T) {
-	t.Run("second attempt is smaller", func(t *testing.T) {
-		svc, _, v := newHighlightFixture(t)
-		var (
-			mu   sync.Mutex
-			fps  []int
-			body []int64
-		)
-		svc.highlights.generateGIF = func(_ context.Context, _ string, _ int64, _ int64, fpsArg int, outPath string, _ time.Duration) error {
-			mu.Lock()
-			fps = append(fps, fpsArg)
-			attempt := len(fps)
-			mu.Unlock()
-			if err := writeHighlightFile(outPath, "gif"); err != nil {
-				return err
-			}
-			size := int64(highlightGIFMaxBytes + 1)
-			if attempt == 2 {
-				size = 1024
-			}
-			if err := os.Truncate(outPath, size); err != nil {
-				return err
-			}
-			mu.Lock()
-			body = append(body, size)
-			mu.Unlock()
-			return nil
-		}
-		svc.StartHighlights()
-
-		h, err := svc.AddHighlight(v.ID, 1000, 6000)
-		if err != nil {
-			t.Fatalf("add: %v", err)
-		}
-		waitForHighlight(t, svc, v.ID, h.ID, HighlightStatusReady)
-
+// A range is rendered once, at 60 fps, into an MP4. The frame rate is a product
+// decision the user feels, so it is pinned; the "once" is the other half of the
+// contract: the old GIF had a size-driven retry, and an MP4 at this length has
+// no reason to render twice.
+func TestHighlightClipIsRenderedOnceAtSixtyFPS(t *testing.T) {
+	svc, _, v := newHighlightFixture(t)
+	var (
+		mu    sync.Mutex
+		rates []int
+	)
+	svc.highlights.generateClip = func(_ context.Context, _ string, _ int64, _ int64, fps int, outPath string, _ time.Duration) error {
 		mu.Lock()
-		defer mu.Unlock()
-		if len(fps) != 2 || fps[0] != highlightGIFDefaultFPS || fps[1] != highlightGIFFallbackFPS {
-			t.Errorf("frame rates = %v, want [10 8]", fps)
+		rates = append(rates, fps)
+		mu.Unlock()
+		if err := writeHighlightFile(outPath, "mp4"); err != nil {
+			return err
 		}
-		if len(body) != 2 || body[0] <= highlightGIFMaxBytes || body[1] > highlightGIFMaxBytes {
-			t.Errorf("sizes = %v", body)
-		}
-	})
+		// A deliberately large file: it must not trigger a second attempt any
+		// more, because the size fallback died with the GIF.
+		return os.Truncate(outPath, 12*1024*1024)
+	}
+	svc.StartHighlights()
 
-	t.Run("still too big is accepted", func(t *testing.T) {
-		svc, _, v := newHighlightFixture(t)
-		var (
-			mu  sync.Mutex
-			fps []int
-		)
-		svc.highlights.generateGIF = func(_ context.Context, _ string, _ int64, _ int64, fpsArg int, outPath string, _ time.Duration) error {
-			mu.Lock()
-			fps = append(fps, fpsArg)
-			mu.Unlock()
-			if err := writeHighlightFile(outPath, "gif"); err != nil {
-				return err
-			}
-			return os.Truncate(outPath, int64(highlightGIFMaxBytes+1))
-		}
-		svc.StartHighlights()
+	h, err := svc.AddHighlight(v.ID, 1000, 21_000)
+	if err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	ready := waitForHighlight(t, svc, v.ID, h.ID, HighlightStatusReady)
 
-		h, err := svc.AddHighlight(v.ID, 1000, 6000)
-		if err != nil {
-			t.Fatalf("add: %v", err)
-		}
-		ready := waitForHighlight(t, svc, v.ID, h.ID, HighlightStatusReady)
-		if _, err := os.Stat(svc.highlightPath(ready)); err != nil {
-			t.Errorf("the accepted file must exist: %v", err)
-		}
-		mu.Lock()
-		defer mu.Unlock()
-		if len(fps) != 2 {
-			t.Errorf("attempts = %v, want exactly two (no third try)", fps)
-		}
-	})
+	mu.Lock()
+	defer mu.Unlock()
+	if len(rates) != 1 || rates[0] != highlightClipFPS {
+		t.Errorf("renders = %v, want exactly one at %d fps", rates, highlightClipFPS)
+	}
+	if highlightClipFPS < 30 {
+		t.Errorf("clip frame rate %d is below the smoothness floor", highlightClipFPS)
+	}
+	if !strings.HasSuffix(ready.MediaPath, ".mp4") {
+		t.Errorf("media path = %q, want the MP4 extension the media route keys on", ready.MediaPath)
+	}
 }
 
 // TestHighlightWithMissingFavoriteFailsCleanly covers the orphan an interrupted

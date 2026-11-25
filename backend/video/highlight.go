@@ -15,7 +15,7 @@ import (
 // counters live in highlights.go; the repository in highlight_repository.go.
 
 // Highlight kinds. A moment is a single frame at start_ms; a range is the
-// [start_ms, end_ms) span rendered as a looping GIF.
+// [start_ms, end_ms) span rendered as a short looping MP4.
 const (
 	HighlightKindMoment = "moment"
 	HighlightKindRange  = "range"
@@ -30,11 +30,12 @@ const (
 	HighlightStatusFailed  = "failed"
 )
 
-// Highlight range bounds: a GIF shorter than one second is not a moment worth
-// saving, and one longer than ten seconds is a file the user did not ask for.
+// Highlight range bounds: a clip shorter than one second is not a moment worth
+// saving, and one longer than twenty seconds is a file the user did not ask for
+// (and a loop nobody watches to the end).
 const (
 	MinHighlightRangeMs int64 = 1000
-	MaxHighlightRangeMs int64 = 10000
+	MaxHighlightRangeMs int64 = 20000
 )
 
 // Highlight is one generated image and the job that produced it.
@@ -46,7 +47,7 @@ type Highlight struct {
 	ID        int64  `json:"id"`
 	VideoID   int64  `json:"videoId"`
 	Kind      string `json:"kind"`      // moment | range
-	StartMs   int64  `json:"startMs"`   // where the frame / GIF begins
+	StartMs   int64  `json:"startMs"`   // where the frame / clip begins
 	EndMs     int64  `json:"endMs"`     // 0 for a moment
 	MediaPath string `json:"mediaPath"` // relative to the data dir, e.g. "highlights/h-12-…-1.jpg"
 	Status    string `json:"status"`    // queued | running | ready | failed
@@ -120,7 +121,7 @@ func ValidateHighlightTimes(startMs, endMs, durationMs int64) error {
 		return errors.New("时间段至少 1 秒")
 	}
 	if length > MaxHighlightRangeMs {
-		return fmt.Errorf("时间段最长 10 秒（当前 %d 秒）", length/1000)
+		return fmt.Errorf("时间段最长 20 秒（当前 %d 秒）", length/1000)
 	}
 	if durationMs > 0 && endMs > durationMs {
 		return errors.New("结束时间超出视频时长")
@@ -148,7 +149,7 @@ const HighlightsPreviewDir = "preview"
 // save path can verify that the file it is about to adopt was made for exactly
 // those times.
 type HighlightPreview struct {
-	// Path is relative to the data dir, e.g. "preview/p-12-90000-95000-…-1.gif".
+	// Path is relative to the data dir, e.g. "preview/p-12-90000-95000-…-1.mp4".
 	Path    string `json:"path"`
 	Kind    string `json:"kind"`
 	StartMs int64  `json:"startMs"`
@@ -156,22 +157,22 @@ type HighlightPreview struct {
 	// Bytes is the size of the rendered file, so the dialog can show it before
 	// the user commits.
 	Bytes int64 `json:"bytes"`
-	// FPS is the frame rate the GIF ended up with (after the 8 MB retry); 0 for a
-	// moment.
+	// FPS is the frame rate the clip was rendered at; 0 for a moment.
 	FPS int `json:"fps"`
 }
 
 // highlightFileNamePattern is the exact shape of a generated highlight file:
-// h-<videoID>-<unixNano>-<seq>.<jpg|gif>. Everything that touches these files
-// (the sweep, the desktop asset handler, the LAN media route) matches against
-// this one expression: a false positive on a media route serves a file the app
-// did not write, and a false positive in the sweep deletes one.
-var highlightFileNamePattern = regexp.MustCompile(`^h-\d+-\d+-\d+\.(jpg|gif)$`)
+// h-<videoID>-<unixNano>-<seq>.<jpg|mp4> — plus <…>.gif, which older rows still
+// point at and the media routes still have to serve. Everything that touches
+// these files (the sweep, the desktop asset handler, the LAN media route)
+// matches against this one expression: a false positive on a media route serves
+// a file the app did not write, and a false positive in the sweep deletes one.
+var highlightFileNamePattern = regexp.MustCompile(`^h-\d+-\d+-\d+\.(jpg|gif|mp4)$`)
 
 // highlightPreviewPattern is the shape of a preview: the same generated-file
 // guard, plus the request it was rendered for —
-// p-<videoID>-<startMs>-<endMs>-<unixNano>-<seq>.<jpg|gif>.
-var highlightPreviewPattern = regexp.MustCompile(`^p-(\d+)-(\d+)-(\d+)-(\d+)-(\d+)\.(jpg|gif)$`)
+// p-<videoID>-<startMs>-<endMs>-<unixNano>-<seq>.<jpg|mp4>.
+var highlightPreviewPattern = regexp.MustCompile(`^p-(\d+)-(\d+)-(\d+)-(\d+)-(\d+)\.(jpg|mp4)$`)
 
 // ValidHighlightFileName reports whether name is exactly one of the files the
 // generator writes. Callers must pass a base name, never a path.
@@ -228,10 +229,11 @@ func highlightPreviewPath(videoID, startMs, endMs, n int64, kind string) string 
 }
 
 // highlightFileExt is the extension for a kind. A moment is always a JPEG, a
-// range always a GIF.
+// range always an MP4 (returns saved before the switch to MP4 keep their .gif;
+// they are only served, never generated again).
 func highlightFileExt(kind string) string {
 	if kind == HighlightKindRange {
-		return ".gif"
+		return ".mp4"
 	}
 	return ".jpg"
 }

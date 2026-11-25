@@ -669,7 +669,7 @@ CREATE INDEX IF NOT EXISTS idx_videos_delete_reason ON videos(delete_reason);
 
 // schemaV31 stores the 精彩时刻 of a favorite (docs/spec/highlight-moments.md).
 //
-// A row is one generated image — a single frame ("moment") or a looping GIF of a
+// A row is one generated image — a single frame ("moment") or a looping clip of a
 // time range ("range") — together with the state of the background job that
 // produces it. media_path is relative to the data dir and is written when the
 // row is inserted as queued, so the orphan sweep can recognise a file that is
