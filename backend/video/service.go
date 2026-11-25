@@ -67,6 +67,9 @@ type Service struct {
 	// volumes caches which of the volumes the library references are attached
 	// (see volume.go).
 	volumes *volumeState
+	// highlights is the 精彩时刻 generator: one worker, the database as the
+	// durable truth, in-memory counters for the dashboard (see highlights.go).
+	highlights highlightState
 }
 
 func NewService(repo VideoRepository, processor *Processor, dataDir string, log *slog.Logger,
@@ -82,6 +85,22 @@ func NewService(repo VideoRepository, processor *Processor, dataDir string, log 
 	// replaces the seam describes the machine for relocation and volume probing
 	// alike.
 	s.volumes = newVolumeState(func(path string) (os.FileInfo, error) { return s.stat(path) })
+	// The 精彩时刻 generator gets its ffmpeg commands from the thumbnail package,
+	// which owns every ffmpeg invocation in the app; only the queue and the row
+	// bookkeeping live here. The seams stay replaceable for tests.
+	s.highlights.generateMoment = func(ctx context.Context, videoPath string, atMs int64, outPath string, timeout time.Duration) error {
+		return thumbnail.GenerateHighlightMoment(ctx, s.processor.FFmpegBin(), videoPath, atMs, outPath, timeout)
+	}
+	s.highlights.generateGIF = func(ctx context.Context, videoPath string, startMs, endMs int64, fps int, outPath string, timeout time.Duration) error {
+		return thumbnail.GenerateHighlightGIF(ctx, s.processor.FFmpegBin(), videoPath, startMs, endMs, fps, outPath, timeout)
+	}
+	s.highlights.fileSize = func(path string) (int64, error) {
+		info, err := os.Stat(path)
+		if err != nil {
+			return 0, err
+		}
+		return info.Size(), nil
+	}
 	return s
 }
 
@@ -365,9 +384,13 @@ func (s *Service) Remove(id int64) error {
 	if err != nil {
 		return err
 	}
+	// Read the pending count before the delete: the cascade removes the rows, and
+	// a round that still counted them would look busy forever.
+	pendingHighlights := s.pendingHighlightsOf(id)
 	if err := s.repo.Delete(id); err != nil {
 		return err
 	}
+	s.cancelHighlightRun(pendingHighlights)
 	s.removeThumbnail(v)
 	// A worker that was downloading this favorite's cover may write it back
 	// after the deletion (see removeThumbnail): asset cleanup is therefore a

@@ -2,6 +2,7 @@ package video
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -61,7 +62,25 @@ func (s *Service) RemoveOrphanedImages() (ImageSweepResult, error) {
 	for _, id := range ids {
 		live[id] = struct{}{}
 	}
-	return s.sweepImages(live), nil
+	result := s.sweepImages(live)
+
+	// The 精彩时刻 folder is owned differently: a file is identified by the row
+	// that declares its path, not by a numeric name, so ownership is a set of
+	// base names rather than a set of ids. Pending rows are included on purpose —
+	// a file being generated is owned.
+	mediaPaths, err := s.repo.ListHighlightMediaPaths()
+	if err != nil {
+		return result, fmt.Errorf("list highlight media paths: %w", err)
+	}
+	kept := make(map[string]struct{}, len(mediaPaths))
+	for _, path := range mediaPaths {
+		kept[filepath.Base(filepath.FromSlash(path))] = struct{}{}
+	}
+	highlights := s.sweepHighlightFiles(kept)
+	result.Scanned += highlights.Scanned
+	result.Removed += highlights.Removed
+	result.Bytes += highlights.Bytes
+	return result, nil
 }
 
 // sweepImages walks the folders the library owns and deletes every generated
@@ -109,6 +128,55 @@ func (s *Service) sweepImages(live map[int64]struct{}) ImageSweepResult {
 	}
 	if result.Removed > 0 {
 		s.log.Info("orphaned images removed", "files", result.Removed, "bytes", result.Bytes)
+	}
+	return result
+}
+
+// sweepHighlightFiles is the 精彩时刻 half of the sweep: it walks highlights/ and
+// deletes every file shaped like a generated highlight that no row declares.
+//
+// Two rules keep this safe. Only names matching the generator's pattern are
+// candidates, so anything else the user put in the folder is left alone; and a
+// file is kept whenever its base name appears in kept, which includes the paths
+// of rows that are still queued or running.
+func (s *Service) sweepHighlightFiles(kept map[string]struct{}) ImageSweepResult {
+	var result ImageSweepResult
+	dir := filepath.Join(s.dataDir, HighlightsRelativeDir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			s.log.Warn("sweep highlights: read dir failed", "dir", dir, "err", err)
+		}
+		return result
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		result.Scanned++
+		if !ValidHighlightFileName(entry.Name()) {
+			continue
+		}
+		if _, owned := kept[entry.Name()]; owned {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		info, statErr := entry.Info()
+		if err := os.Remove(path); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue // removed since the directory was read
+			}
+			s.log.Warn("sweep highlights: remove failed", "path", path, "err", err)
+			continue
+		}
+		result.Removed++
+		if statErr == nil {
+			result.Bytes += info.Size()
+		}
+		s.log.Debug("swept orphaned highlight", "path", path)
+	}
+	if result.Removed > 0 {
+		s.log.Info("orphaned highlights removed", "files", result.Removed, "bytes", result.Bytes)
 	}
 	return result
 }

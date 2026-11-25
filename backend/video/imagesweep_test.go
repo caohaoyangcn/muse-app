@@ -241,3 +241,91 @@ func TestRemovalsCoalesceTheirSweeps(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// The 精彩时刻 folder is swept by a different rule than the thumbnails: a file is
+// owned when a row declares it, so a row's file survives whatever its status.
+func TestSweepKeepsOwnedHighlights(t *testing.T) {
+	svc, dataDir := newTestService(t)
+	p := writeFakeVideo(t, dataDir, "sweep.mp4", 10)
+	v, err := svc.AddVideo(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := svc.AddHighlight(v.ID, 1000, 0)
+	if err != nil {
+		t.Fatalf("add highlight: %v", err)
+	}
+	hlDir := filepath.Join(dataDir, HighlightsRelativeDir)
+	owned := writeImage(t, hlDir, filepath.Base(filepath.FromSlash(h.MediaPath)), "jpeg")
+	orphan := writeImage(t, hlDir, "h-9-123-1.jpg", "orphan")
+
+	result, err := svc.RemoveOrphanedImages()
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if result.Removed != 1 {
+		t.Errorf("removed = %d, want 1", result.Removed)
+	}
+	if _, err := os.Stat(owned); err != nil {
+		t.Errorf("the queued row's file must survive: %v", err)
+	}
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Errorf("the orphan should be gone, stat err = %v", err)
+	}
+}
+
+// Anything the app did not name is left alone, exactly like the thumbnail folders.
+func TestSweepLeavesForeignHighlightFiles(t *testing.T) {
+	svc, dataDir := newTestService(t)
+	hlDir := filepath.Join(dataDir, HighlightsRelativeDir)
+	foreign := []string{
+		"h-1-2.jpg",        // shape with too few parts
+		"h-1-2-3.png",      // wrong extension
+		"highlight.jpg",    // not a generated name
+		"h-1-2-3.gif.bak",  // a backup
+		".h-1-2-3.jpg.tmp", // a temporary of someone else's tool
+	}
+	for _, name := range foreign {
+		writeImage(t, hlDir, name, "keep me")
+	}
+
+	result, err := svc.RemoveOrphanedImages()
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if result.Removed != 0 {
+		t.Errorf("removed = %d, want 0", result.Removed)
+	}
+	for _, name := range foreign {
+		if _, err := os.Stat(filepath.Join(hlDir, name)); err != nil {
+			t.Errorf("%q must survive the sweep: %v", name, err)
+		}
+	}
+}
+
+// A highlight file left behind by a permanent delete is cleared by the next
+// sweep, because the rows that declared it are gone with the favorite.
+func TestSweepClearsHighlightsOfDeletedVideo(t *testing.T) {
+	svc, dataDir := newTestService(t)
+	p := writeFakeVideo(t, dataDir, "gone.mp4", 10)
+	v, err := svc.AddVideo(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := svc.AddHighlight(v.ID, 1000, 0)
+	if err != nil {
+		t.Fatalf("add highlight: %v", err)
+	}
+	file := writeImage(t, filepath.Join(dataDir, HighlightsRelativeDir),
+		filepath.Base(filepath.FromSlash(h.MediaPath)), "jpeg")
+
+	if err := svc.Remove(v.ID); err != nil {
+		t.Fatalf("remove video: %v", err)
+	}
+	if _, err := svc.RemoveOrphanedImages(); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Errorf("the deleted favorite's highlight file should be swept, stat err = %v", err)
+	}
+}
