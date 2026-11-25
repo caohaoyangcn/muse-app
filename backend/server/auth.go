@@ -88,7 +88,7 @@ func requiresAccessKey(path string) bool {
 	if path == sessionPath || path == extensionPath {
 		return false
 	}
-	for _, prefix := range []string{"/api/", "/stream/", "/thumbnails/", "/covers/", "/avatars/"} {
+	for _, prefix := range []string{"/api/", "/stream/", "/thumbnails/", "/covers/", "/avatars/", "/highlights/"} {
 		if strings.HasPrefix(path, prefix) {
 			return true
 		}

@@ -508,6 +508,33 @@ func (a *App) SetVideoScrapedCoverAllowed(id int64, allowed bool) (*video.Video,
 func (a *App) VideoJav(videoID int64) (*jav.Detail, error)   { return a.lib.VideoJav(videoID) }
 func (a *App) VideoJavTask(videoID int64) (*jav.Task, error) { return a.lib.VideoJavTask(videoID) }
 
+// ---- 精彩时刻 (highlight moments) ----
+//
+// Desktop only. The phone reads the same rows over HTTP but cannot add, retry or
+// delete them (docs/spec/highlight-moments.md §1).
+
+// ListVideoHighlights returns a favorite's saved moments and ranges.
+func (a *App) ListVideoHighlights(videoID int64) ([]video.Highlight, error) {
+	return a.lib.ListVideoHighlights(videoID)
+}
+
+// AddVideoHighlight queues a screenshot (endMs == 0) or a looping GIF of a time
+// range. It returns immediately; the image arrives through a background event.
+func (a *App) AddVideoHighlight(videoID, startMs, endMs int64) (*video.Highlight, error) {
+	return a.lib.AddVideoHighlight(videoID, startMs, endMs)
+}
+
+// RetryVideoHighlight re-queues a highlight whose generation failed.
+func (a *App) RetryVideoHighlight(videoID, highlightID int64) error {
+	return a.lib.RetryVideoHighlight(videoID, highlightID)
+}
+
+// DeleteVideoHighlight removes one highlight and its generated image. The source
+// video is never touched.
+func (a *App) DeleteVideoHighlight(videoID, highlightID int64) error {
+	return a.lib.DeleteVideoHighlight(videoID, highlightID)
+}
+
 // CheckJavCodes answers "is this work already collected?" for 番号 taken from a
 // JavDB page. The desktop settings page uses it to prove that the same query
 // the browser extension makes over HTTP works from inside the app.

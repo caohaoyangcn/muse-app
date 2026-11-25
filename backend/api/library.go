@@ -1199,6 +1199,7 @@ func (l *Library) BackgroundTasks() tasks.Snapshot {
 	if l.videos != nil {
 		list = append(list, l.contentScanTask()...)
 		list = append(list, l.fileScanTask()...)
+		list = append(list, l.highlightTask()...)
 	}
 	tasks.Sort(list)
 	return tasks.Snapshot{Tasks: list}
@@ -1367,6 +1368,60 @@ func (l *Library) fileScanTask() []tasks.Task {
 	return []tasks.Task{t}
 }
 
+// highlightTask reports the 精彩时刻 generator. Its executor is video.Service,
+// not this dashboard: the board only projects the counters the worker keeps, the
+// same way every other row works (see docs/spec/background-tasks.md).
+//
+// A finished round stays on the board until the next one starts or the app
+// restarts — there is no checkpoints table for it, and "上次生成" needs none.
+func (l *Library) highlightTask() []tasks.Task {
+	st := l.videos.HighlightTaskStatus()
+	if st.Total == 0 && !st.Active {
+		return nil
+	}
+	state := tasks.StateDone
+	message := ""
+	if st.Active {
+		state = tasks.StateRunning
+		// One worker, so at most one row is being generated; the rest wait.
+		running := 0
+		if st.Current != "" {
+			running = 1
+		}
+		parts := make([]string, 0, 2)
+		if running > 0 {
+			parts = append(parts, fmt.Sprintf("生成中 %d", running))
+		}
+		if queued := st.Pending() - running; queued > 0 {
+			parts = append(parts, fmt.Sprintf("排队 %d", queued))
+		}
+		message = strings.Join(parts, " · ")
+	} else {
+		parts := []string{fmt.Sprintf("完成 %d", st.Done)}
+		if st.Failed > 0 {
+			parts = append(parts, fmt.Sprintf("失败 %d", st.Failed))
+		}
+		if st.Canceled > 0 {
+			parts = append(parts, fmt.Sprintf("取消 %d", st.Canceled))
+		}
+		message = strings.Join(parts, " · ")
+	}
+	return []tasks.Task{{
+		ID:        "highlight-moments",
+		Title:     "精彩时刻生成",
+		Kind:      tasks.KindBatch,
+		State:     state,
+		Done:      st.Done,
+		Total:     st.Total,
+		Failed:    st.Failed,
+		Unit:      "条",
+		Current:   st.Current,
+		Message:   message,
+		StartedAt: st.StartedAt,
+		UpdatedAt: st.UpdatedAt,
+	}}
+}
+
 // actorFillTask reports the 演员资料补齐 backfill.
 func (l *Library) actorFillTask() []tasks.Task {
 	st, err := l.jav.ActorFillStatus()
@@ -1465,6 +1520,45 @@ func (l *Library) SetVideoScrapedCoverAllowed(id int64, allowed bool) (*video.Vi
 	}
 	l.attachReadModelOne(v)
 	return v, nil
+}
+
+// ---- 精彩时刻 (highlight moments) ----
+
+// ListVideoHighlights returns a favorite's saved moments and ranges in timeline
+// order. Every status is included: the desktop shows a pending or failed card,
+// the phone hides the failed ones. It is a read, so the LAN client may call it.
+func (l *Library) ListVideoHighlights(videoID int64) ([]video.Highlight, error) {
+	if l.videos == nil {
+		return []video.Highlight{}, nil
+	}
+	return l.videos.ListHighlights(videoID)
+}
+
+// AddVideoHighlight queues a single frame (endMs == 0) or a looping GIF of a
+// time range. It returns as soon as the row is written: the image is produced by
+// the background generator and announced through video:highlight:updated.
+func (l *Library) AddVideoHighlight(videoID, startMs, endMs int64) (*video.Highlight, error) {
+	if l.videos == nil {
+		return nil, fmt.Errorf("视频服务未初始化")
+	}
+	return l.videos.AddHighlight(videoID, startMs, endMs)
+}
+
+// RetryVideoHighlight re-queues one highlight whose last generation failed.
+func (l *Library) RetryVideoHighlight(videoID, highlightID int64) error {
+	if l.videos == nil {
+		return fmt.Errorf("视频服务未初始化")
+	}
+	return l.videos.RetryHighlight(videoID, highlightID)
+}
+
+// DeleteVideoHighlight removes one highlight and the image it generated. The
+// source video is never touched.
+func (l *Library) DeleteVideoHighlight(videoID, highlightID int64) error {
+	if l.videos == nil {
+		return fmt.Errorf("视频服务未初始化")
+	}
+	return l.videos.DeleteHighlight(videoID, highlightID)
 }
 
 // ---- Cloud sources (WebDAV) ----

@@ -236,6 +236,9 @@ func (s *Server) routes() http.Handler {
 	// 详情页底部的「类似影片」. Computed on read from the scrape results, so
 	// there is nothing to keep in sync; `limit` bounds the row.
 	mux.HandleFunc("GET /api/videos/{id}/similar", s.handleSimilarVideos)
+	// 精彩时刻: read-only for the phone. Adding, retrying and deleting stay on the
+	// desktop, so there is deliberately no write endpoint here.
+	mux.HandleFunc("GET /api/videos/{id}/highlights", s.handleVideoHighlights)
 	mux.HandleFunc("GET /api/jav/tasks", s.handleJavTasks)
 	// 后台任务 dashboard: read-only aggregation of the tasks that own progress
 	// state. The phone polls it while something is running.
@@ -279,6 +282,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /thumbnails/{id}", s.handleThumbnail)
 	mux.HandleFunc("GET /covers/jav/{id}", s.handleJavCover)
 	mux.HandleFunc("GET /avatars/{name}", s.handleActorAvatar)
+	// Generated 精彩时刻 images. The name is the generator's own, so this route
+	// cannot read anything else in the folder.
+	mux.HandleFunc("GET /highlights/{name}", s.handleHighlightFile)
 	// Reserved API prefixes must not fall through to the SPA index.
 	mux.HandleFunc("/api/", http.NotFound)
 	mux.HandleFunc("/stream/", http.NotFound)
@@ -868,6 +874,37 @@ func validActorAvatarName(name string) bool {
 		}
 	}
 	return true
+}
+
+// handleVideoHighlights returns a favorite's 精彩时刻 in every state.
+//
+// The failed rows are filtered by the phone, not here: the desktop shows them
+// with a 重试 button, the phone hides them, and the server is not the place to
+// decide which client is asking.
+func (s *Server) handleVideoHighlights(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	list, err := s.lib.ListVideoHighlights(id)
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, list)
+}
+
+// handleHighlightFile serves one generated 精彩时刻 image. The name must be
+// exactly what the generator writes — a stricter rule than the thumbnail route,
+// because these files are addressed by name rather than by id.
+func (s *Server) handleHighlightFile(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if !video.ValidHighlightFileName(name) {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	http.ServeFile(w, r, filepathFromData(s.dataDir, video.HighlightsRelativeDir, name))
 }
 
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {

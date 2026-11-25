@@ -98,22 +98,82 @@ func (s HighlightTaskStatus) Pending() int {
 
 // highlightRunState is the mutable half of HighlightTaskStatus, guarded by
 // highlightState.mu.
+//
+// The pending set is the source of truth for Total: the total is derived from
+// Done + Failed + len(pending) rather than incremented alongside them, which is
+// what makes "Done + Failed + 当前 pending == Total" impossible to break. It also
+// makes queueing idempotent, so the startup recovery cannot count a row this
+// process had already queued twice.
 type highlightRunState struct {
-	Total     int
 	Done      int
 	Failed    int
 	Canceled  int
 	Current   string
 	StartedAt int64
 	UpdatedAt int64
+	pending   map[int64]struct{}
 }
 
-func (r highlightRunState) pending() int {
-	pending := r.Total - r.Done - r.Failed
-	if pending < 0 {
-		return 0
+func (r *highlightRunState) pendingCount() int { return len(r.pending) }
+
+func (r *highlightRunState) total() int {
+	return r.Done + r.Failed + len(r.pending)
+}
+
+// track accepts rows into the round, starting a new one when nothing is pending:
+// a stale "上次生成" must not be added to. Rows already in the set are ignored,
+// so a repeated recovery or a retried row is still one item.
+func (r *highlightRunState) track(ids []int64, now int64) {
+	if len(ids) == 0 {
+		return
 	}
-	return pending
+	if len(r.pending) == 0 {
+		r.Done, r.Failed, r.Canceled, r.Current = 0, 0, 0, ""
+		r.StartedAt = now
+	}
+	if r.pending == nil {
+		r.pending = make(map[int64]struct{}, len(ids))
+	}
+	for _, id := range ids {
+		r.pending[id] = struct{}{}
+	}
+	r.UpdatedAt = now
+}
+
+// resolve closes one row. It reports whether the row belonged to this round, so a
+// late worker answer about a row the user already removed cannot move the
+// counters a second time.
+func (r *highlightRunState) resolve(id int64, success bool, now int64) bool {
+	if _, ok := r.pending[id]; !ok {
+		return false
+	}
+	delete(r.pending, id)
+	if success {
+		r.Done++
+	} else {
+		r.Failed++
+	}
+	r.Current = ""
+	r.UpdatedAt = now
+	return true
+}
+
+// cancel closes rows the user removed. A cancellation is an outcome, so it counts
+// as Done and is also counted in Canceled for the summary.
+func (r *highlightRunState) cancel(ids []int64, now int64) {
+	canceled := 0
+	for _, id := range ids {
+		if _, ok := r.pending[id]; !ok {
+			continue
+		}
+		delete(r.pending, id)
+		r.Done++
+		r.Canceled++
+		canceled++
+	}
+	if canceled > 0 {
+		r.UpdatedAt = now
+	}
 }
 
 // highlightState owns the generator: its queue, its worker, the round counters
@@ -172,7 +232,7 @@ func (s *Service) StartHighlights() {
 	}
 	// A recovery pass is a round of its own: the dashboard row describes the
 	// work the user is about to see, not what some earlier session did.
-	s.noteHighlightQueued(len(requeue))
+	s.noteHighlightQueued(requeue...)
 	for _, id := range requeue {
 		s.enqueueHighlight(id)
 	}
@@ -254,7 +314,7 @@ func (s *Service) AddHighlight(videoID, startMs, endMs int64) (*Highlight, error
 		_ = s.repo.DeleteHighlight(videoID, h.ID)
 		return nil, err
 	}
-	s.noteHighlightQueued(1)
+	s.noteHighlightQueued(h.ID)
 	if !s.enqueueHighlight(h.ID) {
 		// The queue is closing. The row stays queued and the next start picks it
 		// up, so the user's click is not lost to a race with a quit.
@@ -293,7 +353,7 @@ func (s *Service) RetryHighlight(videoID, id int64) error {
 	h.Error = ""
 	h.FinishedAt = 0
 	h.UpdatedAt = nowMillis()
-	s.noteHighlightQueued(1)
+	s.noteHighlightQueued(id)
 	if !s.enqueueHighlight(id) {
 		s.log.Warn("highlight retried during shutdown", "id", id, "video", videoID)
 	}
@@ -323,7 +383,7 @@ func (s *Service) DeleteHighlight(videoID, id int64) error {
 	}
 	s.removeHighlightFile(h.MediaPath)
 	if h.IsPending() {
-		s.cancelHighlightRun(1)
+		s.cancelHighlights([]int64{h.ID})
 	}
 	s.log.Info("highlight deleted", "id", id, "video", videoID, "status", h.Status)
 	s.emitHighlightRemoved(h)
@@ -337,8 +397,8 @@ func (s *Service) HighlightTaskStatus() HighlightTaskStatus {
 	defer s.highlights.mu.Unlock()
 	run := s.highlights.run
 	return HighlightTaskStatus{
-		Active:    run.pending() > 0,
-		Total:     run.Total,
+		Active:    run.pendingCount() > 0,
+		Total:     run.total(),
 		Done:      run.Done,
 		Failed:    run.Failed,
 		Canceled:  run.Canceled,
@@ -462,6 +522,9 @@ func (s *Service) highlightSource(v *Video) (string, error) {
 		if s.remoteOnline != nil && !s.remoteOnline(v) {
 			return "", errors.New(highlightErrSourceOffline)
 		}
+		if s.processor == nil {
+			return "", errors.New("网盘媒体不可用")
+		}
 		return s.processor.MediaPath(v)
 	}
 	if root := s.volumeDetached(v.Path); root != "" {
@@ -494,7 +557,7 @@ func (s *Service) finishHighlight(h *Highlight, status, message string) {
 	h.Error = message
 	h.FinishedAt = finished
 	h.UpdatedAt = finished
-	s.recordHighlightOutcome(status == HighlightStatusReady, 1)
+	s.resolveHighlight(h.ID, status == HighlightStatusReady)
 	if status == HighlightStatusFailed {
 		s.log.Warn("highlight generation failed", "id", h.ID, "video", h.VideoID, "err", message)
 	} else {
@@ -518,50 +581,34 @@ func (s *Service) enqueueHighlight(id int64) bool {
 	return queue.push(id)
 }
 
-// noteHighlightQueued accounts for rows a producer has accepted. When the round
-// is idle this starts a new one and resets the counters, so the dashboard row
-// always describes the work that just arrived.
-func (s *Service) noteHighlightQueued(added int) {
-	if added <= 0 {
+// noteHighlightQueued accepts rows a producer has handed to the queue. When the
+// round has nothing pending this starts a new one and resets the counters, so the
+// dashboard row always describes the work that just arrived.
+func (s *Service) noteHighlightQueued(ids ...int64) {
+	if len(ids) == 0 {
 		return
 	}
 	s.highlights.mu.Lock()
-	now := nowMillis()
-	if s.highlights.run.pending() == 0 {
-		s.highlights.run = highlightRunState{StartedAt: now}
-	}
-	s.highlights.run.Total += added
-	s.highlights.run.UpdatedAt = now
+	s.highlights.run.track(ids, nowMillis())
 	s.highlights.mu.Unlock()
 	s.scheduleHighlightTasksUpdate()
 }
 
-// recordHighlightOutcome closes n rows. A cancellation counts as Done (the round
-// is over for it) and is also counted in Canceled so the summary can name it.
-func (s *Service) recordHighlightOutcome(success bool, n int) {
-	if n <= 0 {
-		return
-	}
+// resolveHighlight closes one row. A row the user already removed is not in the
+// round any more, so its late answer changes nothing.
+func (s *Service) resolveHighlight(id int64, success bool) {
 	s.highlights.mu.Lock()
-	if success {
-		s.highlights.run.Done += n
-	} else {
-		s.highlights.run.Failed += n
-	}
-	s.highlights.run.Current = ""
-	s.highlights.run.UpdatedAt = nowMillis()
+	s.highlights.run.resolve(id, success, nowMillis())
 	s.highlights.mu.Unlock()
 }
 
-// cancelHighlightRun closes n pending rows that the user removed.
-func (s *Service) cancelHighlightRun(n int) {
-	if n <= 0 {
+// cancelHighlights closes pending rows the user removed.
+func (s *Service) cancelHighlights(ids []int64) {
+	if len(ids) == 0 {
 		return
 	}
 	s.highlights.mu.Lock()
-	s.highlights.run.Done += n
-	s.highlights.run.Canceled += n
-	s.highlights.run.UpdatedAt = nowMillis()
+	s.highlights.run.cancel(ids, nowMillis())
 	s.highlights.mu.Unlock()
 }
 
@@ -616,22 +663,22 @@ func (s *Service) removeHighlightFile(rel string) {
 	}
 }
 
-// pendingHighlightsOf counts a favorite's still-pending highlights. A permanent
+// pendingHighlightIDs returns a favorite's still-pending highlights. A permanent
 // delete runs this first so the round can account for the rows its cascade is
 // about to remove: without it the dashboard would keep them as "pending" forever.
-func (s *Service) pendingHighlightsOf(videoID int64) int {
+func (s *Service) pendingHighlightIDs(videoID int64) []int64 {
 	list, err := s.repo.ListHighlights(videoID)
 	if err != nil {
 		s.log.Warn("list highlights for removal failed", "video", videoID, "err", err)
-		return 0
+		return nil
 	}
-	pending := 0
+	ids := make([]int64, 0, len(list))
 	for i := range list {
 		if list[i].IsPending() {
-			pending++
+			ids = append(ids, list[i].ID)
 		}
 	}
-	return pending
+	return ids
 }
 
 // emitHighlightUpdated announces one row's state change. Both clients key their

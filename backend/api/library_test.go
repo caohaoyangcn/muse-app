@@ -22,6 +22,10 @@ type memVideoRepo struct {
 	// contentIgnores stores the content-duplicate dismissals so the facade test
 	// can exercise "keep all" without a database.
 	contentIgnores map[string]string
+	// highlights and nextHighlightID back the 精彩时刻 methods, which the
+	// dashboard projection and the facade passthroughs read.
+	highlights      []video.Highlight
+	nextHighlightID int64
 }
 
 func (r *memVideoRepo) Create(v *video.Video) error {

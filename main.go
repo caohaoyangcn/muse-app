@@ -116,9 +116,10 @@ func main() {
 	log := setupLogging(dataDir)
 	log.Info("muse build diagnostics", "fc2DiagnosticsVersion", fc2DiagnosticsVersion)
 	thumbDir := filepath.Join(dataDir, "thumbnails")
+	highlightDir := filepath.Join(dataDir, video.HighlightsRelativeDir)
 	javCoverDir := filepath.Join(dataDir, "covers", "jav")
 	actorAvatarDir := filepath.Join(dataDir, "avatars")
-	for _, dir := range []string{dataDir, thumbDir, javCoverDir, actorAvatarDir, filepath.Join(dataDir, "logs")} {
+	for _, dir := range []string{dataDir, thumbDir, highlightDir, javCoverDir, actorAvatarDir, filepath.Join(dataDir, "logs")} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			log.Error("create data dir failed", "dir", dir, "err", err)
 			fatalExit(dataDir)
@@ -285,6 +286,10 @@ func main() {
 	app.setLLMClient(llmClient)
 	lib.SetJavService(javSvc)
 	javSvc.Start()
+	// 精彩时刻: one background worker renders the user's saved moments into
+	// images. Starting it here also re-queues whatever the last process left
+	// queued or interrupted (docs/spec/highlight-moments.md §5.1).
+	videoSvc.StartHighlights()
 	// LAN web server: exposes the library + streaming to devices on the same
 	// network. It starts with the app so the phone URL is ready without opening
 	// the header toggle every session; the toggle still stops and restarts it.
@@ -345,6 +350,10 @@ func main() {
 		shutdownStep{"volume watch", stopVolumeWatch},
 		shutdownStep{"image sweep", stopImageSweep},
 		shutdownStep{"trash purge", stopTrashPurge},
+		// Before the thumbnail processor: both drive ffmpeg, and the highlight
+		// worker owns its own context, so stopping it first means the shrink of
+		// running commands is orderly rather than simultaneous.
+		shutdownStep{"highlight worker", videoSvc.CloseHighlights},
 		shutdownStep{"thumbnail processor", processor.Close},
 		shutdownStep{"fingerprinter", fingerprinter.Close},
 		shutdownStep{"jav scraper", javSvc.Close},
@@ -376,7 +385,7 @@ func main() {
 		WindowStartState: windowStartState,
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
-			Handler: &thumbnailHandler{dir: thumbDir, coverDir: javCoverDir, avatarDir: actorAvatarDir},
+			Handler: &thumbnailHandler{dir: thumbDir, coverDir: javCoverDir, avatarDir: actorAvatarDir, highlightDir: highlightDir},
 		},
 		BackgroundColour: &options.RGBA{R: 23, G: 23, B: 27, A: 255},
 		OnStartup: func(ctx context.Context) {
@@ -446,11 +455,14 @@ func runBindingGenerator() {
 }
 
 // thumbnailHandler serves generated thumbnails to the frontend at
-// /thumbnails/<id>.jpg, since the desktop webview blocks file:// images.
+// /thumbnails/<id>.jpg, since the desktop webview blocks file:// images. It
+// also serves the covers, the actor avatars and the 精彩时刻 images, which are
+// addressed by their generated file name.
 type thumbnailHandler struct {
-	dir       string
-	coverDir  string
-	avatarDir string
+	dir          string
+	coverDir     string
+	avatarDir    string
+	highlightDir string
 }
 
 var thumbnailNamePattern = regexp.MustCompile(`^\d+\.jpg$`)
@@ -487,6 +499,17 @@ func (h *thumbnailHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, filepath.Join(h.avatarDir, name))
+	case strings.HasPrefix(r.URL.Path, "/highlights/"):
+		// The generated-file shape is the whole guard: it admits only the names
+		// the generator writes, so this route cannot be used to read anything
+		// else in the folder or above it.
+		name := path.Base(r.URL.Path)
+		if !video.ValidHighlightFileName(name) {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, r, filepath.Join(h.highlightDir, name))
 	default:
 		http.NotFound(w, r)
 	}

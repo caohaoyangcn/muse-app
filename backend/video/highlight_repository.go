@@ -185,10 +185,6 @@ func (r *sqliteRepository) RecoverHighlights(maxInterruptions int) ([]int64, int
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	type runningRow struct {
-		id            int64
-		interruptions int
-	}
 	interrupted, err := queryInterruptedHighlights(tx)
 	if err != nil {
 		return nil, 0, err

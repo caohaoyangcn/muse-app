@@ -110,6 +110,7 @@ func TestLANAuthRejectsMissingKey(t *testing.T) {
 		"/thumbnails/1.jpg",
 		"/covers/jav/1.jpg",
 		"/avatars/abc.jpg",
+		"/highlights/h-1-2-3.jpg",
 	}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {

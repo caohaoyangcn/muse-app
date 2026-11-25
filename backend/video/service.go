@@ -89,10 +89,10 @@ func NewService(repo VideoRepository, processor *Processor, dataDir string, log 
 	// which owns every ffmpeg invocation in the app; only the queue and the row
 	// bookkeeping live here. The seams stay replaceable for tests.
 	s.highlights.generateMoment = func(ctx context.Context, videoPath string, atMs int64, outPath string, timeout time.Duration) error {
-		return thumbnail.GenerateHighlightMoment(ctx, s.processor.FFmpegBin(), videoPath, atMs, outPath, timeout)
+		return thumbnail.GenerateHighlightMoment(ctx, s.ffmpegBin(), videoPath, atMs, outPath, timeout)
 	}
 	s.highlights.generateGIF = func(ctx context.Context, videoPath string, startMs, endMs int64, fps int, outPath string, timeout time.Duration) error {
-		return thumbnail.GenerateHighlightGIF(ctx, s.processor.FFmpegBin(), videoPath, startMs, endMs, fps, outPath, timeout)
+		return thumbnail.GenerateHighlightGIF(ctx, s.ffmpegBin(), videoPath, startMs, endMs, fps, outPath, timeout)
 	}
 	s.highlights.fileSize = func(path string) (int64, error) {
 		info, err := os.Stat(path)
@@ -148,6 +148,16 @@ func (s *Service) SetFingerprinter(f *Fingerprinter) {
 // "missing" reason, which is everything the video layer owns on its own.
 func (s *Service) SetMissingRemover(remove func(id int64) error) {
 	s.missingRemover = remove
+}
+
+// ffmpegBin is the resolved ffmpeg path. A Service built without a processor
+// (some facade tests wire none) simply has no tool, and the generators report
+// that instead of panicking.
+func (s *Service) ffmpegBin() string {
+	if s.processor == nil {
+		return ""
+	}
+	return s.processor.FFmpegBin()
 }
 
 // volumeIdentityKnown reports whether the path lives on a volume the app can
@@ -384,13 +394,13 @@ func (s *Service) Remove(id int64) error {
 	if err != nil {
 		return err
 	}
-	// Read the pending count before the delete: the cascade removes the rows, and
+	// Read the pending ids before the delete: the cascade removes the rows, and
 	// a round that still counted them would look busy forever.
-	pendingHighlights := s.pendingHighlightsOf(id)
+	pendingHighlights := s.pendingHighlightIDs(id)
 	if err := s.repo.Delete(id); err != nil {
 		return err
 	}
-	s.cancelHighlightRun(pendingHighlights)
+	s.cancelHighlights(pendingHighlights)
 	s.removeThumbnail(v)
 	// A worker that was downloading this favorite's cover may write it back
 	// after the deletion (see removeThumbnail): asset cleanup is therefore a

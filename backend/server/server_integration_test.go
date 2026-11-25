@@ -32,6 +32,10 @@ type stubVideoRepo struct {
 	// contentIgnores stores content-duplicate dismissals for the transport
 	// tests, so "keep all" round-trips over HTTP.
 	contentIgnores map[string]string
+	// highlights backs the read-only 精彩时刻 endpoints; nextHighlightID numbers
+	// the rows a test inserts directly.
+	highlights      []video.Highlight
+	nextHighlightID int64
 }
 
 func (r *stubVideoRepo) Create(v *video.Video) error {
