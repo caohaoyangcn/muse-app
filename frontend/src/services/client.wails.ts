@@ -13,6 +13,7 @@ export const wailsClient: MuseClient = {
   videosByActor: (name) => api.videosByActor(name),
   similarVideos: (id, limit) => api.similarVideos(id, limit ?? 0),
   actorProfile: (name) => api.actorProfile(name),
+  listVideoHighlights: (videoId) => api.listVideoHighlights(videoId),
 
   videoJav: (id) => api.videoJav(id),
   videoJavTask: (id) => api.videoJavTask(id),

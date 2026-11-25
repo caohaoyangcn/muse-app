@@ -2,8 +2,9 @@
 //
 // 两层：
 //  - `client`   两端都有的能力，实现是 Wails 绑定（见 client.wails.ts）。
-//  - 本文件直出的 71 项是**只有桌面端做得到**的能力：原生文件选择器、云盘配置、
-//    刮削控制、演员补全与合并、服务器控制、Cookie 管理、封面选帧、卷状态刷新等。
+//  - 本文件直出的 68 项是**只有桌面端做得到**的能力：原生文件选择器、云盘配置、
+//    刮削控制、演员补全与合并、服务器控制、Cookie 管理、封面选帧、卷状态刷新、
+//    精彩时刻的增删与重试等。
 //    它们不进 MuseClient —— 浏览器永远做不到，塞进共享契约只会让接口说假话。
 //
 // 移动端对应的是 services/web.ts。两者都 re-export `client`，所以壳里的取数入口
@@ -13,6 +14,7 @@ export { client } from "./client";
 export {
   actorFillStatus,
   addCloudVideos,
+  addVideoHighlight,
   addVideos,
   addWatchDir,
   archiveCloudConnection,
@@ -25,6 +27,7 @@ export {
   cloudStorageAvailable,
   copyPath,
   deleteCloudConnection,
+  deleteVideoHighlight,
   enableCloudConnection,
   fileScanStatus,
   getFC2CookieStatus,
@@ -51,6 +54,7 @@ export {
   rescanWatchDirs,
   resetVideoCover,
   retranslateAllTitles,
+  retryVideoHighlight,
   rotateLanAccessKey,
   saveCloudConnection,
   scanFileStatuses,

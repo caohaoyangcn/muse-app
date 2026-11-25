@@ -4,6 +4,8 @@ import { api, cloud, jav, main, server, tasks, video, watch } from "../wailsjs/g
 
 export type Video = video.Video;
 export type AddVideoResult = video.AddVideoResult;
+/** 一条精彩时刻：时刻截图或时间段循环 GIF，含排队/生成中/完成/失败状态。 */
+export type Highlight = video.Highlight;
 /** 回收站快照：条目 + 当前保留天数（由后端统一给出，避免客户端各算一套）。 */
 export type TrashSnapshot = api.TrashSnapshot;
 /** 详情页底部「类似影片」的一项：影片本身、排序分数与推荐理由。 */

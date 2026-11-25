@@ -1,5 +1,6 @@
 import {
   AddVideos,
+  AddVideoHighlight,
   AddWatchDir,
   AddCloudVideos,
   ArchiveCloudConnection,
@@ -8,6 +9,7 @@ import {
   ClearVideoLikes,
   CloudStorageAvailable,
   DeleteCloudConnection,
+  DeleteVideoHighlight,
   CopyPath,
   DeleteVideoPermanently,
   EmptyTrash as EmptyTrashBinding,
@@ -24,6 +26,7 @@ import {
   SaveCloudConnection,
   TestCloudConnection,
   ListVideos,
+  ListVideoHighlights,
   ListWatchDirs,
   LikeVideo,
   OpenContainingFolder,
@@ -37,6 +40,7 @@ import {
   RemoveVideo,
   RemoveWatchDir,
   RestoreVideo,
+  RetryVideoHighlight,
   RescanWatchDirs,
   RefreshVolumes,
   RotateLanAccessKey,
@@ -121,6 +125,7 @@ import type {
   VolumeChange,
   TrashSnapshot,
   JavCodeCheck,
+  Highlight,
 } from "../types";
 
 /**
@@ -192,6 +197,33 @@ export const resetVideoCover = (id: number): Promise<Video> => ResetVideoCover(i
 
 export const setVideoScrapedCoverAllowed = (id: number, allowed: boolean): Promise<Video> =>
   SetVideoScrapedCoverAllowed(id, allowed);
+
+// ---- 精彩时刻 (highlight moments) ----
+
+/**
+ * 一部影片的全部精彩时刻，**每个状态都返回**：排队、生成中、完成、失败。
+ * 失败行由各平台自己决定怎么处理（桌面展示失败卡，手机端过滤掉）。
+ */
+export const listVideoHighlights = (videoId: number): Promise<Highlight[]> =>
+  ListVideoHighlights(videoId);
+
+/**
+ * 新增一条精彩时刻：`endMs` 传 0 表示时刻截图，否则生成该时间段的循环 GIF。
+ * 只入队并立即返回这条记录，生成由后台 worker 完成。
+ */
+export const addVideoHighlight = (
+  videoId: number,
+  startMs: number,
+  endMs: number,
+): Promise<Highlight> => AddVideoHighlight(videoId, startMs, endMs);
+
+/** 把一条生成失败的精彩时刻重新排队（沿用原开始/结束时间）。 */
+export const retryVideoHighlight = (videoId: number, highlightId: number): Promise<void> =>
+  RetryVideoHighlight(videoId, highlightId);
+
+/** 删除一条精彩时刻：只删记录与它生成的截图/GIF，源视频文件不会被删除。 */
+export const deleteVideoHighlight = (videoId: number, highlightId: number): Promise<void> =>
+  DeleteVideoHighlight(videoId, highlightId);
 
 export const videoJav = (id: number): Promise<JavDetail> => VideoJav(id);
 export const videoJavTask = (id: number): Promise<JavTask> => VideoJavTask(id);

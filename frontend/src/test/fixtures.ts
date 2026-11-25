@@ -1,4 +1,4 @@
-import type { Video } from "../types";
+import type { Highlight, Video } from "../types";
 
 /**
  * Test fixtures for the view-model layer.
@@ -53,6 +53,28 @@ export function makeVideo(overrides: Partial<Video> = {}): Video {
     deletedAt: 0,
     deleteReason: "",
     archiveSourceName: "",
+    ...overrides,
+  };
+}
+
+/**
+ * One 精彩时刻 row. Defaults to a finished 1:30 screenshot: the commonest row on
+ * screen, so a test about the range rules or the failure states only states the
+ * fields it is actually about.
+ */
+export function makeHighlight(overrides: Partial<Highlight> = {}): Highlight {
+  return {
+    id: 1,
+    videoId: 1,
+    kind: "moment",
+    startMs: 90_000,
+    endMs: 0,
+    mediaPath: "highlights/h-1-1700000000000000000-1.jpg",
+    status: "ready",
+    error: "",
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_000,
+    finishedAt: 1_700_000_000_000,
     ...overrides,
   };
 }

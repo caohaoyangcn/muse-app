@@ -30,6 +30,7 @@ import { Button } from "../../ui/button";
 import { Dialog, DialogContent } from "../../ui/dialog";
 import { Icon } from "../../ui/icon";
 import { SimilarVideos } from "./SimilarVideos";
+import { HighlightMoments } from "./HighlightMoments";
 
 const errorLabels: Record<string, string> = {
   no_code: "未识别到番号",
@@ -291,6 +292,10 @@ export function VideoDetailView({
                 ) : null}
               </>
             ) : null}
+
+            {/* 精彩时刻放在刮削元数据（含演员/标签）之后、文件信息之前：手机上一屏
+                先读到片名与资料，再看到图，最后才是编码、路径这类技术细节。 */}
+            <HighlightMoments videoId={videoId} />
 
             <MetaSection title="文件信息">
               <MetadataList label={{ position: "start", width: 64 }}>

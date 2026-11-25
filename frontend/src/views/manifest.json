@@ -51,6 +51,13 @@
       "model": "src/views/similar/useSimilarVideos.ts"
     },
     {
+      "id": "video-detail",
+      "title": "视频详情",
+      "desktop": "src/components/VideoDetailPanel.tsx",
+      "mobile": "src/mobile/components/VideoDetailView.tsx",
+      "model": "src/views/highlights/useVideoHighlights.ts"
+    },
+    {
       "id": "scrape",
       "title": "刮削任务",
       "desktop": "src/components/ScrapeTaskView.tsx",
@@ -137,6 +144,18 @@
       "platform": "mobile",
       "capability": "关键字筛选与排序切换",
       "reason": "移动端按分组看任务，不提供关键字与创建时间排序"
+    },
+    {
+      "view": "video-detail",
+      "platform": "mobile",
+      "capability": "新增、重试与删除精彩时刻",
+      "reason": "生成走桌面端的后台 ffmpeg 队列，写入口只留在桌面端，手机只读已生成的结果"
+    },
+    {
+      "view": "video-detail",
+      "platform": "mobile",
+      "capability": "失败的精彩时刻",
+      "reason": "手机端隐藏生成失败的条目，重试与删除需要回到桌面端"
     },
     {
       "view": "settings",

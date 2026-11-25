@@ -19,6 +19,7 @@ import type {
   BackgroundTasks,
   ContentDuplicateGroup,
   ContentScanStatus,
+  Highlight,
   JavDetail,
   JavDuplicateGroup,
   JavTask,
@@ -38,6 +39,13 @@ export interface MuseClient {
   similarVideos(videoId: number, limit?: number): Promise<SimilarVideo[]>;
   /** 某位演员的档案（头像 / 生日 / 身高三围）；还没补全时为 null。 */
   actorProfile(name: string): Promise<ActorProfile | null>;
+  /**
+   * 一部影片的全部精彩时刻，**每个状态都返回**（排队 / 生成中 / 完成 / 失败）。
+   *
+   * 失败行要不要出现是平台自己的事：桌面端展示失败卡并提供重试，手机端没有写
+   * 入口，用 `mobileVisibleHighlights` 自己过滤掉 failed。
+   */
+  listVideoHighlights(videoId: number): Promise<Highlight[]>;
 
   // ---- scrape reads ----
   videoJav(id: number): Promise<JavDetail | null>;
@@ -103,6 +111,7 @@ export const client: MuseClient = {
   videosByActor: (name) => bound().videosByActor(name),
   similarVideos: (videoId, limit) => bound().similarVideos(videoId, limit),
   actorProfile: (name) => bound().actorProfile(name),
+  listVideoHighlights: (videoId) => bound().listVideoHighlights(videoId),
 
   videoJav: (id) => bound().videoJav(id),
   videoJavTask: (id) => bound().videoJavTask(id),

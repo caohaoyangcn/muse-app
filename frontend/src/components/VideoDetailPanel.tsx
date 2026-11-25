@@ -28,6 +28,7 @@ import {
 } from "../ui/astryx";
 import { Dialog, DialogCloseButton, DialogContent } from "../ui/dialog";
 import SimilarVideos from "./SimilarVideos";
+import HighlightMomentsSection from "./HighlightMomentsSection";
 
 type OverrideMode = "auto" | "manual" | "skip";
 
@@ -351,6 +352,8 @@ export default function VideoDetailPanel({
               )}
             </div>
           </div>
+
+          <HighlightMomentsSection video={video} />
 
           {detail && (
             <div className="grid gap-5 lg:grid-cols-2">

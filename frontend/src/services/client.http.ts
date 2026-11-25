@@ -19,6 +19,7 @@ export const httpClient: MuseClient = {
     const actors = await http.listActors();
     return actors.find((a) => a.name === name || a.aliases?.includes(name))?.profile ?? null;
   },
+  listVideoHighlights: (videoId) => http.listVideoHighlights(videoId),
 
   videoJav: (id) => http.javDetail(id),
   videoJavTask: (id) => http.javTask(id),

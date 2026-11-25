@@ -14,6 +14,7 @@ import type {
   BackgroundTasks,
   ContentDuplicateGroup,
   ContentScanStatus,
+  Highlight,
   JavDetail,
   JavDuplicateGroup,
   JavTask,
@@ -192,6 +193,14 @@ export function videosByActor(name: string): Promise<Video[]> {
 export function similarVideos(id: number, limit = 0): Promise<SimilarVideo[]> {
   const query = limit > 0 ? `?limit=${limit}` : "";
   return request<SimilarVideo[]>(`${API}/videos/${id}/similar${query}`);
+}
+
+/**
+ * 一部影片的精彩时刻。服务端返回全部状态（含失败），手机端只读、自己过滤掉
+ * failed：失败的重试与删除入口都在桌面端。
+ */
+export function listVideoHighlights(videoId: number): Promise<Highlight[]> {
+  return request<Highlight[]>(`${API}/videos/${videoId}/highlights`);
 }
 
 /**

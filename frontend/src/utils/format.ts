@@ -1,4 +1,4 @@
-import type { ActorProfile, Video } from "../types";
+import type { ActorProfile, Highlight, Video } from "../types";
 
 /** 7423420 -> "2:03:43"; returns "" when duration is unknown. */
 export function formatDuration(ms: number): string {
@@ -40,6 +40,17 @@ export function videoCoverURL(v: Video): string {
     return `/${v.scrapedCoverPath}?v=${version}`;
   }
   return `/thumbnails/${v.id}.jpg?v=${version}`;
+}
+
+/**
+ * 一条精彩时刻生成图片的地址。
+ *
+ * 生成文件落在 `<dataDir>/highlights/` 下，桌面端与局域网服务都以 `/highlights/`
+ * 暴露同一个相对路径，所以两端共用这一种拼法。`updatedAt` 进查询串是因为 8 fps
+ * 重试会覆盖同一个文件名，没有它 WebView 会继续显示旧图。只在 `ready` 时调用。
+ */
+export function highlightURL(h: Highlight): string {
+  return `/${h.mediaPath}?v=${h.updatedAt || h.createdAt}`;
 }
 
 /** 23.976543 -> "23.98 fps"; returns "" when the frame rate is unknown. */
