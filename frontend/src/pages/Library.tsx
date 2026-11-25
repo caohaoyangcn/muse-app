@@ -164,7 +164,8 @@ export default function Library({
     [videoTabPlan, actorTabs],
   );
 
-  // The header search box. Ctrl/Cmd+F focuses it from anywhere in the library.
+  // The list's keyword box. Ctrl/Cmd+F focuses it from anywhere in the library;
+  // only a view that the query actually drives renders it.
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   // Bumped by that shortcut; the focus effect below runs after the view that
   // must show the box has rendered (the box is unmounted on some panels).
@@ -1423,6 +1424,14 @@ export default function Library({
   // 后台任务 is a status screen with no list to search either.
   const taskView = activeTab === "library" && filter.kind === "tasks";
 
+  // The keyword box narrows the video list (全部收藏 / a group / 最近播放) or the
+  // scrape-task list, so it is mounted only while one of those is the content
+  // under it. A video tab is a detail page, not a list: leaving the box in the
+  // header there put an inert field above the detail, and the same goes for the
+  // actor index and the panels above.
+  const listSearchView =
+    activeTab === "library" && !actorView && !duplicateView && !trashView && !taskView;
+
   // What <main> currently shows. The content error boundary uses it to recover
   // when the user navigates somewhere else, so a broken panel cannot trap them
   // on a dead screen.
@@ -1501,7 +1510,7 @@ export default function Library({
         </Button>
         <div className="flex-1" />
         <ServerBar />
-        {!actorView && !duplicateView && !trashView && !taskView && (
+        {listSearchView && (
           <SearchBar
             value={keyword}
             onChange={setKeyword}
