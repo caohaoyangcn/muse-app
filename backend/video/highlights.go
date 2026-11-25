@@ -455,7 +455,11 @@ func (s *Service) processHighlight(id int64) {
 
 	v, err := s.repo.GetAny(h.VideoID)
 	if err != nil {
-		// The favorite is gone and its rows went with it.
+		// The favorite is gone. Its rows normally went with it (the delete runs in
+		// one transaction), so reaching here means an orphan left by an interrupted
+		// delete: record it as failed instead of leaving it counted as in flight
+		// forever.
+		s.finishHighlight(h, HighlightStatusFailed, highlightErrDeletedVideo)
 		return
 	}
 	s.setHighlightCurrent(v.FileName, h)

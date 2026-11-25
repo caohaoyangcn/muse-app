@@ -619,6 +619,39 @@ func TestHighlightGIFRetriesAtLowerFrameRate(t *testing.T) {
 	})
 }
 
+// TestHighlightWithMissingFavoriteFailsCleanly covers the orphan an interrupted
+// permanent delete can leave: the row exists, the favorite does not. It must end
+// as a failure rather than stay counted as in flight forever.
+func TestHighlightWithMissingFavoriteFailsCleanly(t *testing.T) {
+	svc, _, v := newHighlightFixture(t)
+	h := &Highlight{
+		VideoID:   v.ID + 100,
+		Kind:      HighlightKindMoment,
+		StartMs:   1000,
+		MediaPath: highlightMediaPath(v.ID+100, 1, HighlightKindMoment),
+		Status:    HighlightStatusQueued,
+		CreatedAt: nowMillis(),
+		UpdatedAt: nowMillis(),
+	}
+	if err := svc.repo.CreateHighlight(h); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	svc.highlights.generateMoment = func(_ context.Context, _ string, _ int64, _ string, _ time.Duration) error {
+		t.Error("the generator must not run for a favorite that does not exist")
+		return nil
+	}
+	svc.StartHighlights()
+
+	failed := waitForHighlight(t, svc, h.VideoID, h.ID, HighlightStatusFailed)
+	if failed.Error != highlightErrDeletedVideo {
+		t.Errorf("error = %q, want %q", failed.Error, highlightErrDeletedVideo)
+	}
+	st := waitForHighlightTask(t, svc, func(st HighlightTaskStatus) bool { return !st.Active })
+	if st.Failed != 1 || st.Current != "" {
+		t.Errorf("task status = %+v, want one failure and no current item", st)
+	}
+}
+
 // TestRemoveVideoAccountsForItsPendingHighlights keeps the round counter honest
 // when a favorite is permanently deleted with work still queued.
 func TestRemoveVideoAccountsForItsPendingHighlights(t *testing.T) {
