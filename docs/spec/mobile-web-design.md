@@ -104,6 +104,7 @@ npm run build:mobile      # frontend/ 下
 | `GET /api/actors` | `ListActors` | 含合并别名 |
 | `GET /api/actors/videos?name=` | `VideosByActor` | 演员名走 query，见下 |
 | `GET /api/trash` | `ListTrash` | `{videos, retentionDays}`；回收站 |
+| `GET /api/videos/{id}/highlights` | `ListVideoHighlights` | 精彩时刻，返回全部状态；失败的条目由移动端自己隐藏 |
 
 **写**
 
@@ -127,6 +128,7 @@ npm run build:mobile      # frontend/ 下
 | `GET /stream/video/{id}` | 原始文件 Range 串流；Muse 不解码、不重封装，内容由手机上的专用播放器处理 |
 | `GET /thumbnails/{id}` | 自动缩略图 |
 | `GET /covers/jav/{id}` | 刮削封面 |
+| `GET /highlights/{name}` | 精彩时刻截图/GIF；只接受生成器写出的 `h-<数字>-<数字>-<数字>.(jpg\|gif)` |
 
 ### 设计要点
 
@@ -161,6 +163,8 @@ npm run build:mobile      # frontend/ 下
 | 发起刮削 / 覆盖番号 | ✅ | ❌ 桌面专属 |
 | 演员合并 | ✅ | ❌ 桌面专属 |
 | 封面选帧 | ✅ 输入时间后由 ffmpeg 抽帧，无内嵌视频预览 | ❌ 桌面专属 |
+| 精彩时刻（查看截图 / 循环 GIF） | ✅ | ✅ 只读；失败的条目隐藏 |
+| 新增 / 重试 / 删除精彩时刻 | ✅ | ❌ 桌面专属（不提供 HTTP 写端点） |
 | 打开系统播放器 / 定位文件 / 复制路径 | ✅ | ❌ 作用于服务器文件系统，对手机无意义 |
 | 添加收藏 / 目录监控 / 设置 | ✅ | ❌ 移动端不渲染入口（写端点仍可达） |
 
@@ -178,6 +182,7 @@ npm run build:mobile      # frontend/ 下
   - 手机端海报列数交给 `Grid columns={{minWidth: 136, max: 4}}` 由 CSS 决定（脚本不测量列数），卡片高度由统一的 3:4 比例固定，标题压在封面上，不参与行高计算。
   - 海报卡自带独立层叠上下文（`isolate`）：卡内右上角的「更多」按钮只能压在封面与标题之上，不能越过同一滚动区内 `z-6` 的贴底页脚。否则下一行滚到页脚下方时，它的「更多」按钮和提示会浮在页码上，既挡住翻页也抢走本属于页脚的点击。
 - **无推送**：桌面端依赖 Wails 事件（如 `jav:scrape:updated`）实时刷新，HTTP 无此能力，移动端在打开详情时拉取。这是有意的简化。
+- **精彩时刻的轮询**：它是唯一会在打开详情期间“自己变化”的数据（截图/GIF 由桌面端后台队列生成），因此详情页在存在 `queued`/`running` 条目时每 3 秒轮询一次 `GET /api/videos/{id}/highlights`，没有待处理条目时不建定时器。其余数据仍是「打开时拉一次」。
 - **只有屏幕进 URL**：标签、详情 id 与演员名写入地址栏；搜索关键字、筛选条件、排序与网格/列表偏好仍留在组件状态或 `localStorage`。搜索是逐字符输入，若每敲一个字都压入历史，前进/后退会被输入过程淹没，也会让返回一次只退一个字符。筛选面板本身是历史条目，返回键先关面板，条件保留。
 
 ## 9. 已知限制

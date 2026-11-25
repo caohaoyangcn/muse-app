@@ -140,6 +140,12 @@ type ScrapeTaskCounts struct {
 | 内容查重扫描 | `examining` 阶段：`Done=Examined, Total=ExamineTotal`；`comparing` 阶段：`Done=Done, Total=Total`；`Message=阶段名` |
 | 文件检测 | `Done=Checked, Total=Total, Failed=Removed`，`Message` 带上 offline/skipped 数量 |
 | 演员资料补齐 | `Done=Succeeded+NotFound+Failed, Total=Total, Failed=Failed, Current=Current` |
+| 精彩时刻生成 | `Done=成功+取消, Total=本轮接受数, Failed=生成失败, Canceled=取消, Current=「文件名 · 1:30」`，`Message` 运行中为「生成中 1 · 排队 N」、结束后为「完成 N · 失败 M · 取消 K」 |
+
+精彩时刻的执行器归 `video.Service`（`docs/spec/highlight-moments.md` §5），看板只做只读投影，
+正是 §2 「统一视图，不统一执行器」的又一个例子。它的 `Total` 由
+`Done + Failed + 待处理条数` 推导而来，所以 §3 的不变式不可能被写歪；取消计入 `Done`，
+另在 `Canceled` 里单独记一份供文案使用。
 
 缩略图/元数据回填先不进看板：启动后几秒内完成，且当前只有数量没有总数（需要另加计数），留到第二阶段。
 
@@ -240,4 +246,5 @@ type ScrapeTaskCounts struct {
 - **HTTP 端点**：`GET /api/tasks` 已就绪（移动端页面第二阶段再接入）。
 - **深链**：刮削行 → 刮削看板；查重扫描 → 查重页；演员补齐 → 演员索引。翻译行暂不提供深链。
 - 测试位置：`backend/jav/background_tasks_test.go`、`backend/api/background_tasks_test.go`、`backend/tasks/tasks_test.go`、`frontend/src/utils/tasks.test.ts`。
+- **精彩时刻生成**（`highlight-moments` 行，`video.Service` 拥有执行器）：`Total` 由 `Done + Failed + 待处理` 推导，取消计入 `Done` 且另记 `Canceled`；单 worker，所以运行中最多 1 条在飞，`Message` 是「生成中 1 · 排队 N」。无活动且本轮无计数时不显示，结束后保留到下一轮或应用重启。没有明细深链（当前没有专门的精彩时刻任务页）。测试位置：`backend/video/highlights_test.go`、`backend/api/highlight_test.go`。
 

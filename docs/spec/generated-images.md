@@ -10,9 +10,13 @@
 | --- | --- | --- |
 | `<dataDir>/thumbnails/<id>.jpg` | `backend/thumbnail`（自动缩略图 / 自定义封面帧） | 记录 id |
 | `<dataDir>/covers/jav/<id>.jpg` | `backend/jav`（刮削封面下载） | 记录 id |
+| `<dataDir>/highlights/h-<videoID>-<unixNano>-<seq>.<jpg\|gif>` | `backend/thumbnail`（精彩时刻，见 `highlight-moments.md`） | 生成时的唯一名 |
 
-两者的命名规则相同且**只由记录 id 决定**：`<id>.jpg`。这是清理能够安全进行的全部依据——
+前两者的命名规则相同且**只由记录 id 决定**：`<id>.jpg`。这是清理能够安全进行的全部依据——
 文件名就是归属声明。
+
+精彩时刻的文件名不是归属声明，`video_highlights.media_path` 才是：同一部影片可以有很多条，
+文件名里的 id 只是方便人读。清扫因此用的是**记录声明的 basename 集合**，而不是 id 集合。
 
 刮削封面下载过程中会在 `covers/jav/` 临时写入 `.cover-*` 文件，重命名后即消失；它们不匹配
 `<id>.jpg`，任何清扫都不会碰。
@@ -36,8 +40,10 @@
 
 对账而非"追踪每个写入者"——后者要覆盖上面每一种交错，前者的判断永远只有一条查询。
 
-`video.Service.RemoveOrphanedImages()` 读取 `videos` 的全量 id，然后遍历两个目录，删除
-`<id>.jpg` 且 id 不在集合中的文件，返回 `{Scanned, Removed, Bytes}`。
+`video.Service.RemoveOrphanedImages()` 读取 `videos` 的全量 id，遍历前两个目录删除 `<id>.jpg`
+且 id 不在集合中的文件；再读取 `video_highlights.media_path` 建立 basename 集合，遍历
+`highlights/` 删除形如 `h-<数字>-<数字>-<数字>.(jpg|gif)` 且不在集合中的文件。返回
+`{Scanned, Removed, Bytes}`（两个目录的结果合并）。
 
 触发点：
 
@@ -52,8 +58,11 @@
 
 - 只认 `<十进制正整数>.jpg`。`abc.jpg`、`999.png`、`999.jpg.bak`、`.cover-*`、`0.jpg`、`-5.jpg`、
   以及名字是图片的**目录**，全部原样保留。
-- 只遍历 `thumbnails/` 与 `covers/jav/`，不递归，不碰数据目录里的其它内容。
-- 只删文件，永不动 `videos` 表，永不触碰源视频（全局原则 `spec-v1.md` §41）。
+- `highlights/` 只认 `h-<数字>-<数字>-<数字>.(jpg|gif)`；其它命名（`h-1-2.jpg`、`h-1-2-3.png`、
+  `h-1-2-3.gif.bak`、以点开头的临时文件）一律保留。排队中/生成中的行也带着 `media_path`，
+  所以**正在生成的半成品不会被当成孤儿**。
+- 只遍历 `thumbnails/`、`covers/jav/` 与 `highlights/`，不递归，不碰数据目录里的其它内容。
+- 只删文件，永不动 `videos` / `video_highlights` 表，永不触碰源视频（全局原则 `spec-v1.md` §41）。
 
 代价是：用户若在 `thumbnails/` 里手工放一个恰好叫 `<某个不存在 id>.jpg` 的文件，它会被删掉。
 这两个目录属于应用的生成物，这个取舍写在文档里而不是靠猜。
@@ -76,6 +85,9 @@
 - `backend/video/imagesweep_test.go`：
   - 两个目录里的孤儿都被删除，有记录的图片全部保留；
   - 非应用命名的文件（含临时文件、错误的扩展名、图片名目录）一律保留；
+  - `highlights/` 里被行声明的文件（含排队中的行）保留，孤儿删除；
+  - `highlights/` 里非生成命名的文件一律保留；
+  - 影片永久删除后，它的精彩时刻文件在下一次清扫中被清掉；
   - 目录不存在时返回空结果而不是错误；
   - 记录删除后晚到的封面会被下一次清扫清掉；
   - 旧版本留下的孤儿在首次清扫时被清掉；

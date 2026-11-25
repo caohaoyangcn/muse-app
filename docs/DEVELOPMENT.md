@@ -125,6 +125,7 @@ macOS:   ~/Library/Application Support/Muse/
 
 ├── app.db          # SQLite 收藏库
 ├── thumbnails\     # 缩略图（thumbnails/<id>.jpg）
+├── highlights\     # 精彩时刻（highlights/h-<影片id>-<纳秒>-<序号>.<jpg|gif>）
 ├── covers\jav\     # 刮削封面（covers/jav/<id>.jpg）
 ├── avatars\        # 演员头像（avatars/<star_id>.jpg）
 └── logs\app.log    # 运行日志（超过 10MB 启动时自动清空）
@@ -132,7 +133,8 @@ macOS:   ~/Library/Application Support/Muse/
 
 - 数据目录与程序目录无关；升级时覆盖程序文件夹即可，schema 迁移在启动时自动执行（`backend/database/migration.go`）。
 - 旧版本生成的 `web/` 重封装缓存已不再使用，可安全手动删除。
-- 图片清理逻辑只删除孤立的生成图片，不会触碰源视频。
+- 图片清理逻辑只删除孤立的生成图片，不会触碰源视频。`highlights/` 的归属由 `video_highlights.media_path` 声明，排队中/生成中的文件也因此不会被误删。
+- 「精彩时刻」在 `main.go` 里随启动一起开始（`videoSvc.StartHighlights()`），关闭顺序排在缩略图处理器之前；正在生成的条目会保持 `running`，下次启动自动重排（`docs/spec/highlight-moments.md` §5）。
 
 ## 移动端 Web UI
 
@@ -143,7 +145,7 @@ cd frontend
 npm run build:mobile   # 产物写入 backend/server/webui/（入库，go:embed 依赖）
 ```
 
-移动端刻意不做：发起刮削、封面选帧、演员合并、添加收藏、目录监控与设置。这些依赖原生文件对话框、ffmpeg 交互或服务器文件系统。标签/演员/硬盘筛选两端都有。
+移动端刻意不做：发起刮削、封面选帧、演员合并、添加收藏、目录监控与设置。这些依赖原生文件对话框、ffmpeg 交互或服务器文件系统。标签/演员/硬盘筛选两端都有。精彩时刻在移动端只读（可查看截图与 GIF，不能新增/重试/删除）。
 
 播放由客户端完成：`GET /stream/video/{id}` 始终以 HTTP Range 传输原始文件，Muse 不做服务端转码或重封装；iPhone/iPad 可跳转 Infuse / VLC，其他设备复制播放地址。
 
@@ -163,6 +165,7 @@ npm run build:mobile   # 产物写入 backend/server/webui/（入库，go:embed 
 - `GET /api/videos/{id}/jav`、`GET /api/videos/{id}/jav/task`（未刮削返回 `200` + `null`）
 - `GET /api/jav/tasks`（刮削任务看板）、`GET /api/jav/duplicates`（查重，`?includeIgnored=1` 显示已忽略）、`GET /api/actors`、`GET /api/actors/videos?name=`
 - `GET /api/duplicates/content`（内容重复，`?includeIgnored=1` 显示已忽略）
+- `GET /api/videos/{id}/highlights`（精彩时刻，返回全部状态；新增/重试/删除只在桌面端，没有写端点）
 
 **写**
 
@@ -175,8 +178,9 @@ npm run build:mobile   # 产物写入 backend/server/webui/（入库，go:embed 
 
 - `GET /stream/video/{id}`（Range；始终返回原始文件，由专用播放器客户端解码）
 - `GET /thumbnails/{id}`、`GET /covers/jav/{id}`、`GET /avatars/{name}`
+- `GET /highlights/{name}`（精彩时刻截图/GIF；只接受 `h-<数字>-<数字>-<数字>.(jpg|gif)`）
 
-> 🔐 `/api/*`（除 `/api/session` 与只读的 `/api/extension/check`）、`/stream/*`、`/thumbnails/*`、`/covers/*`、`/avatars/*` 都需要访问口令：HttpOnly Cookie `muse_lan_key`、`Authorization: Bearer <key>`，或**仅限 `/stream/`** 的 `?key=`（给 Infuse / VLC 这类不能带 Cookie 的播放器）。SPA 外壳与静态资源公开，否则登录页加载不出来。
+> 🔐 `/api/*`（除 `/api/session` 与只读的 `/api/extension/check`）、`/stream/*`、`/thumbnails/*`、`/covers/*`、`/avatars/*`、`/highlights/*` 都需要访问口令：HttpOnly Cookie `muse_lan_key`、`Authorization: Bearer <key>`，或**仅限 `/stream/`** 的 `?key=`（给 Infuse / VLC 这类不能带 Cookie 的播放器）。SPA 外壳与静态资源公开，否则登录页加载不出来。
 >
 > 口令由 `settings.LanAccessKey()` 首次生成并持久化（16 位 base32，80 bit），桌面「设置 → 服务器」可查看、复制与轮换（`RotateLanAccessKey`）；轮换后旧 Cookie 与已复制的播放地址立即失效。设计见 [`docs/spec/lan-auth.md`](spec/lan-auth.md)。
 

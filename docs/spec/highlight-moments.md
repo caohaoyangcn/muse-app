@@ -1,6 +1,6 @@
 # 精彩时刻：时刻截图与时间段循环 GIF
 
-**状态：设计已确认，待实现（2026-11-25）。**
+**状态：已实现（2026-11-25，schema v31）。**
 
 **目标：** 在影片详情中记录「精彩时刻」。用户输入一个时刻，生成一帧截图；输入一个时间段，生成循环 GIF。生成走后台任务队列，不阻塞界面，进度出现在现有「后台任务」看板。
 
@@ -126,9 +126,12 @@ const (
 
 ## 4. 数据模型与迁移
 
-### 4.1 schema v29
+### 4.1 schema v31
 
-`backend/database/migration.go`，`currentSchemaVersion = 29`：
+`backend/database/migration.go`，`currentSchemaVersion = 31`。
+
+> 设计定稿时写的是 v29，但 v29（马赛克破解标记）与 v30（删除分组表）在实现前已经落地，
+> 所以精彩时刻表顺延为 **v31**。迁移内容与下面的 SQL 完全一致。
 
 ```sql
 CREATE TABLE IF NOT EXISTS video_highlights (
@@ -154,6 +157,7 @@ CREATE INDEX IF NOT EXISTS idx_video_highlights_status ON video_highlights(statu
 - 不依赖外键（现有数据库未开启 `foreign_keys`）。
 - 永久删除影片时，`sqliteRepository.Delete` 在一个事务里先删该影片的 `video_highlights`，再删 `videos`。
 - 回收站保留记录与生成文件；恢复后 `ready` 条目照常展示。
+- 不迁移、不删除旧数据；旧版本代码忽略这张表，也从不清扫 `highlights/`，文件会保留到升级。
 
 ### 4.2 Go 模型
 
@@ -551,16 +555,16 @@ DeleteVideoHighlight(videoID, highlightID int64) error
 
 ## 11. 实施清单
 
-- [ ] 数据库迁移 v29、`Highlight` 模型、仓库方法与迁移/仓库测试。
-- [ ] `backend/thumbnail` 截图/GIF 生成器与集成测试。
-- [ ] `video.Service` 校验、队列、worker、恢复、任务状态与服务测试。
-- [ ] `api.Library` 门面、`BackgroundTasks` 投影、`app.go`、`main.go` 启停与资源路由。
-- [ ] HTTP 只读端点/媒体服务与服务器测试。
-- [ ] 重新生成 Wails 绑定。
-- [ ] `utils/highlightTime`、共享 hook、桌面弹窗/详情、移动端、事件与 manifest。
-- [ ] 文档更新（本文、`generated-images.md`、`background-tasks.md`、`mobile-web-design.md`、`DEVELOPMENT.md`、`README.md`）。
-- [ ] 重建 `backend/server/webui/`。
-- [ ] 全量验证：
+- [x] 数据库迁移 v31、`Highlight` 模型、仓库方法与迁移/仓库测试。
+- [x] `backend/thumbnail` 截图/GIF 生成器与集成测试。
+- [x] `video.Service` 校验、队列、worker、恢复、任务状态与服务测试。
+- [x] `api.Library` 门面、`BackgroundTasks` 投影、`app.go`、`main.go` 启停与资源路由。
+- [x] HTTP 只读端点/媒体服务与服务器测试。
+- [x] 重新生成 Wails 绑定。
+- [x] `utils/highlightTime`、共享 hook、桌面弹窗/详情、移动端、事件与 manifest。
+- [x] 文档更新（本文、`generated-images.md`、`background-tasks.md`、`mobile-web-design.md`、`DEVELOPMENT.md`、`README.md`）。
+- [x] 重建 `backend/server/webui/`。
+- [x] 全量验证：
 
 ```bash
 gofmt -l .
@@ -587,3 +591,59 @@ npm run build:all
 - **不支持编辑。** 修改时间只能删除后重新添加。
 - **不设数量上限。** 10 秒上限与用户逐条输入控制体积。
 - **回滚不清理新目录。** 旧版本不会删除 `highlights/`，升级后继续使用。
+
+---
+
+## 13. 实现差异与落地细节
+
+实现时在保持行为不变的前提下做了几个设计上没有写死的决定，记录在这里，便于以后改动时
+判断哪些是"规则"、哪些只是"当时的写法"。
+
+### 13.1 表版本顺延为 v31
+
+见 §4.1 的说明：v29 / v30 在实现前已被占用（马赛克破解标记、删除分组表）。SQL 不变。
+
+### 13.2 任务计数的 Total 由 pending 集合推导
+
+§6.1 的不变式（`Done + Failed + pending == Total`）没有靠"每处记得同步加一"来维持，而是让
+`video.Service` 保存**本轮接受的 id 集合**，`Total = Done + Failed + len(pending)` 现算：
+
+- 排队是**幂等**的：启动恢复不会把本进程已经入队的 id 再算一次（这是实现中真实踩到的
+  双重计数，见 `TestBackgroundTasksProjectsHighlightRound`）；
+- 取消按 id 结算，删掉一条不在本轮的旧行不会让 `Done` 虚增；
+- 结果迟到（worker 写完时行已被删）时 `resolve` 找不到 id，计数自然不动。
+
+### 13.3 永久删除时先读后删
+
+`video.Service.Remove` 在删记录**之前**读一遍该影片处于 `queued`/`running` 的条目 id，级联删除后
+按 id 记取消。否则"删影片"会留下永远 pending 的计数，看板会一直显示在跑。生成的文件不在这里
+删除：`media_path` 随行消失，孤儿清扫会兜底。
+
+### 13.4 队列类型在 `video` 内单独一份
+
+`workQueue[T]` 与 `backend/jav/job_queue.go` 的版本实现相同。跨包复用需要把它导出，代价大于
+四十行重复代码；两处注释互相指路。
+
+### 13.5 可替换的接缝
+
+`video.Service` 的 `highlightState` 持有两个 ffmpeg 生成函数和一个 `fileSize`，默认分别接到
+`backend/thumbnail` 与 `os.Stat`。测试据此描述"成功 / 失败 / 超过 8 MB / 卡住直到关闭"，不必真的
+跑 ffmpeg，也不必写 8 MB 的文件。
+
+### 13.6 生成目录按需创建
+
+`highlights/` 在 `AddHighlight` 时确保存在，而不是只在 `main.go` 启动时创建：数据目录被单独恢复
+（只带回 `app.db`）时，行仍然能写入文件。
+
+### 13.7 事件
+
+- `video:highlight:updated`：单条状态变化（新增、就绪、失败、删除都发），payload 是
+  `{id, videoId, status}`；删除时 `status` 为 `deleted`。
+- `tasks:updated`：看板计数变化，1 秒尾触发节流，与片名翻译共用同一语义。
+
+两者都在 `frontend/src/services/events.ts` 的失效列表里。
+
+### 13.8 局域网媒体路由与桌面资源路由共用一条命名规则
+
+`video.ValidHighlightFileName` 是唯一实现，桌面 `AssetServer` 的 `/highlights/` 与局域网
+`GET /highlights/{name}` 都调用它，清扫用的也是同一个正则——三处各写一遍迟早会漂移。
