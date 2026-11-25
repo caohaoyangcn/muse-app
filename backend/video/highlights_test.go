@@ -538,8 +538,31 @@ func TestHighlightRecoveryGivesUpAfterRepeatedInterruptions(t *testing.T) {
 	}
 }
 
+// The frame rate is a product decision the user feels rather than a
+// technical one, so it is pinned here: 10 fps read as visibly choppy on motion.
+// The GIF delay is stored in hundredths of a second, so the default also has to
+// divide 100 or every frame gets rounded and the loop plays at a different
+// speed than requested.
+func TestHighlightGIFFrameRatesAreSmooth(t *testing.T) {
+	if highlightGIFDefaultFPS < 20 {
+		t.Errorf("default%dfps is too choppy; 20 or more is the floor", highlightGIFDefaultFPS)
+	}
+	if 100%highlightGIFDefaultFPS != 0 {
+		t.Errorf("default %d fps does not divide 100 cs; frame delays would be rounded",
+			highlightGIFDefaultFPS)
+	}
+	if highlightGIFFallbackFPS >= highlightGIFDefaultFPS {
+		t.Errorf("fallback %d fps must be below the default %d fps",
+			highlightGIFFallbackFPS, highlightGIFDefaultFPS)
+	}
+	if highlightGIFFallbackFPS < 12 {
+		t.Errorf("fallback %d fps is a slideshow; the size retry should not go that low",
+			highlightGIFFallbackFPS)
+	}
+}
+
 // TestHighlightGIFRetriesAtLowerFrameRate pins the 8 MB ceiling: the first file
-// over the line is regenerated once at 8 fps, at the same path.
+// over the line is regenerated once at the fallback rate, at the same path.
 func TestHighlightGIFRetriesAtLowerFrameRate(t *testing.T) {
 	t.Run("second attempt is smaller", func(t *testing.T) {
 		svc, _, v := newHighlightFixture(t)

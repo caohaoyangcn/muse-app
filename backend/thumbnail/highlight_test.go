@@ -84,8 +84,8 @@ func TestGIFArgsUseOneLineDifferenceFilter(t *testing.T) {
 }
 
 func TestGIFFilterFollowsFrameRate(t *testing.T) {
-	// The 8 fps fallback must reach the filter, or the retry would rewrite the
-	// same 10 fps file.
+	// The worker's fallback rate must reach the filter, or the retry would
+	// rewrite the same file at the same speed it was rejected for.
 	args := GIFArgs("a.mp4", 0, 3000, 8, "out.gif")
 	if filter := args[indexOf(args, "-vf")+1]; !strings.Contains(filter, "fps=8") {
 		t.Errorf("filter = %q, want fps=8", filter)
