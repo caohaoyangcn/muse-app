@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { makeHighlight } from "../test/fixtures";
+import { makeHighlight, makeHighlightPreview } from "../test/fixtures";
 import {
   formatHighlightTime,
   highlightLabel,
   isHighlightPending,
   isHighlightReady,
   mobileVisibleHighlights,
+  previewMatchesRequest,
   timePartsToMs,
   validateHighlightParts,
   validateHighlightTimes,
@@ -175,5 +176,25 @@ describe("mobileVisibleHighlights", () => {
     ]);
 
     expect(visible.map((h) => h.id)).toEqual([1, 3]);
+  });
+});
+
+describe("previewMatchesRequest", () => {
+  it("时间没变时预览仍然有效", () => {
+    expect(previewMatchesRequest(makeHighlightPreview(), 90_000, 95_000)).toBe(true);
+  });
+
+  it("改了结束时间后预览作废", () => {
+    expect(previewMatchesRequest(makeHighlightPreview(), 90_000, 96_000)).toBe(false);
+  });
+
+  it("改了开始时间后预览作废", () => {
+    expect(previewMatchesRequest(makeHighlightPreview(), 91_000, 95_000)).toBe(false);
+  });
+
+  it("时刻（结束为 0）按同样的规则比对", () => {
+    const moment = makeHighlightPreview({ kind: "moment", startMs: 90_000, endMs: 0 });
+    expect(previewMatchesRequest(moment, 90_000, 0)).toBe(true);
+    expect(previewMatchesRequest(moment, 90_000, 5_000)).toBe(false);
   });
 });

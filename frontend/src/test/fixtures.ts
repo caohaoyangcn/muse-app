@@ -1,4 +1,4 @@
-import type { Highlight, Video } from "../types";
+import type { Highlight, HighlightPreview, Video } from "../types";
 
 /**
  * Test fixtures for the view-model layer.
@@ -75,6 +75,23 @@ export function makeHighlight(overrides: Partial<Highlight> = {}): Highlight {
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_000_000,
     finishedAt: 1_700_000_000_000,
+    ...overrides,
+  };
+}
+
+/**
+ * One unsaved preview of a 5 s range. The request it was rendered for is part of
+ * the record, which is what lets a form tell "this is my current input" from
+ * "this is what I typed a moment ago".
+ */
+export function makeHighlightPreview(overrides: Partial<HighlightPreview> = {}): HighlightPreview {
+  return {
+    path: "preview/p-1-90000-95000-1700000000000000000-1.gif",
+    kind: "range",
+    startMs: 90_000,
+    endMs: 95_000,
+    bytes: 1_200_000,
+    fps: 50,
     ...overrides,
   };
 }

@@ -1,4 +1,4 @@
-import type { Highlight } from "../types";
+import type { Highlight, HighlightPreview } from "../types";
 
 /**
  * 精彩时刻的时间输入、校验与展示文案。
@@ -158,4 +158,21 @@ export function isHighlightReady(h: Highlight): boolean {
  */
 export function mobileVisibleHighlights(list: Highlight[]): Highlight[] {
   return list.filter((h) => h.status !== "failed");
+}
+
+/**
+ * 这张预览是否就是当前输入所描述的那一张。
+ *
+ * 预览带着生成时的请求（`startMs` / `endMs`），所以"用户改了时间"不需要另一个
+ * 状态位去记：比对一下就知道。过期的预览必须当作不存在——否则"确认效果后保存"
+ * 会变成"确认 1:30–1:35，保存下来的是 2:00–2:05"。
+ *
+ * 毫秒为 0 的结束时间表示时刻截图，同样是可比对的值。
+ */
+export function previewMatchesRequest(
+  preview: HighlightPreview,
+  startMs: number,
+  endMs: number,
+): boolean {
+  return preview.startMs === startMs && preview.endMs === endMs;
 }

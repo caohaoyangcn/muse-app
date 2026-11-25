@@ -1,6 +1,7 @@
 import {
   AddVideos,
   AddVideoHighlight,
+  AddVideoHighlightFromPreview,
   AddWatchDir,
   AddCloudVideos,
   ArchiveCloudConnection,
@@ -10,6 +11,7 @@ import {
   CloudStorageAvailable,
   DeleteCloudConnection,
   DeleteVideoHighlight,
+  DiscardVideoHighlightPreview,
   CopyPath,
   DeleteVideoPermanently,
   EmptyTrash as EmptyTrashBinding,
@@ -27,6 +29,7 @@ import {
   TestCloudConnection,
   ListVideos,
   ListVideoHighlights,
+  PreviewVideoHighlight,
   ListWatchDirs,
   LikeVideo,
   OpenContainingFolder,
@@ -126,6 +129,7 @@ import type {
   TrashSnapshot,
   JavCodeCheck,
   Highlight,
+  HighlightPreview,
 } from "../types";
 
 /**
@@ -224,6 +228,29 @@ export const retryVideoHighlight = (videoId: number, highlightId: number): Promi
 /** 删除一条精彩时刻：只删记录与它生成的截图/GIF，源视频文件不会被删除。 */
 export const deleteVideoHighlight = (videoId: number, highlightId: number): Promise<void> =>
   DeleteVideoHighlight(videoId, highlightId);
+
+/**
+ * 生成一张预览（不落库、不进队列）：用户先看真实效果，再决定是否保存。
+ * 截图与 GIF 用的是正式保存时的同一条 ffmpeg 流程，所以预览即所得。
+ */
+export const previewVideoHighlight = (
+  videoId: number,
+  startMs: number,
+  endMs: number,
+): Promise<HighlightPreview> => PreviewVideoHighlight(videoId, startMs, endMs);
+
+/** 保存已确认的预览：直接采纳预览生成的文件，不再重复编码一次。 */
+export const addVideoHighlightFromPreview = (
+  videoId: number,
+  startMs: number,
+  endMs: number,
+  previewPath: string,
+): Promise<Highlight> =>
+  AddVideoHighlightFromPreview(videoId, startMs, endMs, previewPath);
+
+/** 放弃预览（关闭弹窗时调用）：只删除预览文件本身。 */
+export const discardVideoHighlightPreview = (previewPath: string): Promise<void> =>
+  DiscardVideoHighlightPreview(previewPath);
 
 export const videoJav = (id: number): Promise<JavDetail> => VideoJav(id);
 export const videoJavTask = (id: number): Promise<JavTask> => VideoJavTask(id);

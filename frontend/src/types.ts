@@ -6,6 +6,11 @@ export type Video = video.Video;
 export type AddVideoResult = video.AddVideoResult;
 /** 一条精彩时刻：时刻截图或时间段循环 GIF，含排队/生成中/完成/失败状态。 */
 export type Highlight = video.Highlight;
+/**
+ * 尚未保存的预览：弹窗据此展示真实生成的图，用户确认后才落库。
+ * 带着生成时的请求（startMs / endMs），所以「这张图是不是当前输入的那一张」是可判定的。
+ */
+export type HighlightPreview = video.HighlightPreview;
 /** 回收站快照：条目 + 当前保留天数（由后端统一给出，避免客户端各算一套）。 */
 export type TrashSnapshot = api.TrashSnapshot;
 /** 详情页底部「类似影片」的一项：影片本身、排序分数与推荐理由。 */

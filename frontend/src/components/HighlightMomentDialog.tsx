@@ -1,17 +1,25 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { addVideoHighlight } from "../services/desktop";
+import {
+  addVideoHighlight,
+  addVideoHighlightFromPreview,
+  discardVideoHighlightPreview,
+  previewVideoHighlight,
+} from "../services/desktop";
 import { invalidate } from "../services/live";
 import {
   EMPTY_HIGHLIGHT_TIME_PARTS,
   formatHighlightTime,
   isHighlightTimePartsEmpty,
+  previewMatchesRequest,
   timePartsToMs,
   validateHighlightParts,
   validateHighlightTimes,
   type HighlightTimeParts,
 } from "../utils/highlightTime";
-import { Banner } from "../ui/astryx";
+import { formatFileSize, highlightPreviewURL } from "../utils/format";
+import type { HighlightPreview } from "../types";
+import { Banner, Spinner } from "../ui/astryx";
 import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader } from "../ui/dialog";
 import { Input } from "../ui/input";
@@ -71,6 +79,19 @@ function TimeRow({
   );
 }
 
+/** 预览下方的元信息：多长、什么帧率、多大。 */
+function previewDescription(preview: HighlightPreview): string {
+  const range =
+    preview.endMs > 0
+      ? `时间段 ${formatHighlightTime(preview.startMs)}–${formatHighlightTime(preview.endMs)}` +
+        ` · ${Math.round((preview.endMs - preview.startMs) / 1000)} 秒`
+      : `时刻 ${formatHighlightTime(preview.startMs)}`;
+  const parts = [range];
+  if (preview.fps > 0) parts.push(`${preview.fps} fps`);
+  if (preview.bytes > 0) parts.push(formatFileSize(preview.bytes));
+  return parts.join(" · ");
+}
+
 /**
  * 新增精彩时刻（桌面端弹窗）。
  *
@@ -79,8 +100,13 @@ function TimeRow({
  * 保存按钮跟着错误一起禁用；提交时后端还会再校验一次（spec §3.3），前端这层
  * 只是让错误立刻可见，不是安全边界。
  *
- * 保存成功后先 `invalidate()` 再关窗：生成本身在后台跑，弹窗没有理由继续挡着
- * 详情页；占位卡会自己出现在刚被失效重读的那一栏里。
+ * 弹窗里可以先生成一次**真实预览**：跑的是正式保存时的同一条 ffmpeg 流程
+ * （同样的帧率、同样的 8 MB 回退），所以看到的就是会存下来的东西。预览不是记录，
+ * 不会出现在详情页，也不进任务看板；保存时直接采纳这张图，不再编码第二遍。
+ * 用户中途改时间，旧预览立刻作废——"确认效果后保存"不能变成"确认 A、保存 B"。
+ *
+ * 没预览也能保存：那条路仍是后台队列生成（预览文件可能已被清理，或者用户就是
+ * 知道自己要什么）。
  */
 export default function HighlightMomentDialog({
   open,
@@ -94,21 +120,30 @@ export default function HighlightMomentDialog({
   /** 影片时长，0 表示还不知道；此时不判"超出视频时长"。 */
   durationMs: number;
   onClose: () => void;
-  /** 源文件读不到的原因（缺失 / 磁盘未接入 / 网盘离线）。有值时禁止保存。 */
+  /** 源文件读不到的原因（缺失 / 磁盘未接入 / 网盘离线）。有值时禁止预览与保存。 */
   sourceUnavailableReason?: string;
 }) {
   const [start, setStart] = useState<HighlightTimeParts>(EMPTY_HIGHLIGHT_TIME_PARTS);
   const [end, setEnd] = useState<HighlightTimeParts>(EMPTY_HIGHLIGHT_TIME_PARTS);
   const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<HighlightPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // 每次输入变化都会让它 +1，所以一次"生成中"的预览回来时，如果用户已经又改了
+  // 时间，这张图就会被丢弃而不是当成当前预览。
+  const previewToken = useRef(0);
 
   // 每次打开都从空白开始：上一次的时间多半不是这一次想要的，悄悄沿用旧值会让人
   // 在没看清的情况下保存一条错的时刻。
   useEffect(() => {
     if (!open) return;
+    previewToken.current += 1;
     setStart(EMPTY_HIGHLIGHT_TIME_PARTS);
     setEnd(EMPTY_HIGHLIGHT_TIME_PARTS);
     setActionError(null);
+    setPreviewError(null);
+    setPreview(null);
   }, [open]);
 
   const endEmpty = isHighlightTimePartsEmpty(end);
@@ -123,34 +158,98 @@ export default function HighlightMomentDialog({
       : null;
   const error = partsError ?? timesError;
 
-  // 结果行只在"现在按保存会发生什么"确定时说：还在报错时先让用户把红字改掉。
-  const canSubmit = error === null && startMs !== null && !Number.isNaN(startMs);
-  let preview: string | null = null;
-  if (canSubmit) {
-    preview = endEmpty
+  const blocked = sourceUnavailableReason !== undefined;
+  const timesKnown = startMs !== null && !Number.isNaN(startMs);
+  const canSubmit = error === null && timesKnown;
+  // 预览只在"这张图正是当前输入描述的"时候才算数。
+  const freshPreview =
+    preview && timesKnown && previewMatchesRequest(preview, startMs, endMs) ? preview : null;
+
+  let previewText: string | null = null;
+  if (canSubmit && startMs !== null) {
+    previewText = endEmpty
       ? `将生成截图：${formatHighlightTime(startMs)}`
       : `将生成循环 GIF：${formatHighlightTime(startMs)}–${formatHighlightTime(endMs)}（${Math.round(
           (endMs - startMs) / 1000,
         )} 秒）`;
   }
 
-  const blocked = sourceUnavailableReason !== undefined;
+  /** 旧预览作废：删掉文件，别让它留在磁盘上等下一次启动清理。 */
+  const dropPreview = (target: HighlightPreview | null) => {
+    setPreview(null);
+    if (target) void discardVideoHighlightPreview(target.path).catch(() => undefined);
+  };
+
+  /** 输入变了：旧预览作废，还在飞的生成结果也一并作废。 */
+  const invalidatePreview = () => {
+    previewToken.current += 1;
+    setPreviewError(null);
+  };
 
   /**
    * 只留数字，不做别的改写：不夹取、不补零、不自动跳格。用户打错的 0:75 会由校验
-   * 指出来，而不是被悄悄变成 1:15。
+   * 指出来，而不是被悄悄变成 1:15。改时间等于换了问题，旧预览当场失效。
    */
   const digits = (raw: string) => raw.replace(/\D/g, "");
-  const setStartField = (key: keyof HighlightTimeParts, raw: string) =>
+  const setStartField = (key: keyof HighlightTimeParts, raw: string) => {
+    invalidatePreview();
+    dropPreview(preview);
     setStart((prev) => ({ ...prev, [key]: digits(raw) }));
-  const setEndField = (key: keyof HighlightTimeParts, raw: string) =>
+  };
+  const setEndField = (key: keyof HighlightTimeParts, raw: string) => {
+    invalidatePreview();
+    dropPreview(preview);
     setEnd((prev) => ({ ...prev, [key]: digits(raw) }));
+  };
+  const clearEnd = () => {
+    invalidatePreview();
+    dropPreview(preview);
+    setEnd(EMPTY_HIGHLIGHT_TIME_PARTS);
+  };
+
+  const render = async () => {
+    if (error !== null || blocked || previewing || saving || startMs === null) return;
+    const mine = ++previewToken.current;
+    setPreviewing(true);
+    setPreviewError(null);
+    // 换一张就是换一个问题：旧图先清掉，避免生成失败时还留着上一张。
+    dropPreview(preview);
+    try {
+      const next = await previewVideoHighlight(videoId, startMs, endMs);
+      if (mine !== previewToken.current) {
+        // 生成期间用户改了时间（或关了弹窗）：这张图描述的是旧问题。
+        void discardVideoHighlightPreview(next.path).catch(() => undefined);
+        return;
+      }
+      setPreview(next);
+    } catch (e) {
+      if (mine === previewToken.current) setPreviewError(errorText(e));
+    } finally {
+      if (mine === previewToken.current) setPreviewing(false);
+    }
+  };
 
   const save = async () => {
-    if (error !== null || blocked || saving || startMs === null) return;
+    if (error !== null || blocked || saving || previewing || startMs === null) return;
     setSaving(true);
     setActionError(null);
     try {
+      if (freshPreview) {
+        try {
+          // 采纳预览：文件直接成为精彩时刻的图，不再编码一次。
+          await addVideoHighlightFromPreview(videoId, startMs, endMs, freshPreview.path);
+          setPreview(null); // 文件已被移走，不再需要作废
+          invalidate();
+          onClose();
+          return;
+        } catch {
+          // 预览文件可能已被清理（启动清理、另一个窗口）。保存不能因此失败：
+          // 清掉这张图，退回后台队列重新生成一次。
+          const abandoned = freshPreview;
+          setPreview(null);
+          void discardVideoHighlightPreview(abandoned.path).catch(() => undefined);
+        }
+      }
       await addVideoHighlight(videoId, startMs, endMs);
       invalidate();
       onClose();
@@ -163,12 +262,25 @@ export default function HighlightMomentDialog({
     }
   };
 
+  /** 关闭（取消、Esc、遮罩）都算放弃：没保存的预览不该留在磁盘上。 */
+  const close = () => {
+    previewToken.current += 1;
+    dropPreview(preview);
+    onClose();
+  };
+
   return (
-    <Dialog open={open} width={520} onOpenChange={(next) => !next && onClose()} purpose="form">
+    <Dialog
+      open={open}
+      width={freshPreview ? 720 : 520}
+      onOpenChange={(next) => !next && close()}
+      purpose="form"
+    >
       <DialogContent className="flex flex-col">
         <DialogHeader title="新增精彩时刻" />
         <p className="mt-1 text-xs text-[var(--muted)]">
           填一个时刻生成截图；再填结束时间则生成该时间段的循环 GIF（1–10 秒）。
+          可以先预览，确认效果后再保存。
         </p>
 
         <div className="mt-4 flex flex-col gap-2">
@@ -181,7 +293,7 @@ export default function HighlightMomentDialog({
           <TimeRow
             endContent={
               <Button
-                onClick={() => setEnd(EMPTY_HIGHLIGHT_TIME_PARTS)}
+                onClick={clearEnd}
                 size="sm"
                 title="清空结束时间，回到时刻截图"
                 variant="ghost"
@@ -196,26 +308,68 @@ export default function HighlightMomentDialog({
           />
         </div>
 
-        <div className="mt-4 min-h-[44px]">
-          {preview && <p className="text-sm">{preview}</p>}
+        <div className="mt-4 min-h-[24px]">
+          {previewText && !previewError && <p className="text-sm">{previewText}</p>}
           {error && <p className="mt-1 text-sm text-[var(--danger)]">{error}</p>}
           {sourceUnavailableReason && (
             <p className="mt-1 text-sm text-[var(--danger)]">{sourceUnavailableReason}</p>
           )}
         </div>
 
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            disabled={!canSubmit || blocked || previewing || saving}
+            onClick={() => void render()}
+            size="sm"
+            title="用正式保存时的同一条指令生成一次，看看效果"
+            variant="default"
+          >
+            {previewing ? "生成预览中…" : freshPreview ? "重新预览" : "预览"}
+          </Button>
+          {previewing && <Spinner label="生成预览中…" size="sm" />}
+          {!freshPreview && !previewing && canSubmit && (
+            <span className="text-xs text-[var(--muted)]">
+              直接保存也可以，生成会在后台队列里进行。
+            </span>
+          )}
+          {freshPreview && (
+            <span className="text-xs text-[var(--muted)]">预览即所得：保存后用的就是这张图。</span>
+          )}
+        </div>
+
+        {previewError && (
+          <p className="mt-2 text-sm text-[var(--danger)]" role="alert">
+            {previewError}
+          </p>
+        )}
+
+        {freshPreview && (
+          <figure className="mt-3">
+            <div className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[#111114] p-2">
+              <img
+                alt="精彩时刻预览"
+                className="max-h-[45vh] max-w-full object-contain"
+                src={highlightPreviewURL(freshPreview)}
+              />
+            </div>
+            <figcaption className="mt-2 text-xs text-[var(--muted)]">
+              预览：{previewDescription(freshPreview)}
+            </figcaption>
+          </figure>
+        )}
+
         {actionError ? (
-          <div className="mt-2">
+          <div className="mt-3">
             <Banner status="error" title={actionError} />
           </div>
         ) : null}
 
         <DialogFooter className="mt-4">
-          <Button disabled={saving} onClick={onClose}>
+          <Button disabled={saving} onClick={close}>
             取消
           </Button>
           <Button
-            disabled={error !== null || blocked || saving}
+            disabled={!canSubmit || blocked || saving || previewing}
             onClick={() => void save()}
             variant="primary"
           >

@@ -1,4 +1,4 @@
-import type { ActorProfile, Highlight, Video } from "../types";
+import type { ActorProfile, Highlight, HighlightPreview, Video } from "../types";
 
 /** 7423420 -> "2:03:43"; returns "" when duration is unknown. */
 export function formatDuration(ms: number): string {
@@ -51,6 +51,16 @@ export function videoCoverURL(v: Video): string {
  */
 export function highlightURL(h: Highlight): string {
   return `/${h.mediaPath}?v=${h.updatedAt || h.createdAt}`;
+}
+
+/**
+ * 一张待确认预览的地址。
+ *
+ * 预览文件名本身每次生成都不同（带编号），所以不需要像正式图片那样再挂一个
+ * `?v=` 反缓存参数：换一张预览就是换一个 URL。
+ */
+export function highlightPreviewURL(preview: HighlightPreview): string {
+  return `/${preview.path}`;
 }
 
 /** 23.976543 -> "23.98 fps"; returns "" when the frame rate is unknown. */
