@@ -21,6 +21,8 @@ export function AddVideo(arg1:string):Promise<video.Video>;
 
 export function AddVideoHighlight(arg1:number,arg2:number,arg3:number):Promise<video.Highlight>;
 
+export function AddVideoHighlightFromPreview(arg1:number,arg2:number,arg3:number,arg4:string):Promise<video.Highlight>;
+
 export function AddVideos(arg1:Array<string>):Promise<Array<video.AddVideoResult>>;
 
 export function AddWatchDir(arg1:string):Promise<watch.WatchedDir>;
@@ -58,6 +60,8 @@ export function DeleteCloudConnection(arg1:number):Promise<void>;
 export function DeleteVideoHighlight(arg1:number,arg2:number):Promise<void>;
 
 export function DeleteVideoPermanently(arg1:number):Promise<void>;
+
+export function DiscardVideoHighlightPreview(arg1:string):Promise<void>;
 
 export function Emit(arg1:string,arg2:Array<any>):Promise<void>;
 
@@ -124,6 +128,8 @@ export function OpenVideo(arg1:number):Promise<void>;
 export function PickVideoFiles():Promise<Array<string>>;
 
 export function PickWatchDir():Promise<string>;
+
+export function PreviewVideoHighlight(arg1:number,arg2:number,arg3:number):Promise<video.HighlightPreview>;
 
 export function PurgeExpiredTrash():Promise<number>;
 

@@ -260,6 +260,33 @@ func TestHighlightFacadePassThrough(t *testing.T) {
 	}
 }
 
+// TestHighlightPreviewPassThrough: the façade forwards the preview calls to the
+// service, which validates before it renders anything — so a request that can
+// never be saved is refused without touching ffmpeg. The render itself needs a
+// real tool and is covered by the video package's integration test.
+func TestHighlightPreviewPassThrough(t *testing.T) {
+	lib, svc, videoID := newHighlightLibrary(t)
+	t.Cleanup(svc.CloseHighlights)
+
+	if _, err := lib.PreviewVideoHighlight(videoID, 5000, 4000); err == nil {
+		t.Error("an impossible range must be refused")
+	}
+	if _, err := lib.AddVideoHighlightFromPreview(videoID, 5000, 4000,
+		"preview/p-1-5000-4000-1-1.gif"); err == nil {
+		t.Error("an impossible range must be refused")
+	}
+	// A preview that is not there cannot be adopted; the dialog falls back to the
+	// queue instead of failing the save.
+	if _, err := lib.AddVideoHighlightFromPreview(videoID, 1000, 6000,
+		"preview/p-1-1000-6000-1-1.gif"); err == nil {
+		t.Error("a missing preview must be reported as stale")
+	}
+	// Discarding something that is not a preview is a no-op, not a delete.
+	if err := lib.DiscardVideoHighlightPreview("../../etc/passwd"); err != nil {
+		t.Errorf("discard foreign path: %v", err)
+	}
+}
+
 // findTaskRow returns one dashboard row, failing the test when it is absent.
 func findTaskRow(t *testing.T, lib *Library, id string) tasks.Task {
 	t.Helper()

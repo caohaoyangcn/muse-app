@@ -133,6 +133,34 @@ func ValidateHighlightTimes(startMs, endMs, durationMs int64) error {
 // never have to agree about each other's files.
 const HighlightsRelativeDir = "highlights"
 
+// HighlightsPreviewDir holds a rendered highlight the user has not confirmed
+// yet. It is deliberately a separate folder from highlights/: files there are
+// owned by a row, and the orphan sweep deletes anything a row does not declare.
+// A preview has no row yet, so putting it in highlights/ would make the sweep
+// eat a preview of a dialog that is still open.
+const HighlightsPreviewDir = "preview"
+
+// HighlightPreview is one rendered-but-unconfirmed highlight: what the dialog
+// shows before the user decides to keep it.
+//
+// It carries the request it was rendered for, so the client can tell "preview of
+// the times in the form" from "preview of what I typed a moment ago", and the
+// save path can verify that the file it is about to adopt was made for exactly
+// those times.
+type HighlightPreview struct {
+	// Path is relative to the data dir, e.g. "preview/p-12-90000-95000-…-1.gif".
+	Path    string `json:"path"`
+	Kind    string `json:"kind"`
+	StartMs int64  `json:"startMs"`
+	EndMs   int64  `json:"endMs"`
+	// Bytes is the size of the rendered file, so the dialog can show it before
+	// the user commits.
+	Bytes int64 `json:"bytes"`
+	// FPS is the frame rate the GIF ended up with (after the 8 MB retry); 0 for a
+	// moment.
+	FPS int `json:"fps"`
+}
+
 // highlightFileNamePattern is the exact shape of a generated highlight file:
 // h-<videoID>-<unixNano>-<seq>.<jpg|gif>. Everything that touches these files
 // (the sweep, the desktop asset handler, the LAN media route) matches against
@@ -140,10 +168,63 @@ const HighlightsRelativeDir = "highlights"
 // did not write, and a false positive in the sweep deletes one.
 var highlightFileNamePattern = regexp.MustCompile(`^h-\d+-\d+-\d+\.(jpg|gif)$`)
 
+// highlightPreviewPattern is the shape of a preview: the same generated-file
+// guard, plus the request it was rendered for —
+// p-<videoID>-<startMs>-<endMs>-<unixNano>-<seq>.<jpg|gif>.
+var highlightPreviewPattern = regexp.MustCompile(`^p-(\d+)-(\d+)-(\d+)-(\d+)-(\d+)\.(jpg|gif)$`)
+
 // ValidHighlightFileName reports whether name is exactly one of the files the
 // generator writes. Callers must pass a base name, never a path.
 func ValidHighlightFileName(name string) bool {
 	return highlightFileNamePattern.MatchString(name)
+}
+
+// ValidHighlightPreviewFileName reports whether name is exactly one of the files
+// a preview can write. The desktop asset handler uses it to serve previews.
+func ValidHighlightPreviewFileName(name string) bool {
+	return highlightPreviewPattern.MatchString(name)
+}
+
+// highlightPreviewMeta is the request encoded in a preview's file name.
+type highlightPreviewMeta struct {
+	videoID int64
+	startMs int64
+	endMs   int64
+	ext     string
+}
+
+// parseHighlightPreviewName decodes a preview name. The times are part of the
+// name so that adopting a preview can be verified against the request instead of
+// trusted: a stale preview from another edit cannot be saved as if it described
+// the times in the form.
+func parseHighlightPreviewName(name string) (highlightPreviewMeta, bool) {
+	match := highlightPreviewPattern.FindStringSubmatch(name)
+	if match == nil {
+		return highlightPreviewMeta{}, false
+	}
+	numbers := make([]int64, 0, 5)
+	for i := 1; i <= 5; i++ {
+		value, err := strconv.ParseInt(match[i], 10, 64)
+		if err != nil {
+			return highlightPreviewMeta{}, false
+		}
+		numbers = append(numbers, value)
+	}
+	return highlightPreviewMeta{
+		videoID: numbers[0],
+		startMs: numbers[1],
+		endMs:   numbers[2],
+		ext:     "." + match[6],
+	}, true
+}
+
+// highlightPreviewPath builds the relative path of a new preview file. The
+// request is part of the name (see parseHighlightPreviewName); n makes two
+// renders of the same request distinct.
+func highlightPreviewPath(videoID, startMs, endMs, n int64, kind string) string {
+	return HighlightsPreviewDir + "/p-" + strconv.FormatInt(videoID, 10) + "-" +
+		strconv.FormatInt(startMs, 10) + "-" + strconv.FormatInt(endMs, 10) + "-" +
+		strconv.FormatInt(nowNanos(), 10) + "-" + strconv.FormatInt(n, 10) + highlightFileExt(kind)
 }
 
 // highlightFileExt is the extension for a kind. A moment is always a JPEG, a

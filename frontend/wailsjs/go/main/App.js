@@ -22,6 +22,10 @@ export function AddVideoHighlight(arg1, arg2, arg3) {
   return window['go']['main']['App']['AddVideoHighlight'](arg1, arg2, arg3);
 }
 
+export function AddVideoHighlightFromPreview(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['AddVideoHighlightFromPreview'](arg1, arg2, arg3, arg4);
+}
+
 export function AddVideos(arg1) {
   return window['go']['main']['App']['AddVideos'](arg1);
 }
@@ -96,6 +100,10 @@ export function DeleteVideoHighlight(arg1, arg2) {
 
 export function DeleteVideoPermanently(arg1) {
   return window['go']['main']['App']['DeleteVideoPermanently'](arg1);
+}
+
+export function DiscardVideoHighlightPreview(arg1) {
+  return window['go']['main']['App']['DiscardVideoHighlightPreview'](arg1);
 }
 
 export function Emit(arg1, arg2) {
@@ -228,6 +236,10 @@ export function PickVideoFiles() {
 
 export function PickWatchDir() {
   return window['go']['main']['App']['PickWatchDir']();
+}
+
+export function PreviewVideoHighlight(arg1, arg2, arg3) {
+  return window['go']['main']['App']['PreviewVideoHighlight'](arg1, arg2, arg3);
 }
 
 export function PurgeExpiredTrash() {

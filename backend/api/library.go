@@ -1561,6 +1561,32 @@ func (l *Library) DeleteVideoHighlight(videoID, highlightID int64) error {
 	return l.videos.DeleteHighlight(videoID, highlightID)
 }
 
+// PreviewVideoHighlight renders the request into the preview folder without
+// recording anything, so the dialog can show the real GIF before it is saved.
+func (l *Library) PreviewVideoHighlight(videoID, startMs, endMs int64) (*video.HighlightPreview, error) {
+	if l.videos == nil {
+		return nil, fmt.Errorf("视频服务未初始化")
+	}
+	return l.videos.PreviewHighlight(videoID, startMs, endMs)
+}
+
+// AddVideoHighlightFromPreview saves a confirmed preview: the rendered file is
+// adopted as the highlight's image instead of being generated a second time.
+func (l *Library) AddVideoHighlightFromPreview(videoID, startMs, endMs int64, previewPath string) (*video.Highlight, error) {
+	if l.videos == nil {
+		return nil, fmt.Errorf("视频服务未初始化")
+	}
+	return l.videos.AddHighlightFromPreview(videoID, startMs, endMs, previewPath)
+}
+
+// DiscardVideoHighlightPreview deletes a preview the user chose not to save.
+func (l *Library) DiscardVideoHighlightPreview(previewPath string) error {
+	if l.videos == nil {
+		return nil
+	}
+	return l.videos.DiscardHighlightPreview(previewPath)
+}
+
 // ---- Cloud sources (WebDAV) ----
 
 // ListCloudConnections returns the configured sources. It never touches the

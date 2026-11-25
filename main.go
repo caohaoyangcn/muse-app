@@ -117,9 +117,10 @@ func main() {
 	log.Info("muse build diagnostics", "fc2DiagnosticsVersion", fc2DiagnosticsVersion)
 	thumbDir := filepath.Join(dataDir, "thumbnails")
 	highlightDir := filepath.Join(dataDir, video.HighlightsRelativeDir)
+	previewDir := filepath.Join(dataDir, video.HighlightsPreviewDir)
 	javCoverDir := filepath.Join(dataDir, "covers", "jav")
 	actorAvatarDir := filepath.Join(dataDir, "avatars")
-	for _, dir := range []string{dataDir, thumbDir, highlightDir, javCoverDir, actorAvatarDir, filepath.Join(dataDir, "logs")} {
+	for _, dir := range []string{dataDir, thumbDir, highlightDir, previewDir, javCoverDir, actorAvatarDir, filepath.Join(dataDir, "logs")} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			log.Error("create data dir failed", "dir", dir, "err", err)
 			fatalExit(dataDir)
@@ -385,7 +386,7 @@ func main() {
 		WindowStartState: windowStartState,
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
-			Handler: &thumbnailHandler{dir: thumbDir, coverDir: javCoverDir, avatarDir: actorAvatarDir, highlightDir: highlightDir},
+			Handler: &thumbnailHandler{dir: thumbDir, coverDir: javCoverDir, avatarDir: actorAvatarDir, highlightDir: highlightDir, previewDir: previewDir},
 		},
 		BackgroundColour: &options.RGBA{R: 23, G: 23, B: 27, A: 255},
 		OnStartup: func(ctx context.Context) {
@@ -463,6 +464,7 @@ type thumbnailHandler struct {
 	coverDir     string
 	avatarDir    string
 	highlightDir string
+	previewDir   string
 }
 
 var thumbnailNamePattern = regexp.MustCompile(`^\d+\.jpg$`)
@@ -510,6 +512,16 @@ func (h *thumbnailHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, filepath.Join(h.highlightDir, name))
+	case strings.HasPrefix(r.URL.Path, "/preview/"):
+		// A not-yet-saved preview. Desktop only: the phone cannot add a
+		// highlight, so the LAN server has no route for these files.
+		name := path.Base(r.URL.Path)
+		if !video.ValidHighlightPreviewFileName(name) {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, r, filepath.Join(h.previewDir, name))
 	default:
 		http.NotFound(w, r)
 	}

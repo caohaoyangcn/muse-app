@@ -201,6 +201,9 @@ type highlightState struct {
 	run highlightRunState
 	// emitScheduled is the coalescing flag for the dashboard event.
 	emitScheduled bool
+	// previewMu serializes preview rendering: the dialog's preview is a
+	// synchronous call, and two of them at once would only make each slower.
+	previewMu sync.Mutex
 
 	// Seams. wired by NewService to the real ffmpeg generator and os.Stat; tests
 	// replace them to describe a generator that succeeds, fails, overshoots the
@@ -229,6 +232,9 @@ func (s *Service) StartHighlights() {
 	s.highlights.mu.Unlock()
 
 	go s.highlightWorker()
+	// A preview only means anything to the dialog that rendered it, so nothing
+	// from the previous process can be resumed. Clean up before anything else.
+	s.purgeStalePreviews()
 
 	requeue, failed, err := s.repo.RecoverHighlights(highlightMaxInterruptions)
 	if err != nil {
@@ -486,7 +492,7 @@ func (s *Service) processHighlight(id int64) {
 	}
 
 	outPath := s.highlightPath(h)
-	if genErr := s.generateHighlight(s.highlights.ctx, v, h, media, outPath); genErr != nil {
+	if _, genErr := s.generateHighlight(s.highlights.ctx, v, h, media, outPath); genErr != nil {
 		if s.highlights.ctx.Err() != nil {
 			// Shutdown killed ffmpeg. The row stays running: the next start
 			// recovers it and bumps the interruption counter instead of
@@ -501,30 +507,34 @@ func (s *Service) processHighlight(id int64) {
 	s.finishHighlight(h, HighlightStatusReady, "")
 }
 
-// generateHighlight renders the row's file at exactly one path: a moment is the
-// frame at StartMs, a range is the GIF of [StartMs, EndMs).
+// generateHighlight renders the request at exactly one path: a moment is the
+// frame at StartMs, a range is the GIF of [StartMs, EndMs). The frame rate it
+// ended up with is returned (0 for a moment) so a preview can report it.
 //
 // The 8 MB ceiling is handled here rather than in the generator because only the
-// worker knows the row: a retry overwrites the same path, so the UI never sees an
-// intermediate file.
-func (s *Service) generateHighlight(ctx context.Context, v *Video, h *Highlight, media, outPath string) error {
+// caller knows the request: a retry overwrites the same path, so the UI never
+// sees an intermediate file.
+func (s *Service) generateHighlight(ctx context.Context, v *Video, h *Highlight, media, outPath string) (int, error) {
 	timeout := highlightLocalTimeout
 	if v.IsRemote() {
 		timeout = highlightRemoteTimeout
 	}
 	if h.Kind == HighlightKindMoment {
-		return s.highlights.generateMoment(ctx, media, h.StartMs, outPath, timeout)
+		return 0, s.highlights.generateMoment(ctx, media, h.StartMs, outPath, timeout)
 	}
 	if err := s.highlights.generateGIF(ctx, media, h.StartMs, h.EndMs, highlightGIFDefaultFPS, outPath, timeout); err != nil {
-		return err
+		return 0, err
 	}
 	size, err := s.highlights.fileSize(outPath)
 	if err != nil || size <= highlightGIFMaxBytes {
-		return nil
+		return highlightGIFDefaultFPS, nil
 	}
 	s.log.Info("highlight gif over the size ceiling, retrying at a lower frame rate",
 		"id", h.ID, "bytes", size, "fps", highlightGIFFallbackFPS)
-	return s.highlights.generateGIF(ctx, media, h.StartMs, h.EndMs, highlightGIFFallbackFPS, outPath, timeout)
+	if err := s.highlights.generateGIF(ctx, media, h.StartMs, h.EndMs, highlightGIFFallbackFPS, outPath, timeout); err != nil {
+		return 0, err
+	}
+	return highlightGIFFallbackFPS, nil
 }
 
 // highlightSource answers "can this favorite's bytes be read right now?" and
@@ -650,7 +660,13 @@ func (s *Service) clearHighlightCurrent() {
 // value is relative to the data dir; only its base name is trusted, so a crafted
 // media_path can never point outside highlights/.
 func (s *Service) highlightPath(h *Highlight) string {
-	return filepath.Join(s.dataDir, HighlightsRelativeDir, filepath.Base(filepath.FromSlash(h.MediaPath)))
+	return s.highlightFile(h.MediaPath)
+}
+
+// highlightFile resolves a recorded, data-dir-relative highlight path. Only the
+// base name is used, for the reason above.
+func (s *Service) highlightFile(rel string) string {
+	return filepath.Join(s.dataDir, HighlightsRelativeDir, filepath.Base(filepath.FromSlash(rel)))
 }
 
 // ensureHighlightDir creates the folder the generated files live in. It is
@@ -670,7 +686,7 @@ func (s *Service) removeHighlightFile(rel string) {
 	if rel == "" {
 		return
 	}
-	file := filepath.Join(s.dataDir, HighlightsRelativeDir, filepath.Base(filepath.FromSlash(rel)))
+	file := s.highlightFile(rel)
 	if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
 		s.log.Warn("remove highlight file failed", "file", file, "err", err)
 	}

@@ -1103,6 +1103,28 @@ export namespace video {
 	        this.finishedAt = source["finishedAt"];
 	    }
 	}
+	export class HighlightPreview {
+	    path: string;
+	    kind: string;
+	    startMs: number;
+	    endMs: number;
+	    bytes: number;
+	    fps: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new HighlightPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.kind = source["kind"];
+	        this.startMs = source["startMs"];
+	        this.endMs = source["endMs"];
+	        this.bytes = source["bytes"];
+	        this.fps = source["fps"];
+	    }
+	}
 	export class Service {
 	
 	

@@ -535,6 +535,23 @@ func (a *App) DeleteVideoHighlight(videoID, highlightID int64) error {
 	return a.lib.DeleteVideoHighlight(videoID, highlightID)
 }
 
+// PreviewVideoHighlight renders the request into the preview folder and returns
+// what to show. Nothing is saved: the dialog calls this to let the user confirm
+// the animation before deciding.
+func (a *App) PreviewVideoHighlight(videoID, startMs, endMs int64) (*video.HighlightPreview, error) {
+	return a.lib.PreviewVideoHighlight(videoID, startMs, endMs)
+}
+
+// AddVideoHighlightFromPreview saves a confirmed preview without re-encoding it.
+func (a *App) AddVideoHighlightFromPreview(videoID, startMs, endMs int64, previewPath string) (*video.Highlight, error) {
+	return a.lib.AddVideoHighlightFromPreview(videoID, startMs, endMs, previewPath)
+}
+
+// DiscardVideoHighlightPreview deletes a preview the user closed the dialog on.
+func (a *App) DiscardVideoHighlightPreview(previewPath string) error {
+	return a.lib.DiscardVideoHighlightPreview(previewPath)
+}
+
 // CheckJavCodes answers "is this work already collected?" for 番号 taken from a
 // JavDB page. The desktop settings page uses it to prove that the same query
 // the browser extension makes over HTTP works from inside the app.
