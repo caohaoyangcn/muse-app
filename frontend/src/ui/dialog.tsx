@@ -43,6 +43,7 @@ export function Dialog({
   open,
   onOpenChange,
   width,
+  maxHeight,
   label,
   purpose = "info",
   padding = 4,
@@ -52,6 +53,13 @@ export function Dialog({
   onOpenChange: (open: boolean) => void;
   /** Preferred surface width; numbers are pixels. */
   width?: number | string;
+  /**
+   * Upper bound for the dialog's own box. Astryx defaults this to `75dvh` and
+   * clips whatever does not fit, so a dialog whose body grows (a preview, a long
+   * form) has to raise it and scroll its own content — otherwise the last row is
+   * simply cut off.
+   */
+  maxHeight?: number | string;
   /** Accessible name for a dialog that has no `DialogHeader`. */
   label?: string;
   /** Dismissal policy: `form` keeps a stray backdrop click from throwing away
@@ -67,6 +75,7 @@ export function Dialog({
         isOpen={open}
         onOpenChange={onOpenChange}
         width={width}
+        maxHeight={maxHeight}
         aria-label={label}
         purpose={purpose}
         padding={padding}

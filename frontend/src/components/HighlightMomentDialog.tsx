@@ -292,12 +292,16 @@ export default function HighlightMomentDialog({
       width={560}
       onOpenChange={(next) => !next && close()}
       purpose="form"
+      // Astryx caps the dialog at 75dvh by default and clips what does not fit;
+      // the content below is capped a little tighter than this so the header and
+      // the footer always sit inside the box.
+      maxHeight="calc(100vh - 40px)"
     >
       {/*
         高度上限 + 中间滚动：预览出现后内容会明显变长，而「保存」必须始终留在
         视口里——它是这个弹窗唯一不能滚走的东西。所以头尾固定，只有中间这一段滚动。
       */}
-      <DialogContent className="flex max-h-[calc(100vh-96px)] flex-col">
+      <DialogContent className="flex max-h-[calc(100vh-140px)] flex-col">
         <DialogHeader title="新增精彩时刻" />
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           <p className="mt-1 text-xs text-[var(--muted)]">
