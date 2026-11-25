@@ -540,6 +540,7 @@ DeleteVideoHighlight(videoID, highlightID int64) error
   - 任务状态：运行/完成/失败/取消计数与文案。
 - 清扫：queued/running 文件保留、孤儿删除、非应用命名保留。
 - `thumbnail` 集成测试：真实 ffmpeg 生成 JPEG/GIF，断言 JPEG 魔数、GIF 魔数与 `NETSCAPE2.0` 循环块。
+- 服务集成测试（`highlights_integration_test.go`，`-tags integration`）：真实 ffmpeg 经 `video.Service` 生成 2 秒区间，断言每帧延迟正好 0.02 s（50 fps 的 2 cs，浏览器认可的最短延迟）与帧数约 100——常量对了不等于 ffmpeg 写对了。
 - API/服务：`BackgroundTasks` 包含「精彩时刻生成」行。
 - HTTP：列表返回状态、媒体文件可访问、非法文件名 404。
 
