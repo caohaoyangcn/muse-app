@@ -164,8 +164,8 @@ export default function Library({
     [videoTabPlan, actorTabs],
   );
 
-  // The list's keyword box. Ctrl/Cmd+F focuses it from anywhere in the library;
-  // only a view that the query actually drives renders it.
+  // The list's keyword box, rendered in the list toolbar. Ctrl/Cmd+F focuses it
+  // from anywhere in the library after switching back to a video list.
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   // Bumped by that shortcut; the focus effect below runs after the view that
   // must show the box has rendered (the box is unmounted on some panels).
@@ -1228,7 +1228,7 @@ export default function Library({
   // — leaving a video/actor tab behind, and stepping out of the 演员 / 查重 /
   // 刮削任务 panels, which are not the video list (their filters would leave the
   // box searching something other than videos). The current list (全部收藏, a
-  // group, or 最近播放) is kept; the header box is focused with its query
+  // group, or 最近播放) is kept; the list's box is focused with its query
   // selected.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1404,34 +1404,6 @@ export default function Library({
   // The actor currently shown in an actor tab, if the active tab is one.
   const activeActorName = actorTabName(activeTab);
 
-  // Both actor views own a keyword box that filters the list they show. The
-  // header box is a whole-library video query and cannot act on either of them,
-  // so it is hidden rather than left sitting above the view's own box as a
-  // second, inert field that looks like it should filter what is on screen.
-  // The actor index only owns the content when the library tab is active; an
-  // open video/detail tab takes precedence over `filter`.
-  const actorView =
-    activeActorName != null || (activeTab === "library" && filter.kind === "actors");
-
-  // 查重 owns its own keyword box too (it filters 番号 and file names, not the
-  // library), so the header search is hidden for it in the same way.
-  const duplicateView = activeTab === "library" && filter.kind === "duplicates";
-
-  // 回收站 owns its own toolbar, so the library search box would be a second,
-  // inert field above it.
-  const trashView = activeTab === "library" && filter.kind === "trash";
-
-  // 后台任务 is a status screen with no list to search either.
-  const taskView = activeTab === "library" && filter.kind === "tasks";
-
-  // The keyword box narrows the video list (全部收藏 / a group / 最近播放) or the
-  // scrape-task list, so it is mounted only while one of those is the content
-  // under it. A video tab is a detail page, not a list: leaving the box in the
-  // header there put an inert field above the detail, and the same goes for the
-  // actor index and the panels above.
-  const listSearchView =
-    activeTab === "library" && !actorView && !duplicateView && !trashView && !taskView;
-
   // What <main> currently shows. The content error boundary uses it to recover
   // when the user navigates somewhere else, so a broken panel cannot trap them
   // on a dead screen.
@@ -1510,14 +1482,6 @@ export default function Library({
         </Button>
         <div className="flex-1" />
         <ServerBar />
-        {listSearchView && (
-          <SearchBar
-            value={keyword}
-            onChange={setKeyword}
-            inputRef={searchInputRef}
-            placeholder={filter.kind === "scrapeTasks" ? "按文件名搜索任务" : "搜索视频"}
-          />
-        )}
         {/* The help entry leads to the 新手引导 page: one place that owns both
             the replay and the shortcut list, instead of a second overlay that
             would fork the tour's state. */}
@@ -1613,6 +1577,7 @@ export default function Library({
             <ScrapeTaskView
               status={filter.status}
               keyword={keyword}
+              onKeywordChange={setKeyword}
               onOpen={openDetail}
               onStatusChange={selectScrapeStatus}
             />
@@ -1649,6 +1614,15 @@ export default function Library({
                   </h2>
                   <span className="text-xs text-[var(--muted)]">{viewCountText}</span>
                   <div className="ml-auto flex flex-wrap items-center gap-2">
+                    {/* The keyword box narrows this list and nothing else, so it
+                        sits in the list's own control row rather than in the
+                        header, where it would travel to every other screen. */}
+                    <SearchBar
+                      value={keyword}
+                      onChange={setKeyword}
+                      inputRef={searchInputRef}
+                      placeholder="搜索视频"
+                    />
                     <Button
                       aria-label={
                         filterCount(filters) === 0

@@ -4,6 +4,7 @@ import { usePagedList } from "../hooks/usePagedList";
 import { formatDateTime } from "../utils/datetime";
 import { videoCoverURL } from "../utils/format";
 import { videoDisplayName } from "../utils/videoName";
+import SearchBar from "./SearchBar";
 import {
   Badge,
   EmptyState,
@@ -71,11 +72,13 @@ function TaskRow({ task, onOpen }: { task: JavTaskOverview; onOpen: (video: Vide
 export default function ScrapeTaskView({
   status,
   keyword,
+  onKeywordChange,
   onOpen,
   onStatusChange,
 }: {
   status: ScrapeTaskStatus;
   keyword: string;
+  onKeywordChange: (keyword: string) => void;
   onOpen: (video: Video) => void;
   onStatusChange: (status: ScrapeTaskStatus) => void;
 }) {
@@ -105,15 +108,23 @@ export default function ScrapeTaskView({
       <Toolbar
         className="sticky top-0 z-[5] rounded-none border-b border-[var(--border)] bg-[var(--bg)] px-0 py-3"
         endContent={
-          <Button
-            className="ml-auto"
-            icon={<Icon className="size-3.5" name={sortDir === "desc" ? "arrow-down" : "arrow-up"} />}
-            onClick={toggleSort}
-            tooltip={sortDir === "desc" ? "按创建时间升序" : "按创建时间降序"}
-            variant="ghost"
-          >
-            创建时间
-          </Button>
+          <>
+            {/* The task board's keyword box is part of its own toolbar, next to
+                the status filter; the shell header carries no list search. */}
+            <SearchBar
+              value={keyword}
+              onChange={onKeywordChange}
+              placeholder="按文件名搜索任务"
+            />
+            <Button
+              icon={<Icon className="size-3.5" name={sortDir === "desc" ? "arrow-down" : "arrow-up"} />}
+              onClick={toggleSort}
+              tooltip={sortDir === "desc" ? "按创建时间升序" : "按创建时间降序"}
+              variant="ghost"
+            >
+              创建时间
+            </Button>
+          </>
         }
         label="刮削任务"
         size="sm"
