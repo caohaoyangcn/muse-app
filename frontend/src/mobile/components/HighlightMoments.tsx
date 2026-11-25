@@ -4,17 +4,19 @@ import type { Highlight } from "../../types";
 import { highlightURL } from "../../utils/format";
 import {
   highlightLabel,
+  isHighlightRange,
   isHighlightReady,
   mobileVisibleHighlights,
 } from "../../utils/highlightTime";
 import { useVideoHighlights } from "../../views/highlights/useVideoHighlights";
 import { ClickableCard, Spinner } from "../../ui/astryx";
+import { LoopingClip } from "../../ui/clip";
 import { Dialog, DialogCloseButton, DialogContent } from "../../ui/dialog";
 
-/** 生成中的占位文案：时间段是 GIF，时刻是单帧截图。 */
+/** 生成中的占位文案：时间段是视频，时刻是单帧截图。 */
 function pendingLabel(h: Highlight): string {
   if (h.status === "queued") return "排队中";
-  return h.kind === "range" ? "正在生成 GIF…" : "正在截取…";
+  return h.kind === "range" ? "正在生成视频…" : "正在截取…";
 }
 
 /**
@@ -26,6 +28,9 @@ function pendingLabel(h: Highlight): string {
  * 浏览器收不到桌面端的事件，所以这里用 `pollWhilePending: true`：只有存在排队/
  * 生成中的条目时才每 3 秒重读一次（见 useVideoHighlights）。没有任何可见条目时
  * 整段不渲染——空的标题比没有这一段更难看。
+ *
+ * 循环片段用 `<video>` 播放：手机上同时挂十几个自动播放的视频会明显发热，所以
+ * `LoopingClip` 只在片段进入视口时播放，滚出视口就暂停。
  */
 export function HighlightMoments({ videoId }: { videoId: number }) {
   const { items } = useVideoHighlights(videoId, { pollWhilePending: true });
@@ -58,12 +63,16 @@ export function HighlightMoments({ videoId }: { videoId: number }) {
                 onClick={() => setPreview(h)}
                 padding={0}
               >
-                <img
-                  alt={highlightLabel(h)}
-                  className="block aspect-video w-full bg-[#111114] object-contain"
-                  loading="lazy"
-                  src={highlightURL(h)}
-                />
+                {isHighlightRange(h) ? (
+                  <LoopingClip label={highlightLabel(h)} src={highlightURL(h)} />
+                ) : (
+                  <img
+                    alt={highlightLabel(h)}
+                    className="block aspect-video w-full bg-[#111114] object-contain"
+                    loading="lazy"
+                    src={highlightURL(h)}
+                  />
+                )}
               </ClickableCard>
             ) : (
               <div className="flex aspect-video w-full items-center justify-center bg-[#111114]">
@@ -89,13 +98,21 @@ export function HighlightMoments({ videoId }: { videoId: number }) {
         <DialogContent>
           <div className="relative flex h-[100dvh] w-full items-center justify-center bg-black">
             <DialogCloseButton />
-            {opened && (
-              <img
-                alt={highlightLabel(opened)}
-                className="max-h-full max-w-full object-contain"
-                src={highlightURL(opened)}
-              />
-            )}
+            {opened &&
+              (isHighlightRange(opened) ? (
+                <LoopingClip
+                  aspect={null}
+                  className="h-full w-full"
+                  label={highlightLabel(opened)}
+                  src={highlightURL(opened)}
+                />
+              ) : (
+                <img
+                  alt={highlightLabel(opened)}
+                  className="max-h-full max-w-full object-contain"
+                  src={highlightURL(opened)}
+                />
+              ))}
           </div>
         </DialogContent>
       </Dialog>

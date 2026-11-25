@@ -4,18 +4,19 @@ import { deleteVideoHighlight, retryVideoHighlight } from "../services/desktop";
 import { invalidate } from "../services/live";
 import type { Highlight, Video } from "../types";
 import { highlightURL } from "../utils/format";
-import { highlightLabel, isHighlightPending, isHighlightReady } from "../utils/highlightTime";
+import { highlightLabel, isHighlightPending, isHighlightRange, isHighlightReady } from "../utils/highlightTime";
 import { useVideoHighlights } from "../views/highlights/useVideoHighlights";
 import { Banner, ClickableCard, Spinner } from "../ui/astryx";
 import { Button } from "../ui/button";
+import { LoopingClip } from "../ui/clip";
 import { Dialog, DialogCloseButton, DialogContent } from "../ui/dialog";
 import ConfirmDialog from "./ConfirmDialog";
 import HighlightMomentDialog from "./HighlightMomentDialog";
 
-/** 生成中的占位文案：时间段是 GIF，时刻是单帧截图。 */
+/** 生成中的占位文案：时间段是视频，时刻是单帧截图。 */
 function pendingLabel(h: Highlight): string {
   if (h.status === "queued") return "排队中";
-  return h.kind === "range" ? "正在生成 GIF…" : "正在截取…";
+  return h.kind === "range" ? "正在生成视频…" : "正在截取…";
 }
 
 function errorText(error: unknown): string {
@@ -23,7 +24,7 @@ function errorText(error: unknown): string {
 }
 
 /**
- * 详情页的「精彩时刻」：生成的截图与循环 GIF。
+ * 详情页的「精彩时刻」：生成的截图与循环视频。
  *
  * 取数与状态在 `useVideoHighlights` 里（手机端共用），这里只负责桌面端的展示与
  * 写入口：新增、重试、删除都只有桌面能做（移动端是只读的局域网页面）。
@@ -87,8 +88,8 @@ export default function HighlightMomentsSection({ video }: { video: Video }) {
           <h3 className="text-sm font-semibold">精彩时刻</h3>
           <p className="mt-1 text-xs text-[var(--muted)]">
             {items.length > 0
-              ? `${items.length} 条 · 截图与 1–10 秒循环 GIF`
-              : "记录一个时刻生成截图，或记录 1–10 秒生成循环 GIF"}
+              ? `${items.length} 条 · 截图与 1–20 秒循环视频`
+              : "记录一个时刻生成截图，或记录 1–20 秒生成循环视频"}
           </p>
         </div>
         <Button
@@ -146,12 +147,16 @@ export default function HighlightMomentsSection({ video }: { video: Video }) {
                   onClick={() => setPreview(h)}
                   padding={0}
                 >
-                  <img
-                    alt={highlightLabel(h)}
-                    className="block aspect-video w-full bg-[#111114] object-contain"
-                    loading="lazy"
-                    src={highlightURL(h)}
-                  />
+                  {isHighlightRange(h) ? (
+                    <LoopingClip label={highlightLabel(h)} src={highlightURL(h)} />
+                  ) : (
+                    <img
+                      alt={highlightLabel(h)}
+                      className="block aspect-video w-full bg-[#111114] object-contain"
+                      loading="lazy"
+                      src={highlightURL(h)}
+                    />
+                  )}
                 </ClickableCard>
               ) : (
                 <div className="flex aspect-video w-full flex-col items-center justify-center gap-1 bg-[#111114] px-3 text-center">
@@ -216,13 +221,22 @@ export default function HighlightMomentsSection({ video }: { video: Video }) {
         <DialogContent className="p-4">
           <DialogCloseButton />
           <div className="flex max-h-[calc(100vh-96px)] min-h-[240px] items-center justify-center overflow-auto rounded-[var(--radius)] bg-black/30 p-2">
-            {preview && (
-              <img
-                alt={highlightLabel(preview)}
-                className="max-h-[calc(100vh-128px)] max-w-full object-contain"
-                src={highlightURL(preview)}
-              />
-            )}
+            {preview &&
+              (isHighlightRange(preview) ? (
+                <LoopingClip
+                  aspect={null}
+                  className="h-[min(70vh,calc(100vh-160px))] rounded-[var(--radius)]"
+                  fit="contain"
+                  label={highlightLabel(preview)}
+                  src={highlightURL(preview)}
+                />
+              ) : (
+                <img
+                  alt={highlightLabel(preview)}
+                  className="max-h-[calc(100vh-128px)] max-w-full object-contain"
+                  src={highlightURL(preview)}
+                />
+              ))}
           </div>
         </DialogContent>
       </Dialog>
@@ -235,7 +249,7 @@ export default function HighlightMomentsSection({ video }: { video: Video }) {
           message={`${highlightLabel(pendingDelete)}：${
             isHighlightPending(pendingDelete)
               ? "删除会取消这次生成，"
-              : "只删除这条生成的截图/GIF 记录与文件，"
+              : "只删除这条生成的截图/视频记录与文件，"
           }源视频不受影响。`}
           onCancel={() => setPendingDelete(null)}
           onConfirm={() => void remove()}

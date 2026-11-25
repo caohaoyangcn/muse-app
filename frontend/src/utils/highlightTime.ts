@@ -13,7 +13,15 @@ import type { Highlight, HighlightPreview } from "../types";
 
 /** 一条精彩时刻允许的最短/最长时间段，与后端常量保持一致。 */
 export const MIN_HIGHLIGHT_RANGE_MS = 1000;
-export const MAX_HIGHLIGHT_RANGE_MS = 10000;
+export const MAX_HIGHLIGHT_RANGE_MS = 20000;
+
+/**
+ * 一键设置结束时间的常用时长（秒）。
+ *
+ * 填完开始时间后，多数人要的就是"后面几秒"，逐个去填分秒既慢又容易算错。
+ * 只放 20 秒以内的整数值：更长的时间段后端会拒绝，放上去只会变成一排点不动的按钮。
+ */
+export const HIGHLIGHT_DURATION_PRESETS = [5, 10, 15, 20] as const;
 
 /** 时 / 分 / 秒三个输入框的原始文本；空串表示这一格没填。 */
 export type HighlightTimeParts = { h: string; m: string; s: string };
@@ -50,6 +58,43 @@ export function timePartsToMs(parts: HighlightTimeParts): number | null {
   const s = partValue(parts.s);
   if (Number.isNaN(h) || Number.isNaN(m) || Number.isNaN(s)) return Number.NaN;
   return (h * 3600 + m * 60 + s) * 1000;
+}
+
+/**
+ * 毫秒 → 三格输入框的文本（`timePartsToMs` 的反向）。
+ *
+ * 小时为 0 时留空，因为"1:35"读起来就是 1 分 35 秒，写个 0 时反而多一格噪声；
+ * 分和秒即使为 0 也写出来，这样"开始 1:30、时长 +5s"得到的是 1:35 而不是"1 分 5 秒"
+ * 那种一眼看不出意图的空格。
+ */
+export function msToTimeParts(ms: number): HighlightTimeParts {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return {
+    h: h > 0 ? String(h) : "",
+    m: String(m),
+    s: String(s),
+  };
+}
+
+/**
+ * 从当前开始时间起，能不能取这个时长。
+ *
+ * 超出视频结尾或超过 20 秒时返回 false，让按钮变灰——而不是夹取。夹取会把用户
+ * 点的「+20 秒」悄悄变成「+7 秒」，然后保存出一条比预想短的片段。
+ */
+export function canUseHighlightPreset(
+  startMs: number,
+  seconds: number,
+  durationMs: number,
+): boolean {
+  if (!Number.isFinite(startMs) || startMs < 0) return false;
+  const lengthMs = seconds * 1000;
+  if (lengthMs < MIN_HIGHLIGHT_RANGE_MS || lengthMs > MAX_HIGHLIGHT_RANGE_MS) return false;
+  if (durationMs > 0 && startMs + lengthMs > durationMs) return false;
+  return true;
 }
 
 /** 分或秒超过 59。必须在换算成毫秒之前判断：0:75 换算后就是 1:15，长度看起来完全正常。 */
@@ -107,7 +152,7 @@ export function validateHighlightTimes(
     if (range < MIN_HIGHLIGHT_RANGE_MS) return "时间段至少 1 秒";
     // 报出当前秒数：用户才知道该往哪边收，而不是只被告知"太长了"。
     if (range > MAX_HIGHLIGHT_RANGE_MS) {
-      return `时间段最长 10 秒（当前 ${Math.round(range / 1000)} 秒）`;
+      return `时间段最长 20 秒（当前 ${Math.round(range / 1000)} 秒）`;
     }
   }
 
@@ -148,6 +193,15 @@ export function isHighlightPending(h: Highlight): boolean {
 /** 生成完成，`mediaPath` 指向的文件已经可以显示。 */
 export function isHighlightReady(h: Highlight): boolean {
   return h.status === "ready";
+}
+
+/**
+ * 时间段（循环视频）还是时刻（单帧截图）。
+ *
+ * 两者在界面上用不同的元素：视频要 `<video>` 才会动，截图用 `<img>` 才是对的。
+ */
+export function isHighlightRange(h: Highlight): boolean {
+  return h.kind === "range" && h.endMs > 0;
 }
 
 /**

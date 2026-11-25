@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { makeHighlight, makeHighlightPreview } from "../test/fixtures";
 import {
+  canUseHighlightPreset,
   formatHighlightTime,
   highlightLabel,
   isHighlightPending,
+  isHighlightRange,
   isHighlightReady,
   mobileVisibleHighlights,
+  msToTimeParts,
   previewMatchesRequest,
   timePartsToMs,
   validateHighlightParts,
@@ -90,12 +93,12 @@ describe("validateHighlightTimes", () => {
     expect(validateHighlightTimes(90_000, 90_500, 0)).toBe("时间段至少 1 秒");
   });
 
-  it("超过 10 秒时报出当前秒数", () => {
-    expect(validateHighlightTimes(90_000, 102_000, 0)).toBe("时间段最长 10 秒（当前 12 秒）");
+  it("超过 20 秒时报出当前秒数", () => {
+    expect(validateHighlightTimes(90_000, 112_000, 0)).toBe("时间段最长 20 秒（当前 22 秒）");
   });
 
-  it("恰好 10 秒可以通过", () => {
-    expect(validateHighlightTimes(90_000, 100_000, 0)).toBeNull();
+  it("恰好 20 秒可以通过", () => {
+    expect(validateHighlightTimes(90_000, 110_000, 0)).toBeNull();
   });
 
   it("开始时间到达视频末尾时提示超出时长", () => {
@@ -196,5 +199,55 @@ describe("previewMatchesRequest", () => {
     const moment = makeHighlightPreview({ kind: "moment", startMs: 90_000, endMs: 0 });
     expect(previewMatchesRequest(moment, 90_000, 0)).toBe(true);
     expect(previewMatchesRequest(moment, 90_000, 5_000)).toBe(false);
+  });
+});
+
+describe("msToTimeParts", () => {
+  it("1 分 35 秒拆成 1 和 35，小时留空", () => {
+    expect(msToTimeParts(95_000)).toEqual({ h: "", m: "1", s: "35" });
+  });
+
+  it("不足一分钟时把 0 分写出来，读起来才是 5 秒", () => {
+    expect(msToTimeParts(5_000)).toEqual({ h: "", m: "0", s: "5" });
+  });
+
+  it("超过一小时才出现小时位", () => {
+    expect(msToTimeParts(3_723_000)).toEqual({ h: "1", m: "2", s: "3" });
+  });
+
+  it("与 timePartsToMs 互为逆运算", () => {
+    expect(timePartsToMs(msToTimeParts(95_000))).toBe(95_000);
+  });
+});
+
+describe("canUseHighlightPreset", () => {
+  it("时长在 20 秒以内且没超出视频时可用", () => {
+    expect(canUseHighlightPreset(30_000, 20, 120_000)).toBe(true);
+  });
+
+  it("会超出视频结尾时不可用", () => {
+    expect(canUseHighlightPreset(110_000, 20, 120_000)).toBe(false);
+  });
+
+  it("恰好到视频结尾仍然可用", () => {
+    expect(canUseHighlightPreset(100_000, 20, 120_000)).toBe(true);
+  });
+
+  it("视频时长未知时不判断越界", () => {
+    expect(canUseHighlightPreset(0, 20, 0)).toBe(true);
+  });
+
+  it("超过 20 秒上限的时长不可用", () => {
+    expect(canUseHighlightPreset(0, 25, 120_000)).toBe(false);
+  });
+});
+
+describe("isHighlightRange", () => {
+  it("时间段需要播放器才能动", () => {
+    expect(isHighlightRange(makeHighlight({ kind: "range", startMs: 0, endMs: 5_000 }))).toBe(true);
+  });
+
+  it("时刻是一张静态图", () => {
+    expect(isHighlightRange(makeHighlight({ kind: "moment", endMs: 0 }))).toBe(false);
   });
 });

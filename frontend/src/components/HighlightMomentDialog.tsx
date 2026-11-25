@@ -9,8 +9,11 @@ import {
 import { invalidate } from "../services/live";
 import {
   EMPTY_HIGHLIGHT_TIME_PARTS,
+  HIGHLIGHT_DURATION_PRESETS,
+  canUseHighlightPreset,
   formatHighlightTime,
   isHighlightTimePartsEmpty,
+  msToTimeParts,
   previewMatchesRequest,
   timePartsToMs,
   validateHighlightParts,
@@ -21,6 +24,7 @@ import { formatFileSize, highlightPreviewURL } from "../utils/format";
 import type { HighlightPreview } from "../types";
 import { Banner, Spinner } from "../ui/astryx";
 import { Button } from "../ui/button";
+import { LoopingClip } from "../ui/clip";
 import { Dialog, DialogContent, DialogFooter, DialogHeader } from "../ui/dialog";
 import { Input } from "../ui/input";
 
@@ -169,7 +173,7 @@ export default function HighlightMomentDialog({
   if (canSubmit && startMs !== null) {
     previewText = endEmpty
       ? `将生成截图：${formatHighlightTime(startMs)}`
-      : `将生成循环 GIF：${formatHighlightTime(startMs)}–${formatHighlightTime(endMs)}（${Math.round(
+      : `将生成循环视频：${formatHighlightTime(startMs)}–${formatHighlightTime(endMs)}（${Math.round(
           (endMs - startMs) / 1000,
         )} 秒）`;
   }
@@ -205,6 +209,19 @@ export default function HighlightMomentDialog({
     invalidatePreview();
     dropPreview(preview);
     setEnd(EMPTY_HIGHLIGHT_TIME_PARTS);
+  };
+
+  /**
+   * 常用时长：把结束时间设成"开始 + N 秒"。
+   *
+   * 只改结束那三格，开始时间与预览一并作废重来——和手填结束时间的路径完全一样，
+   * 所以它不会绕开校验或留下一个对不上的预览。
+   */
+  const applyPreset = (seconds: number) => {
+    if (startMs === null) return;
+    invalidatePreview();
+    dropPreview(preview);
+    setEnd(msToTimeParts(startMs + seconds * 1000));
   };
 
   const render = async () => {
@@ -279,7 +296,7 @@ export default function HighlightMomentDialog({
       <DialogContent className="flex flex-col">
         <DialogHeader title="新增精彩时刻" />
         <p className="mt-1 text-xs text-[var(--muted)]">
-          填一个时刻生成截图；再填结束时间则生成该时间段的循环 GIF（1–10 秒）。
+          填一个时刻生成截图；再填结束时间则生成该时间段的循环视频（1–20 秒）。
           可以先预览，确认效果后再保存。
         </p>
 
@@ -306,6 +323,30 @@ export default function HighlightMomentDialog({
             onChange={setEndField}
             parts={end}
           />
+          {timesKnown && startMs !== null && (
+            <div className="flex flex-wrap items-center gap-1.5 pl-[112px]">
+              <span className="text-xs text-[var(--muted)]">常用时长</span>
+              {HIGHLIGHT_DURATION_PRESETS.map((seconds) => {
+                const usable = canUseHighlightPreset(startMs, seconds, durationMs);
+                return (
+                  <Button
+                    key={seconds}
+                    disabled={!usable || saving || previewing}
+                    onClick={() => applyPreset(seconds)}
+                    size="sm"
+                    title={
+                      usable
+                        ? `结束时间设为 ${formatHighlightTime(startMs + seconds * 1000)}`
+                        : `从 ${formatHighlightTime(startMs)} 起取不到 ${seconds} 秒：超过 20 秒上限或视频结尾`
+                    }
+                    variant="default"
+                  >
+                    +{seconds} 秒
+                  </Button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="mt-4 min-h-[24px]">
@@ -345,13 +386,21 @@ export default function HighlightMomentDialog({
 
         {freshPreview && (
           <figure className="mt-3">
-            <div className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[#111114] p-2">
-              <img
-                alt="精彩时刻预览"
-                className="max-h-[45vh] max-w-full object-contain"
+            {freshPreview.kind === "range" ? (
+              <LoopingClip
+                className="rounded-[var(--radius)] border border-[var(--border)]"
+                label="精彩时刻预览"
                 src={highlightPreviewURL(freshPreview)}
               />
-            </div>
+            ) : (
+              <div className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[#111114] p-2">
+                <img
+                  alt="精彩时刻预览"
+                  className="max-h-[45vh] max-w-full object-contain"
+                  src={highlightPreviewURL(freshPreview)}
+                />
+              </div>
+            )}
             <figcaption className="mt-2 text-xs text-[var(--muted)]">
               预览：{previewDescription(freshPreview)}
             </figcaption>
