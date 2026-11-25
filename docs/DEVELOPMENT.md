@@ -219,6 +219,7 @@ SmartScreen、杀软误报、防火墙、`shared` / `static` 两种 FFmpeg 打�
 - [`guided-tour.md`](spec/guided-tour.md)：新手引导
 - [`volume-offline.md`](spec/volume-offline.md)：卷离线与缺失文件
 - [`generated-images.md`](spec/generated-images.md)：生成图片的生命周期
+- [`highlight-moments.md`](spec/highlight-moments.md)：精彩时刻（时刻截图 / 时间段 GIF，后台生成）
 
 ## 提交约定
 

@@ -1,0 +1,589 @@
+# 精彩时刻：时刻截图与时间段循环 GIF
+
+**状态：设计已确认，待实现（2026-11-25）。**
+
+**目标：** 在影片详情中记录「精彩时刻」。用户输入一个时刻，生成一帧截图；输入一个时间段，生成循环 GIF。生成走后台任务队列，不阻塞界面，进度出现在现有「后台任务」看板。
+
+**核心约束：** 仍然遵守「收藏 ≠ 文件」。只读取源视频生成派生图片，绝不复制、移动、修改或删除源视频；删除精彩时刻只删记录与生成文件。
+
+---
+
+## 1. 已确认的产品行为
+
+| 决策 | 结论 |
+| --- | --- |
+| 增删平台 | 桌面端新增、重试、删除；移动端只读，不新增 HTTP 写端点 |
+| 数量 | 每部影片不设上限，全局队列不设硬上限 |
+| 输入 | 时/分/秒三个数字框 × 开始（必填）+ 结束（可选） |
+| 识别 | 结束三个框全空 = 时刻截图；任一格有值 = 时间段 GIF |
+| 精度 | 整数秒；分/秒 0–59，小时不限 |
+| 校验 | 实时提示 + 禁用保存，不自动改写输入；范围 1–10 秒、结束晚于开始、不超视频时长 |
+| 展示 | 只在详情页，网格卡片不出现 |
+| 生成 | 后台单 worker，保存后立即关闭弹窗 |
+| 取消 | 删除排队中/生成中的条目即取消；不提供独立取消按钮 |
+| 恢复 | `queued` / `running` 重启后自动重排；连续中断 3 次标失败 |
+| 失败 | 桌面保留失败卡 + 重试/删除；移动端隐藏失败条目 |
+| 编辑 | 不支持编辑时间，只能删除后重新添加 |
+| GIF | 480 宽 / 10 fps / 128 色；8 MB 软上限，优先降到 8 fps，不降分辨率/颜色 |
+| 任务看板 | 新增「精彩时刻生成」行，完成后保留至下一轮或应用重启 |
+| 手机刷新 | 仅存在排队/生成中条目时每 3 秒轮询 |
+
+---
+
+## 2. 用户流程
+
+### 2.1 新增时刻（截图）
+
+1. 桌面详情页「精彩时刻」区域点击「新增精彩时刻」。
+2. 填写开始时间，结束时间留空。
+3. 输入器实时显示「将生成截图：1:30」。
+4. 点击保存，弹窗立即关闭；详情出现「排队中」占位卡，后台任务看板出现进度行。
+5. worker 生成完成后，占位卡替换为截图，标签「时刻 1:30」。
+
+### 2.2 新增时间段（GIF）
+
+1. 填写开始和结束时间，范围在 1–10 秒内。
+2. 输入器实时显示「将生成循环 GIF：1:30–1:35（5 秒）」。
+3. 保存后同上；完成后占位卡替换为自动循环的 GIF，标签「时间段 1:30–1:35 · 5 秒」。
+
+### 2.3 失败与重试
+
+- 生成失败时，桌面显示「生成失败」卡片，附错误文案、「重试」「删除」。
+- 重试沿用原开始/结束时间，重新进入队列。
+- 移动端不展示失败条目；任务看板仍会统计失败。
+- 应用崩溃/退出导致的中断会自动重排；同一条超过 3 次中断后标失败，等待手动重试。
+
+### 2.4 删除
+
+- 删除任意状态都需二次确认，文案说明只删除生成的截图/GIF，不影响源视频。
+- 删除排队中条目：直接移出队列。
+- 删除生成中条目：当前 ffmpeg 跑完但结果丢弃并清理。
+- 删除已完成条目：删除记录与文件。
+
+### 2.5 源文件不可用
+
+- 影片缺失、外接盘未接入、网盘离线时，已生成的精彩时刻照常展示（它们是本地文件）。
+- 「新增精彩时刻」按钮禁用并说明原因。
+- 已在队列中的任务在 worker 执行时发现源不可用，标失败并给出对应原因。
+
+---
+
+## 3. 时间输入器与校验
+
+### 3.1 输入器结构
+
+`components/HighlightMomentDialog.tsx` 使用两行结构化输入：
+
+```text
+开始时间（必填）   [ 时 ] : [ 分 ] : [ 秒 ]
+结束时间（可选）   [ 时 ] : [ 分 ] : [ 秒 ]   [清空结束时间]
+```
+
+- 只接受数字，`inputMode="numeric"`。
+- 开始时间三个框全空 → 保存禁用，提示「请填写开始时间」。
+- 结束三个框全空 → 时刻。
+- 结束任一框有值（包括 0）→ 时间段；空着的子字段按 0 解释。
+- 「清空结束时间」把三个结束框恢复为空，回到时刻模式。
+- 不做自动跳格，避免输入分钟时被强行移走焦点。
+
+### 3.2 实时校验
+
+每次输入变化都计算：
+
+| 条件 | 提示 |
+| --- | --- |
+| 开始全空 | 请填写开始时间 |
+| 分或秒 > 59 | 分/秒需在 0–59 |
+| 结束有值且 `end <= start` | 结束时间必须晚于开始时间 |
+| 时间段长度 < 1 秒 | 时间段至少 1 秒 |
+| 时间段长度 > 10 秒 | 时间段最长 10 秒（当前 N 秒） |
+| 已知视频时长且 `start >= duration` | 开始时间超出视频时长 |
+| 已知视频时长且 `end > duration` | 结束时间超出视频时长 |
+
+- 任一错误立即标红并禁用保存；不等提交。
+- 不自动夹取或改写用户输入。
+- 提交时后端再次校验，防止绕过前端。
+
+### 3.3 后端校验
+
+`video.AddHighlight` 使用与前端相同的规则，返回中文错误：
+
+- `startMs < 0`
+- 已知时长时 `startMs >= durationMs`
+- `endMs > 0` 时：`endMs <= startMs`、`endMs-startMs < 1000`、`> 10000`
+- 已知时长时 `endMs > durationMs`
+
+常量：
+
+```go
+const (
+    MinHighlightRangeMs int64 = 1000
+    MaxHighlightRangeMs int64 = 10000
+)
+```
+
+---
+
+## 4. 数据模型与迁移
+
+### 4.1 schema v29
+
+`backend/database/migration.go`，`currentSchemaVersion = 29`：
+
+```sql
+CREATE TABLE IF NOT EXISTS video_highlights (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id      INTEGER NOT NULL,
+    kind          TEXT NOT NULL CHECK (kind IN ('moment','range')),
+    start_ms      INTEGER NOT NULL,
+    end_ms        INTEGER NOT NULL DEFAULT 0,
+    media_path    TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'queued'
+                  CHECK (status IN ('queued','running','ready','failed')),
+    error         TEXT NOT NULL DEFAULT '',
+    interruptions INTEGER NOT NULL DEFAULT 0,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL,
+    finished_at   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_video_highlights_video ON video_highlights(video_id);
+CREATE INDEX IF NOT EXISTS idx_video_highlights_status ON video_highlights(status);
+```
+
+- 迁移可重复执行，无数据回填。
+- 不依赖外键（现有数据库未开启 `foreign_keys`）。
+- 永久删除影片时，`sqliteRepository.Delete` 在一个事务里先删该影片的 `video_highlights`，再删 `videos`。
+- 回收站保留记录与生成文件；恢复后 `ready` 条目照常展示。
+
+### 4.2 Go 模型
+
+`backend/video/highlight.go`：
+
+```go
+type Highlight struct {
+    ID            int64  `json:"id"`
+    VideoID       int64  `json:"videoId"`
+    Kind          string `json:"kind"`       // moment | range
+    StartMs       int64  `json:"startMs"`
+    EndMs         int64  `json:"endMs"`      // moment 为 0
+    MediaPath     string `json:"mediaPath"`  // 相对数据目录
+    Status        string `json:"status"`     // queued | running | ready | failed
+    Error         string `json:"error"`
+    Interruptions int    `json:"interruptions,omitempty"`
+    CreatedAt     int64  `json:"createdAt"`
+    UpdatedAt     int64  `json:"updatedAt"`
+    FinishedAt    int64  `json:"finishedAt"`
+}
+
+const (
+    HighlightKindMoment   = "moment"
+    HighlightKindRange    = "range"
+    HighlightStatusQueued = "queued"
+    HighlightStatusRunning = "running"
+    HighlightStatusReady  = "ready"
+    HighlightStatusFailed = "failed"
+)
+```
+
+### 4.3 仓库接口
+
+扩展 `VideoRepository`，并同步补齐测试用 `stubVideoRepo`、`memVideoRepo`：
+
+```go
+CreateHighlight(h *Highlight) error
+GetHighlight(id int64) (*Highlight, error)                  // worker 用
+GetVideoHighlight(videoID, id int64) (*Highlight, error)    // 归属校验
+ListHighlights(videoID int64) ([]Highlight, error)          // 按 start_ms, id
+ListQueuedHighlightIDs() ([]int64, error)
+ListHighlightMediaPaths() ([]string, error)                 // 清扫用，含 pending
+ClaimHighlight(id int64) (bool, error)                      // queued -> running
+FinishHighlight(id int64, status, errMsg string, finishedAt int64) (bool, error)
+RetryHighlight(videoID, id int64) (bool, error)             // failed -> queued
+RecoverHighlights(maxInterruptions int) (requeue []int64, failed int, err error)
+DeleteHighlight(videoID, id int64) error
+```
+
+`FinishHighlight` 返回 false 表示行已被删除；worker 据此丢弃生成文件，避免给已删除的条目写回状态。
+
+---
+
+## 5. 后台生成器
+
+### 5.1 生命周期
+
+`video.Service` 新增：
+
+```go
+func (s *Service) StartHighlights()
+func (s *Service) CloseHighlights()
+```
+
+- `main.go` 在 `javSvc.Start()` 附近调用 `videoSvc.StartHighlights()`。
+- 关闭步骤放在 thumbnail processor 之前：`shutdownStep{"highlight worker", videoSvc.CloseHighlights}`。
+- 启动时 `RecoverHighlights(3)`：
+  - `running` 行 `interruptions+1`；达到 3 次标 `failed`（「生成被多次中断」）；否则改回 `queued`。
+  - `queued` 行直接重新入队。
+  - 恢复的条目组成新一轮任务计数。
+- 队列是内存 `workQueue[int64]`，数据库行是持久事实；单 worker。
+- 关闭时取消服务 context、关闭队列、等待 worker。正在生成的行保持 `running`，留给下次启动恢复，不标失败。
+
+### 5.2 新增
+
+`AddHighlight(videoID, startMs, endMs)`：
+
+1. `repo.Get(videoID)`，不存在返回 `ErrNotFound`。
+2. 校验时间（见 §3.3）。
+3. `processor.MediaPath(v)` 确认媒体可读；缺失、卷离线、远程离线返回明确中文错误。
+4. 生成唯一媒体路径：
+   `highlights/h-<videoID>-<unixNano>-<seq>.<jpg|gif>`。
+   `seq` 为进程内原子序号。路径在入队前写入数据库，清扫会把生成中的文件视为有主文件。
+5. 插入 `status=queued` 行；入队；`noteQueued` 启动或延续本轮任务计数；发出 `video:highlight:updated` 和节流的 `tasks:updated`。
+6. 立即返回该行；弹窗关闭。
+
+若队列在关闭过程中拒绝入队，行保持 `queued`，下次启动恢复。
+
+### 5.3 重试与删除
+
+`RetryHighlight(videoID, id)`：
+
+- 仅 `failed` 行；清空 `error`，置 `queued`，重新入队，计入当前/新一轮任务。
+- 明确失败（源损坏、超时）不自动重试；只有崩溃中断自动重排。
+
+`DeleteHighlight(videoID, id)`：
+
+1. 读取行；不存在按幂等成功处理。
+2. 删除记录。
+3. 删除 `media_path` 对应文件（尽力而为）。
+4. 若是 `queued`/`running`，计入本轮「取消」并结束 pending；worker 之后通过 rows-affected 判断，避免重复计数。
+5. 若是 `ready`/`failed`，不改任务计数。
+
+### 5.4 Worker
+
+`processHighlight(id)`：
+
+1. `GetHighlight(id)`；不存在或非 `queued` → 结束（若被删除，计取消）。
+2. `ClaimHighlight(id)` 原子 queued → running；设置任务 `Current`（文件名 + 时间标签）。
+3. `repo.GetAny(videoID)`：
+   - 影片不存在 → 行已被级联删除，结束。
+   - 影片在回收站 → 标 failed「影片在回收站中，恢复后可重试」。
+   - 文件缺失 / 卷离线 / 远程离线 → 标 failed 对应中文原因。
+4. 调用生成器（服务 context）：
+   - 时刻：截图。
+   - 时间段：GIF；生成后检查大小，超过 8 MB 且当前 10 fps → 用 8 fps 重新生成一次（覆盖同一路径）；仍超则接受。
+5. 若服务 context 被取消（退出）→ 不更新行，保持 `running`。
+6. 成功：`FinishHighlight(ready)`；返回 false 表示行已被删，删除生成文件；否则计完成。
+7. 失败：删除半成品；`FinishHighlight(failed, error)`；返回 false 时删除文件；否则计失败。
+8. 状态变化发出 `video:highlight:updated`；任务事件节流到最多 1 次/秒。
+
+### 5.5 错误文案
+
+统一中文，桌面失败卡直接展示：
+
+- `生成精彩时刻失败：<ffmpeg 首行>`
+- `源文件缺失，无法生成精彩时刻`
+- `磁盘未接入，无法生成精彩时刻`
+- `网盘离线，无法生成精彩时刻`
+- `影片在回收站中，恢复后可重试`
+- `生成被多次中断`
+
+---
+
+## 6. 任务看板
+
+### 6.1 状态结构
+
+`backend/video` 暴露只读快照：
+
+```go
+type HighlightTaskStatus struct {
+    Active    bool
+    Total     int
+    Done      int // 成功 + 取消
+    Failed    int
+    Canceled  int
+    Current   string
+    StartedAt int64
+    UpdatedAt int64
+}
+```
+
+- 不变式：`Done + Failed + 当前 pending == Total`。
+- 取消计入 `Done`，另记 `Canceled` 用于文案。
+- 队列空闲时开始新一轮并重置计数；结束后保留到下一轮或应用重启（与片名翻译一致）。
+
+### 6.2 投影
+
+`api.Library.BackgroundTasks()` 新增 `highlightTask()`：
+
+```go
+state := tasks.StateDone
+if status.Active {
+    state = tasks.StateRunning
+}
+
+tasks.Task{
+    ID:        "highlight-moments",
+    Title:     "精彩时刻生成",
+    Kind:      tasks.KindBatch,
+    State:     state,
+    Done:      status.Done,
+    Total:     status.Total,
+    Failed:    status.Failed,
+    Unit:      "条",
+    Current:   status.Current,
+    Message:   "生成中 1 · 排队 N" / "完成 N · 失败 M · 取消 K",
+    StartedAt: status.StartedAt,
+    UpdatedAt: status.UpdatedAt,
+}
+```
+
+- 无活动且本轮没有计数时不显示。
+- 不提供 `Detail` 深链；当前没有专门的精彩时刻任务明细页。
+- 执行器仍归 `video.Service`；看板只做只读投影，符合 `background-tasks.md` 的「统一视图，不统一执行器」。
+
+### 6.3 事件与刷新
+
+- `tasks:updated`：任务计数变化，节流 1 次/秒。
+- `video:highlight:updated`：单条状态变化。
+- 两者都加入 `frontend/src/services/events.ts` 的失效列表；桌面端 `useLiveQuery` 自动刷新详情和看板。
+- 移动端没有推送，靠详情页轮询（见 §8.4）。
+
+---
+
+## 7. 生成规格与压缩
+
+### 7.1 截图
+
+- 输出 `<base>.jpg`，宽 1280，`-q:v 3`。
+- ffmpeg 参数：
+
+```text
+-y -hide_banner -loglevel error -ss <at> -i <video>
+-frames:v 1 -vf scale=1280:-2 -q:v 3 <out.jpg>
+```
+
+### 7.2 GIF
+
+- 输出 `<base>.gif`，宽 480，默认 10 fps，128 色。
+- ffmpeg 参数：
+
+```text
+-y -hide_banner -loglevel error
+-ss <start> -t <duration> -i <video>
+-an -loop 0
+-vf "fps=<fps>,scale=480:-2:flags=lanczos,
+     split[s0][s1];
+     [s0]palettegen=max_colors=128:stats_mode=diff[p];
+     [s1][p]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle"
+-gifflags +transdiff
+<out.gif>
+```
+
+- 滤镜字符串实际写成一个参数，不能有换行。
+- 8 MB 软上限：
+  - 10 fps 生成后 `os.Stat` 超限 → 用 8 fps 重新生成一次，覆盖同一路径。
+  - 8 fps 仍超限 → 保留文件，不自动降分辨率或颜色。
+- 超时：本地 60 秒，远程 90 秒；每次尝试独立计时。
+- 失败删除半成品文件。
+
+### 7.3 为什么这样压缩
+
+- `diff_mode=rectangle` 只编码变化区域，通常能显著减小体积，不改变单帧画质。
+- `stats_mode=diff` 把调色板集中在变化区域，减少无关区域的色彩损失。
+- `+transdiff` 启用 GIF 帧间透明差分。
+- 8 MB 超限时优先降 fps（10 → 8），保持分辨率与颜色；这是不牺牲单帧画质的降级方式。
+- GIF 本身最多 256 色，128 色是体积与画质的折中。
+
+---
+
+## 8. 传输与前端
+
+### 8.1 门面与 Wails
+
+`backend/api/library.go`：
+
+```go
+ListVideoHighlights(videoID int64) ([]video.Highlight, error)
+AddVideoHighlight(videoID, startMs, endMs int64) (*video.Highlight, error)
+RetryVideoHighlight(videoID, highlightID int64) error
+DeleteVideoHighlight(videoID, highlightID int64) error
+```
+
+`app.go` 暴露同名 Wails 方法。`frontend/wailsjs` 由 `wails generate module` 重新生成，不手改。
+
+### 8.2 局域网 HTTP（只读）
+
+- `GET /api/videos/{id}/highlights` → 返回全部状态（移动端自行过滤 failed）。
+- `GET /highlights/{file}` → 严格匹配 `^h-\d+-\d+-\d+\.(jpg|gif)$` 后 `http.ServeFile`，`Cache-Control: no-cache`。
+- 两个端点都自动受 `backend/server/auth.go` 的 `withLANAuth` 保护，不申请公开豁免；移动端沿用现有局域网访问口令。
+- 不新增 HTTP 写端点。
+
+### 8.3 桌面资源服务
+
+`main.go` 的 `thumbnailHandler` 增加 `highlightDir` 和 `/highlights/` 路由，使用同一严格正则；启动时创建 `<dataDir>/highlights`。
+
+### 8.4 前端契约与共享工具
+
+- `types.ts`：`export type Highlight = video.Highlight;`
+- `services/client.ts`：`listVideoHighlights(videoId): Promise<Highlight[]>`，两端共用。
+- `client.wails.ts` / `client.http.ts` 分别实现；`services/http.ts` 增加 GET。
+- `services/api.ts` / `services/desktop.ts`：`addVideoHighlight`、`retryVideoHighlight`、`deleteVideoHighlight`（仅桌面）。
+- `utils/highlightTime.ts`：
+  - `timePartsToMs(parts)`：把时/分/秒字符串转毫秒；全空返回 `null`。
+  - `validateHighlightTimes(startMs, endMs, durationMs)`：返回中文错误或 `null`。
+  - `formatHighlightTime(ms)`：`0:00` / `1:30` / `1:02:03`。
+  - `highlightLabel(h)`：`时刻 1:30` / `时间段 1:30–1:35 · 5 秒`。
+  - `isHighlightPending(h)`、`isHighlightReady(h)`、`mobileVisibleHighlights(list)`（过滤 `failed`）。
+- `utils/format.ts` 增加 `highlightURL(h)`：
+  `/${h.mediaPath}?v=${h.updatedAt || h.createdAt}`；只在 `ready` 时调用。
+- 新增 `views/highlights/useVideoHighlights.ts`：
+  - `useLiveQuery`，key `highlights:${videoId}`。
+  - 可选 `pollWhilePending`：存在 `queued`/`running` 时每 3 秒 `reload()`，否则不建定时器。
+  - 桌面传 `false`（事件刷新），移动端传 `true`。
+- `views/manifest.json` 增加 `video-detail` 视图条目，并在 gaps 记录：移动端不支持新增/重试/删除，失败条目隐藏。
+
+### 8.5 桌面新增弹窗
+
+`components/HighlightMomentDialog.tsx`：
+
+- 两行时间器，实时结果显示与错误（见 §3）。
+- 保存按钮在任一错误时禁用。
+- 保存调用 `addVideoHighlight`，成功后 `invalidate()` 并立即关闭。
+- API 层错误（DB、媒体路径）显示在弹窗内，保留输入。
+- 源不可用时入口按钮禁用并说明原因。
+
+### 8.6 桌面详情
+
+`components/HighlightMomentsSection.tsx`，挂载在 `VideoDetailPanel` 顶部封面/元数据之后：
+
+- 网格展示全部状态：
+  - `ready`：`<img src={highlightURL(h)} loading="lazy">`，点击打开大图 Dialog。
+  - `queued`：「排队中」+ Spinner。
+  - `running`：「正在生成 GIF…」或「正在截取…」+ Spinner。
+  - `failed`：「生成失败」+ 错误文案 + 「重试」「删除」。
+- 每条提供删除，经 `ConfirmDialog` 确认；排队/生成中删除即取消。
+- 空状态「还没有精彩时刻」；读取失败显示 Banner + 重试。
+- 新增按钮在 `status === "missing"`、`volumeOffline`、`sourceOffline` 时禁用。
+
+### 8.7 移动详情
+
+`mobile/components/HighlightMoments.tsx`：
+
+- `useVideoHighlights(videoId, { pollWhilePending: true })`。
+- 只渲染 `ready` 与 `queued`/`running`；`failed` 过滤掉。
+- `ready` 两列网格 + 点击全屏；pending 占位 + Spinner。
+- 无可见条目时整段不渲染。
+- 不提供新增、重试、删除入口。
+
+---
+
+## 9. 资源生命周期
+
+### 9.1 文件布局
+
+```text
+<dataDir>/highlights/h-<videoID>-<unixNano>-<seq>.jpg
+<dataDir>/highlights/h-<videoID>-<unixNano>-<seq>.gif
+```
+
+- 归属由 `video_highlights.media_path` 声明，而不是文件名里的 id。
+- 路径在插入 queued 行时写入，生成中的文件不会被清扫误删。
+- 同一路径在 8 fps 重试时覆盖，不再新增行。
+
+### 9.2 孤儿清扫
+
+扩展 `video.RemoveOrphanedImages`：
+
+1. 读取 `ListHighlightMediaPaths()`，建立 basename 集合。
+2. 扫描 `highlights/`，只处理 `^h-\d+-\d+-\d+\.(jpg|gif)$`。
+3. 保留集合内文件；删除孤儿；其他命名与目录一律保留。
+4. `Scanned / Removed / Bytes` 计入总结果。
+
+### 9.3 删除与回收站
+
+- 永久删除影片：事务级联删行；随后清扫删除文件。
+- 删除单条精彩时刻：删行 + 删文件。
+- 回收站：保留行与文件；恢复后照常展示。
+- 失败/取消：worker 删除半成品；清扫兜底。
+
+### 9.4 回滚
+
+- v29 表对旧版本代码无害；旧版本不会清扫 `highlights/`，文件会保留到升级。
+- 不迁移、不删除旧数据。
+
+---
+
+## 10. 测试计划
+
+### 后端
+
+- 迁移：v28 → v29 建表/索引/约束；重复迁移幂等。
+- 仓库：增删查、Claim/Finish/Retry、Recover（running 中断计数、3 次失败）、级联删除、媒体路径列表。
+- 服务：
+  - 新增校验（负数、结束 ≤ 开始、< 1 秒、> 10 秒、超时长）；
+  - 插入 queued、入队、立即返回；
+  - worker 成功 → ready，文件存在，事件与任务计数；
+  - worker 失败 → failed + error，半成品清理；
+  - 重试 failed → queued → 再次执行；
+  - 删除 queued/running/ready/failed 的文件与计数；
+  - worker 发现行被删时丢弃结果；
+  - 退出取消保持 running，重启恢复；
+  - 8 MB 阈值：假生成器先写超限文件，断言用 8 fps 重试；再超限则接受；
+  - 任务状态：运行/完成/失败/取消计数与文案。
+- 清扫：queued/running 文件保留、孤儿删除、非应用命名保留。
+- `thumbnail` 集成测试：真实 ffmpeg 生成 JPEG/GIF，断言 JPEG 魔数、GIF 魔数与 `NETSCAPE2.0` 循环块。
+- API/服务：`BackgroundTasks` 包含「精彩时刻生成」行。
+- HTTP：列表返回状态、媒体文件可访问、非法文件名 404。
+
+### 前端
+
+- `utils/highlightTime.test.ts`：
+  - 时/分/秒转毫秒；
+  - 结束 ≤ 开始、> 10 秒、超时长、分/秒越界；
+  - 标签格式；
+  - pending/ready 判断；
+  - 移动端过滤 failed。
+- `npm run lint` 校验 manifest 与跨平台目录规则。
+- `npm test`、`npm run build:all`；重建 `backend/server/webui/`。
+- 绑定生成后检查 `App.{js,d.ts}` 与 `models.ts` 包含 `Highlight`、status/error 字段与 retry 方法。
+
+---
+
+## 11. 实施清单
+
+- [ ] 数据库迁移 v29、`Highlight` 模型、仓库方法与迁移/仓库测试。
+- [ ] `backend/thumbnail` 截图/GIF 生成器与集成测试。
+- [ ] `video.Service` 校验、队列、worker、恢复、任务状态与服务测试。
+- [ ] `api.Library` 门面、`BackgroundTasks` 投影、`app.go`、`main.go` 启停与资源路由。
+- [ ] HTTP 只读端点/媒体服务与服务器测试。
+- [ ] 重新生成 Wails 绑定。
+- [ ] `utils/highlightTime`、共享 hook、桌面弹窗/详情、移动端、事件与 manifest。
+- [ ] 文档更新（本文、`generated-images.md`、`background-tasks.md`、`mobile-web-design.md`、`DEVELOPMENT.md`、`README.md`）。
+- [ ] 重建 `backend/server/webui/`。
+- [ ] 全量验证：
+
+```bash
+gofmt -l .
+go vet ./...
+golangci-lint run ./...
+go test ./...
+go test -tags integration ./backend/thumbnail ./backend/video ./backend/server
+
+cd frontend
+npm run lint
+npm test
+npm run build:all
+```
+
+---
+
+## 12. 风险与非目标
+
+- **不做通用任务调度器。** 任务看板仍是只读投影；精彩时刻的执行器归 `video.Service`，状态落在自己的表里。
+- **移动端不提供写操作。** 新增、重试、删除只在桌面端；失败条目在移动端隐藏。
+- **不自动重试明确失败。** 源损坏、超时等确定性错误交给用户手动重试；只有崩溃中断自动重排。
+- **8 MB 是软上限。** 8 fps 仍超限时保留文件，不再自动降颜色/分辨率。
+- **GIF 仍是 256 色上限。** 不引入 ffmpeg 之外的压缩工具。
+- **不支持编辑。** 修改时间只能删除后重新添加。
+- **不设数量上限。** 10 秒上限与用户逐条输入控制体积。
+- **回滚不清理新目录。** 旧版本不会删除 `highlights/`，升级后继续使用。
