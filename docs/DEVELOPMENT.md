@@ -126,6 +126,7 @@ macOS:   ~/Library/Application Support/Muse/
 ├── app.db          # SQLite 收藏库
 ├── thumbnails\     # 缩略图（thumbnails/<id>.jpg）
 ├── highlights\     # 精彩时刻（highlights/h-<影片id>-<纳秒>-<序号>.<jpg|gif>）
+├── preview\        # 待确认的精彩时刻预览（关闭弹窗或重启即清空）
 ├── covers\jav\     # 刮削封面（covers/jav/<id>.jpg）
 ├── avatars\        # 演员头像（avatars/<star_id>.jpg）
 └── logs\app.log    # 运行日志（超过 10MB 启动时自动清空）
@@ -133,7 +134,7 @@ macOS:   ~/Library/Application Support/Muse/
 
 - 数据目录与程序目录无关；升级时覆盖程序文件夹即可，schema 迁移在启动时自动执行（`backend/database/migration.go`）。
 - 旧版本生成的 `web/` 重封装缓存已不再使用，可安全手动删除。
-- 图片清理逻辑只删除孤立的生成图片，不会触碰源视频。`highlights/` 的归属由 `video_highlights.media_path` 声明，排队中/生成中的文件也因此不会被误删。
+- 图片清理逻辑只删除孤立的生成图片，不会触碰源视频。`highlights/` 的归属由 `video_highlights.media_path` 声明，排队中/生成中的文件也因此不会被误删；`preview/` 不参与清扫（那里的文件天生没有记录），由弹窗关闭时显式删除、启动时清空残留。
 - 「精彩时刻」在 `main.go` 里随启动一起开始（`videoSvc.StartHighlights()`），关闭顺序排在缩略图处理器之前；正在生成的条目会保持 `running`，下次启动自动重排（`docs/spec/highlight-moments.md` §5）。
 
 ## 移动端 Web UI
