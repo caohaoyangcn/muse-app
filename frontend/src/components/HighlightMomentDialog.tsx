@@ -289,131 +289,138 @@ export default function HighlightMomentDialog({
   return (
     <Dialog
       open={open}
-      width={freshPreview ? 720 : 520}
+      width={560}
       onOpenChange={(next) => !next && close()}
       purpose="form"
     >
-      <DialogContent className="flex flex-col">
+      {/*
+        高度上限 + 中间滚动：预览出现后内容会明显变长，而「保存」必须始终留在
+        视口里——它是这个弹窗唯一不能滚走的东西。所以头尾固定，只有中间这一段滚动。
+      */}
+      <DialogContent className="flex max-h-[calc(100vh-96px)] flex-col">
         <DialogHeader title="新增精彩时刻" />
-        <p className="mt-1 text-xs text-[var(--muted)]">
-          填一个时刻生成截图；再填结束时间则生成该时间段的循环视频（1–20 秒）。
-          可以先预览，确认效果后再保存。
-        </p>
-
-        <div className="mt-4 flex flex-col gap-2">
-          <TimeRow
-            label="开始时间（必填）"
-            name="开始时间"
-            onChange={setStartField}
-            parts={start}
-          />
-          <TimeRow
-            endContent={
-              <Button
-                onClick={clearEnd}
-                size="sm"
-                title="清空结束时间，回到时刻截图"
-                variant="ghost"
-              >
-                清空结束时间
-              </Button>
-            }
-            label="结束时间（可选）"
-            name="结束时间"
-            onChange={setEndField}
-            parts={end}
-          />
-          {timesKnown && startMs !== null && (
-            <div className="flex flex-wrap items-center gap-1.5 pl-[112px]">
-              <span className="text-xs text-[var(--muted)]">常用时长</span>
-              {HIGHLIGHT_DURATION_PRESETS.map((seconds) => {
-                const usable = canUseHighlightPreset(startMs, seconds, durationMs);
-                return (
-                  <Button
-                    key={seconds}
-                    disabled={!usable || saving || previewing}
-                    onClick={() => applyPreset(seconds)}
-                    size="sm"
-                    title={
-                      usable
-                        ? `结束时间设为 ${formatHighlightTime(startMs + seconds * 1000)}`
-                        : `从 ${formatHighlightTime(startMs)} 起取不到 ${seconds} 秒：超过 20 秒上限或视频结尾`
-                    }
-                    variant="default"
-                  >
-                    +{seconds} 秒
-                  </Button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="mt-4 min-h-[24px]">
-          {previewText && !previewError && <p className="text-sm">{previewText}</p>}
-          {error && <p className="mt-1 text-sm text-[var(--danger)]">{error}</p>}
-          {sourceUnavailableReason && (
-            <p className="mt-1 text-sm text-[var(--danger)]">{sourceUnavailableReason}</p>
-          )}
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button
-            disabled={!canSubmit || blocked || previewing || saving}
-            onClick={() => void render()}
-            size="sm"
-            title="用正式保存时的同一条指令生成一次，看看效果"
-            variant="default"
-          >
-            {previewing ? "生成预览中…" : freshPreview ? "重新预览" : "预览"}
-          </Button>
-          {previewing && <Spinner label="生成预览中…" size="sm" />}
-          {!freshPreview && !previewing && canSubmit && (
-            <span className="text-xs text-[var(--muted)]">
-              直接保存也可以，生成会在后台队列里进行。
-            </span>
-          )}
-          {freshPreview && (
-            <span className="text-xs text-[var(--muted)]">预览即所得：保存后用的就是这张图。</span>
-          )}
-        </div>
-
-        {previewError && (
-          <p className="mt-2 text-sm text-[var(--danger)]" role="alert">
-            {previewError}
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            填一个时刻生成截图；再填结束时间则生成该时间段的循环视频（1–20 秒）。
+            可以先预览，确认效果后再保存。
           </p>
-        )}
 
-        {freshPreview && (
-          <figure className="mt-3">
-            {freshPreview.kind === "range" ? (
-              <LoopingClip
-                className="rounded-[var(--radius)] border border-[var(--border)]"
-                label="精彩时刻预览"
-                src={highlightPreviewURL(freshPreview)}
-              />
-            ) : (
-              <div className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[#111114] p-2">
-                <img
-                  alt="精彩时刻预览"
-                  className="max-h-[45vh] max-w-full object-contain"
-                  src={highlightPreviewURL(freshPreview)}
-                />
+          <div className="mt-4 flex flex-col gap-2">
+            <TimeRow
+              label="开始时间（必填）"
+              name="开始时间"
+              onChange={setStartField}
+              parts={start}
+            />
+            <TimeRow
+              endContent={
+                <Button
+                  onClick={clearEnd}
+                  size="sm"
+                  title="清空结束时间，回到时刻截图"
+                  variant="ghost"
+                >
+                  清空结束时间
+                </Button>
+              }
+              label="结束时间（可选）"
+              name="结束时间"
+              onChange={setEndField}
+              parts={end}
+            />
+            {timesKnown && startMs !== null && (
+              <div className="flex flex-wrap items-center gap-1.5 pl-[112px]">
+                <span className="text-xs text-[var(--muted)]">常用时长</span>
+                {HIGHLIGHT_DURATION_PRESETS.map((seconds) => {
+                  const usable = canUseHighlightPreset(startMs, seconds, durationMs);
+                  return (
+                    <Button
+                      key={seconds}
+                      disabled={!usable || saving || previewing}
+                      onClick={() => applyPreset(seconds)}
+                      size="sm"
+                      title={
+                        usable
+                          ? `结束时间设为 ${formatHighlightTime(startMs + seconds * 1000)}`
+                          : `从 ${formatHighlightTime(startMs)} 起取不到 ${seconds} 秒：超过 20 秒上限或视频结尾`
+                      }
+                      variant="default"
+                    >
+                      +{seconds} 秒
+                    </Button>
+                  );
+                })}
               </div>
             )}
-            <figcaption className="mt-2 text-xs text-[var(--muted)]">
-              预览：{previewDescription(freshPreview)}
-            </figcaption>
-          </figure>
-        )}
-
-        {actionError ? (
-          <div className="mt-3">
-            <Banner status="error" title={actionError} />
           </div>
-        ) : null}
 
-        <DialogFooter className="mt-4">
+          <div className="mt-4 min-h-[24px]">
+            {previewText && !previewError && <p className="text-sm">{previewText}</p>}
+            {error && <p className="mt-1 text-sm text-[var(--danger)]">{error}</p>}
+            {sourceUnavailableReason && (
+              <p className="mt-1 text-sm text-[var(--danger)]">{sourceUnavailableReason}</p>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              disabled={!canSubmit || blocked || previewing || saving}
+              onClick={() => void render()}
+              size="sm"
+              title="用正式保存时的同一条指令生成一次，看看效果"
+              variant="default"
+            >
+              {previewing ? "生成预览中…" : freshPreview ? "重新预览" : "预览"}
+            </Button>
+            {previewing && <Spinner label="生成预览中…" size="sm" />}
+            {!freshPreview && !previewing && canSubmit && (
+              <span className="text-xs text-[var(--muted)]">
+                直接保存也可以，生成会在后台队列里进行。
+              </span>
+            )}
+            {freshPreview && (
+              <span className="text-xs text-[var(--muted)]">预览即所得：保存后用的就是这张图。</span>
+            )}
+          </div>
+
+          {previewError && (
+            <p className="mt-2 text-sm text-[var(--danger)]" role="alert">
+              {previewError}
+            </p>
+          )}
+
+          {freshPreview && (
+            <figure className="mt-3">
+              {freshPreview.kind === "range" ? (
+                <LoopingClip
+                  aspect={null}
+                  className="h-[clamp(150px,30vh,280px)] rounded-[var(--radius)] border border-[var(--border)]"
+                  label="精彩时刻预览"
+                  src={highlightPreviewURL(freshPreview)}
+                />
+              ) : (
+                <div className="flex min-h-[150px] items-center justify-center overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[#111114] p-2">
+                  <img
+                    alt="精彩时刻预览"
+                    className="max-h-[30vh] max-w-full object-contain"
+                    src={highlightPreviewURL(freshPreview)}
+                  />
+                </div>
+              )}
+              <figcaption className="mt-2 text-xs text-[var(--muted)]">
+                预览：{previewDescription(freshPreview)}
+              </figcaption>
+            </figure>
+          )}
+
+          {actionError ? (
+            <div className="mt-3">
+              <Banner status="error" title={actionError} />
+            </div>
+          ) : null}
+        </div>
+
+        <DialogFooter className="mt-4 shrink-0 border-t border-[var(--border)] pt-3">
           <Button disabled={saving} onClick={close}>
             取消
           </Button>
