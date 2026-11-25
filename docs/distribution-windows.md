@@ -82,6 +82,10 @@ MUSE_FFMPEG_ZIP=/path/to/ffmpeg-...-lgpl-shared.zip scripts/package-windows.sh  
 数据目录是 `%LOCALAPPDATA%\Muse\`，和程序文件夹无关。朋友升级时只要用新文件夹
 覆盖旧的就行，收藏库会自动迁移（`backend/database/migration.go`）。
 
+要把数据放到别的盘或做成绿色版，在 `Muse.exe` 旁放 `muse.portable`（数据落到
+`<exe>/data`）或 `muse.config.json`（`{"dataDir": "D:\\MuseData"}`）；`muse.config.json`
+优先。详见 README「数据与隐私」与 `docs/DEVELOPMENT.md`「数据目录与迁移」。
+
 ## GitHub Release 流水线
 
 仓库带一条 GitHub Actions 流水线（`.github/workflows/release.yml`）：**推 tag 或手动触发都会打包并发布

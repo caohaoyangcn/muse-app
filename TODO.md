@@ -154,6 +154,9 @@
 
 - [ ] **前端 `reload()` 全量重查**
   - `frontend/src/pages/Library.tsx` 大多数 handler 都 `load()` 全量 fetch（`confirmRemove` 等）；可引入轻量缓存 / 增量更新。
+- [x] **数据目录可配置（exe 旁引导文件）**
+  - ✅ `backend/platform.ResolveDataDir`：`muse.config.json`（`dataDir`，支持环境变量、相对路径按 exe 目录解析）优先于 `muse.portable`（`<exe>/data`），都缺省时用平台默认目录；启动日志 `data directory resolved` 记录实际路径与来源。
+  - 仍未做：设置页内选择目录并自动迁移（需停 DB 与后台 worker、搬运含 WAL 的整个数据根、写引导文件后重启）。
 - [ ] **设置页提供「打开日志 / 数据目录」入口**
   - 排查问题（防火墙、刮削失败）时用户只能去文件管理器找应用数据目录下的 `logs/app.log`。
 

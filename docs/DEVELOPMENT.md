@@ -133,6 +133,7 @@ macOS:   ~/Library/Application Support/Muse/
 ```
 
 - 数据目录与程序目录无关；升级时覆盖程序文件夹即可，schema 迁移在启动时自动执行（`backend/database/migration.go`）。
+- 数据根由 `backend/platform.ResolveDataDir` 在启动时决定，优先级：exe 旁的 `muse.config.json`（`dataDir` 字段，支持环境变量，相对路径按 exe 目录解析）→ exe 旁的 `muse.portable` 标记（`<exe>/data`）→ 平台默认目录。配置不能存在它所指向的数据库里，所以这一步必须早于 `setupLogging` 与 `database.Open`；`app.log` 里的 `data directory resolved` 会记录实际路径与来源。搬迁时整个数据根一起走（含 `app.db-wal` / `app.db-shm`）。
 - 旧版本生成的 `web/` 重封装缓存已不再使用，可安全手动删除。
 - 图片清理逻辑只删除孤立的生成图片，不会触碰源视频。`highlights/` 的归属由 `video_highlights.media_path` 声明，排队中/生成中的文件也因此不会被误删；`preview/` 不参与清扫（那里的文件天生没有记录），由弹窗关闭时显式删除、启动时清空残留。
 - 「精彩时刻」在 `main.go` 里随启动一起开始（`videoSvc.StartHighlights()`），关闭顺序排在缩略图处理器之前；正在生成的条目会保持 `running`，下次启动自动重排（`docs/spec/highlight-moments.md` §5）。

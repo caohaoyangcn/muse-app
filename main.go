@@ -108,12 +108,19 @@ func main() {
 		return
 	}
 
-	dataDir, err := platform.AppDataDir("Muse")
+	// muse.config.json / muse.portable next to the exe can move the whole data
+	// root (db, generated images, logs) before anything is opened.
+	dataDirResolution, err := platform.ResolveDataDir("Muse")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "resolve application data directory: %v\n", err)
 		os.Exit(1)
 	}
+	dataDir := dataDirResolution.Path
 	log := setupLogging(dataDir)
+	log.Info("data directory resolved", "path", dataDir, "source", dataDirResolution.Source)
+	if dataDirResolution.Warning != "" {
+		log.Warn("data directory config ignored", "warning", dataDirResolution.Warning)
+	}
 	log.Info("muse build diagnostics", "fc2DiagnosticsVersion", fc2DiagnosticsVersion)
 	thumbDir := filepath.Join(dataDir, "thumbnails")
 	highlightDir := filepath.Join(dataDir, video.HighlightsRelativeDir)
