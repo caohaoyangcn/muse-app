@@ -8,7 +8,7 @@ import (
 // currentSchemaVersion is the highest applied schema version. It is tracked in
 // PRAGMA user_version. Bump it whenever a migration adds a column/table that
 // requires (or could benefit from) re-extracting data for pre-existing rows.
-const currentSchemaVersion = 30
+const currentSchemaVersion = 31
 
 // MigrationResult reports what happened during Migrate so callers can trigger
 // one-off backfills (e.g. re-probing ffprobe for videos created before a new
@@ -528,6 +528,17 @@ func Migrate(db *sql.DB) (MigrationResult, error) {
 		version = 30
 	}
 
+	if version < 31 {
+		// v31 adds the 精彩时刻 table. Existing favorites simply have none, and
+		// an older build ignores the table (and never sweeps highlights/), so
+		// the step is additive with no backfill. IF NOT EXISTS makes it
+		// repeatable for a database a repair already stamped past v31.
+		if _, err := db.Exec(schemaV31); err != nil {
+			return res, fmt.Errorf("migrate database v31 highlights: %w", err)
+		}
+		version = 31
+	}
+
 	res.SchemaVersion = version
 	if err := setUserVersion(db, version); err != nil {
 		return res, err
@@ -654,6 +665,37 @@ CREATE INDEX IF NOT EXISTS idx_videos_deleted_at ON videos(deleted_at);
 // "only archived rows" cheap.
 const schemaV26Indexes = `
 CREATE INDEX IF NOT EXISTS idx_videos_delete_reason ON videos(delete_reason);
+`
+
+// schemaV31 stores the 精彩时刻 of a favorite (docs/spec/highlight-moments.md).
+//
+// A row is one generated image — a single frame ("moment") or a looping GIF of a
+// time range ("range") — together with the state of the background job that
+// produces it. media_path is relative to the data dir and is written when the
+// row is inserted as queued, so the orphan sweep can recognise a file that is
+// still being generated as owned.
+//
+// No foreign key on purpose: this database does not enable foreign_keys, so the
+// cascade is done by sqliteRepository.Delete's transaction. Pure table creation;
+// additive, no backfill.
+const schemaV31 = `
+CREATE TABLE IF NOT EXISTS video_highlights (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id      INTEGER NOT NULL,
+    kind          TEXT NOT NULL CHECK (kind IN ('moment','range')),
+    start_ms      INTEGER NOT NULL,
+    end_ms        INTEGER NOT NULL DEFAULT 0,
+    media_path    TEXT NOT NULL DEFAULT '',
+    status        TEXT NOT NULL DEFAULT 'queued'
+                  CHECK (status IN ('queued','running','ready','failed')),
+    error         TEXT NOT NULL DEFAULT '',
+    interruptions INTEGER NOT NULL DEFAULT 0,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL,
+    finished_at   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_video_highlights_video ON video_highlights(video_id);
+CREATE INDEX IF NOT EXISTS idx_video_highlights_status ON video_highlights(status);
 `
 
 // userVersion reads PRAGMA user_version.

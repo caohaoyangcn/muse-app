@@ -1118,3 +1118,91 @@ func TestV27AddsTitleTranslationSchema(t *testing.T) {
 		t.Errorf("translation = %q, want it preserved across re-migrate", titleZh)
 	}
 }
+
+// TestV31CreatesHighlightTable verifies the 精彩时刻 storage: a v30 library gains
+// the table and its indexes without touching existing favorites, the defaults and
+// the two CHECK constraints are enforced, and re-migrating over a table that
+// already holds rows is a no-op.
+func TestV31CreatesHighlightTable(t *testing.T) {
+	db := openMigrated(t)
+	if _, err := Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	// Rewind to v30, which is what the previous release looks like.
+	for _, stmt := range []string{
+		`DROP TABLE IF EXISTS video_highlights`,
+		`PRAGMA user_version = 30`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("rewind to v30 (%s): %v", stmt, err)
+		}
+	}
+	if _, err := db.Exec(`INSERT INTO videos (path, file_name, file_size, created_at, updated_at, status) VALUES ('C:\v\a.mp4','a.mp4',1,1,1,'available')`); err != nil {
+		t.Fatalf("insert video: %v", err)
+	}
+
+	res, err := Migrate(db)
+	if err != nil {
+		t.Fatalf("migrate v30 -> v31: %v", err)
+	}
+	if res.SchemaVersion != currentSchemaVersion {
+		t.Errorf("schema version = %d, want %d", res.SchemaVersion, currentSchemaVersion)
+	}
+	exists, err := tableExists(db, "video_highlights")
+	if err != nil {
+		t.Fatalf("inspect table: %v", err)
+	}
+	if !exists {
+		t.Fatal("video_highlights table missing")
+	}
+	for _, column := range []string{"video_id", "kind", "start_ms", "end_ms", "media_path", "status", "error", "interruptions", "created_at", "updated_at", "finished_at"} {
+		if !hasColumn(db, "video_highlights", column) {
+			t.Errorf("video_highlights.%s missing", column)
+		}
+	}
+	for _, index := range []string{"idx_video_highlights_video", "idx_video_highlights_status"} {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?`, index).Scan(&n); err != nil || n != 1 {
+			t.Errorf("%s = %d, err=%v, want 1", index, n, err)
+		}
+	}
+
+	// The defaults are the ones the repository relies on when it inserts a
+	// queued row: no media yet, no error, no interruption, not finished.
+	if _, err := db.Exec(
+		`INSERT INTO video_highlights (video_id, kind, start_ms, created_at, updated_at) VALUES (1, 'moment', 90000, 5, 5)`,
+	); err != nil {
+		t.Fatalf("insert highlight: %v", err)
+	}
+	var kind, status, mediaPath, errText string
+	var endMs, finishedAt, interruptions int64
+	if err := db.QueryRow(
+		`SELECT kind, status, media_path, error, end_ms, finished_at, interruptions FROM video_highlights WHERE video_id=1`,
+	).Scan(&kind, &status, &mediaPath, &errText, &endMs, &finishedAt, &interruptions); err != nil {
+		t.Fatalf("read highlight defaults: %v", err)
+	}
+	if kind != "moment" || status != "queued" || mediaPath != "" || errText != "" ||
+		endMs != 0 || finishedAt != 0 || interruptions != 0 {
+		t.Errorf("highlight defaults = (%q, %q, %q, %q, %d, %d, %d)",
+			kind, status, mediaPath, errText, endMs, finishedAt, interruptions)
+	}
+
+	// Both CHECK constraints reject a value no code path writes.
+	for _, stmt := range []string{
+		`INSERT INTO video_highlights (video_id, kind, start_ms, created_at, updated_at) VALUES (1, 'clip', 0, 5, 5)`,
+		`INSERT INTO video_highlights (video_id, kind, start_ms, status, created_at, updated_at) VALUES (1, 'moment', 0, 'done', 5, 5)`,
+	} {
+		if _, err := db.Exec(stmt); err == nil {
+			t.Errorf("expected the CHECK constraint to reject %q", stmt)
+		}
+	}
+
+	// Re-migrating (the table now exists and holds a row) must keep the row.
+	if _, err := Migrate(db); err != nil {
+		t.Fatalf("re-migrate: %v", err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM video_highlights`).Scan(&count); err != nil || count != 1 {
+		t.Errorf("highlights after re-migrate = %d, err=%v, want 1", count, err)
+	}
+}

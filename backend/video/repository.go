@@ -115,6 +115,44 @@ type VideoRepository interface {
 	// ListVideoIDs returns the ids of every favorite, for reconciling the
 	// generated images on disk against the records that own them.
 	ListVideoIDs() ([]int64, error)
+
+	// ---- 精彩时刻 (docs/spec/highlight-moments.md §4.3) ----
+	//
+	// The rows in video_highlights are the durable truth behind the generator:
+	// the queue only carries ids, so every transition is a conditional UPDATE
+	// whose rows-affected answer tells the worker whether the user deleted the
+	// row under it.
+	CreateHighlight(h *Highlight) error
+	// GetHighlight reads one row by id; the worker uses it because it already
+	// holds the id.
+	GetHighlight(id int64) (*Highlight, error)
+	// GetVideoHighlight reads one row and proves it belongs to the favorite.
+	// Every user-facing operation goes through it, so an id from another
+	// favorite cannot be read, retried or deleted.
+	GetVideoHighlight(videoID, id int64) (*Highlight, error)
+	// ListHighlights returns a favorite's highlights in timeline order.
+	ListHighlights(videoID int64) ([]Highlight, error)
+	// ListQueuedHighlightIDs returns the ids to (re)queue at startup.
+	ListQueuedHighlightIDs() ([]int64, error)
+	// ListHighlightMediaPaths returns every recorded media path, pending rows
+	// included: a file being generated is owned, so the sweep must keep it.
+	ListHighlightMediaPaths() ([]string, error)
+	// ClaimHighlight moves a queued row to running. It reports false when the
+	// row is gone or is no longer queued.
+	ClaimHighlight(id int64) (bool, error)
+	// FinishHighlight writes a terminal status. It reports false when the row
+	// has been deleted, which is the worker's signal to discard the file it
+	// just generated.
+	FinishHighlight(id int64, status, errMsg string, finishedAt int64) (bool, error)
+	// RetryHighlight moves a failed row back to queued.
+	RetryHighlight(videoID, id int64) (bool, error)
+	// RecoverHighlights re-queues the rows a crash or a quit interrupted. A
+	// running row has its interruption counter bumped; at maxInterruptions it
+	// is marked failed instead of being retried forever.
+	RecoverHighlights(maxInterruptions int) (requeue []int64, failed int, err error)
+	// DeleteHighlight removes one row. It is a no-op when the row is already
+	// gone, so a stale client still sees success.
+	DeleteHighlight(videoID, id int64) error
 }
 
 type sqliteRepository struct {
@@ -335,10 +373,28 @@ func (r *sqliteRepository) ListArchived() ([]Video, error) {
 	return r.query(`SELECT `+videoColumns+` FROM videos WHERE deleted_at IS NOT NULL AND delete_reason = ? ORDER BY deleted_at DESC, id DESC`, TrashReasonArchived)
 }
 
+// Delete is the permanent delete. It drops the favorite's 精彩时刻 rows in the
+// same transaction as the favorite itself, so a permanent delete can never leave
+// highlight records pointing at a video that no longer exists. The generated
+// files are not touched here: the orphan sweep deletes everything no row refers
+// to any more (the media_path values are gone with the rows).
+//
+// No ON DELETE CASCADE is used because SQLite foreign keys are not enabled on
+// this connection (see docs/spec/highlight-moments.md §4.1).
 func (r *sqliteRepository) Delete(id int64) error {
-	_, err := r.db.Exec(`DELETE FROM videos WHERE id = ?`, id)
+	tx, err := r.db.Begin()
 	if err != nil {
 		return fmt.Errorf("delete video: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`DELETE FROM video_highlights WHERE video_id = ?`, id); err != nil {
+		return fmt.Errorf("delete video highlights: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM videos WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("delete video: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("delete video commit: %w", err)
 	}
 	return nil
 }
