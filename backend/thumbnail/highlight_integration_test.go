@@ -34,15 +34,15 @@ func requireFFmpeg(t *testing.T) (ffmpegBin string, videoPath string) {
 	return bin, out
 }
 
-// probeClip reports the codec, frame rate and duration of a rendered file.
-func probeClip(t *testing.T, path string) (codec string, fps float64, frames int, duration float64) {
+// probeClip reports the stream facts of a rendered file.
+func probeClip(t *testing.T, path string) (codec string, fps float64, frames int, duration float64, width, height int) {
 	t.Helper()
 	ffprobe, err := exec.LookPath("ffprobe")
 	if err != nil {
 		t.Skip("ffprobe not on PATH; skipping integration test")
 	}
 	out, err := exec.Command(ffprobe, "-v", "error", "-select_streams", "v:0",
-		"-show_entries", "stream=codec_name,avg_frame_rate,nb_frames,duration",
+		"-show_entries", "stream=codec_name,avg_frame_rate,nb_frames,duration,width,height",
 		"-of", "default=nw=1", path).Output()
 	if err != nil {
 		t.Fatalf("ffprobe %s: %v", path, err)
@@ -66,9 +66,13 @@ func probeClip(t *testing.T, path string) (codec string, fps float64, frames int
 			frames, _ = strconv.Atoi(value)
 		case "duration":
 			duration, _ = strconv.ParseFloat(value, 64)
+		case "width":
+			width, _ = strconv.Atoi(value)
+		case "height":
+			height, _ = strconv.Atoi(value)
 		}
 	}
-	return codec, fps, frames, duration
+	return codec, fps, frames, duration, width, height
 }
 
 func TestGenerateHighlightMomentIntegration(t *testing.T) {
@@ -104,9 +108,17 @@ func TestGenerateHighlightClipIntegration(t *testing.T) {
 		t.Fatalf("output is not an MP4 (first bytes %q)", data[:min(12, len(data))])
 	}
 
-	codec, fps, frames, duration := probeClip(t, out)
+	codec, fps, frames, duration, width, height := probeClip(t, out)
 	if codec != "h264" {
 		t.Errorf("codec = %q, want h264", codec)
+	}
+	// The test source is 320 wide, below the 960 cap: it must come out at its own
+	// size. Upscaling would only make the file bigger and softer.
+	if width != 320 {
+		t.Errorf("width = %d, want the source width 320 (clips are never upscaled)", width)
+	}
+	if height != 240 {
+		t.Errorf("height = %d, want the source height 240", height)
 	}
 	if fps < 59 || fps > 61 {
 		t.Errorf("fps = %v, want 60", fps)

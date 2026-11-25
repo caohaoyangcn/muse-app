@@ -58,7 +58,13 @@ func TestClipArgsProduceALoopableMutedMP4(t *testing.T) {
 	}
 
 	filter := args[indexOf(args, "-vf")+1]
-	for _, want := range []string{"fps=60", "scale=480:-2:flags=lanczos", "setsar=1"} {
+	for _, want := range []string{
+		"fps=60",
+		// The width is capped by the source so a small favorite is not upscaled
+		// into a blurrier, bigger file.
+		"scale='min(960,iw)':-2:flags=lanczos",
+		"setsar=1",
+	} {
 		if !strings.Contains(filter, want) {
 			t.Errorf("filter = %q missing %q", filter, want)
 		}
@@ -69,7 +75,7 @@ func TestClipArgsProduceALoopableMutedMP4(t *testing.T) {
 	joined := strings.Join(args, " ")
 	for _, want := range []string{
 		"-c:v libx264",
-		"-crf 26",
+		"-crf 22",
 		"-pix_fmt yuv420p",
 		"-movflags +faststart",
 	} {

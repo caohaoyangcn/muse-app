@@ -35,14 +35,18 @@ const (
 	// HighlightMomentWidth is the width of a saved moment frame. The height
 	// follows the source aspect ratio.
 	HighlightMomentWidth = 1280
-	// HighlightClipWidth is the width of a looping range. 480 is the scale the
-	// GIF version established, kept so a saved highlight looks the same as it did
-	// before the switch; at 60 fps a 20 s range is around 750 KB, so this is now a
-	// quality/size choice rather than a hard limit.
-	HighlightClipWidth = 480
-	// clipCRF trades size for quality at a fixed quantiser. 26 is visually
-	// transparent at 480 px and keeps a 20 s range under a megabyte.
-	clipCRF = "26"
+	// HighlightClipWidth is the width of a looping range, capped by the source: a
+	// 1080p favorite is scaled down to 960, a 640-wide one is left alone rather
+	// than blown up into a blurrier, bigger file.
+	//
+	// It started at 480 (the GIF's width), which reads as soft as soon as the clip
+	// is shown at dialog or lightbox size — the display upscales it. At 60 fps a
+	// 20 s range from a 1080p source is around 1.6 MB at 960, so width stopped
+	// being the thing the format forces us to trade away.
+	HighlightClipWidth = 960
+	// clipCRF trades size for quality at a fixed quantiser. 22 keeps a downscaled
+	// 960-wide clip crisp; 26 was fine at 480 and soft at 960.
+	clipCRF = "22"
 	// clipPreset: medium is the default speed/size balance; these clips are short,
 	// so a faster preset would only save a fraction of a second.
 	clipPreset = "medium"
@@ -83,6 +87,11 @@ func MomentArgs(videoPath string, atMs int64, outPath string) []string {
 // would only add bytes. +faststart moves the index to the front so a phone can
 // start playing before the file has finished arriving over the LAN. setsar=1
 // removes any anamorphic pixel aspect so the browser does not stretch the frame.
+//
+// The width is capped by the source instead of a fixed scale: `min(960,iw)` keeps
+// a small favorite at its own size. The single quotes belong to ffmpeg's filter
+// parser (they protect the comma inside min()), not to a shell — the whole -vf
+// value is one argument.
 func ClipArgs(videoPath string, startMs, endMs int64, fps int, outPath string) []string {
 	return []string{
 		"-y", "-hide_banner", "-loglevel", "error",
@@ -90,7 +99,7 @@ func ClipArgs(videoPath string, startMs, endMs int64, fps int, outPath string) [
 		"-t", formatSeconds(endMs - startMs),
 		"-i", videoPath,
 		"-an",
-		"-vf", fmt.Sprintf("fps=%d,scale=%d:-2:flags=lanczos,setsar=1", fps, HighlightClipWidth),
+		"-vf", fmt.Sprintf("fps=%d,scale='min(%d,iw)':-2:flags=lanczos,setsar=1", fps, HighlightClipWidth),
 		"-c:v", "libx264",
 		"-preset", clipPreset,
 		"-crf", clipCRF,
