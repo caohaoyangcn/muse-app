@@ -10,6 +10,7 @@ import type {
   BackgroundTasks,
   ContentDuplicateGroup,
   ContentScanStatus,
+  Highlight,
   JavDetail,
   JavDuplicateGroup,
   JavTaskOverview,
@@ -519,3 +520,57 @@ export const BACKGROUND: BackgroundTasks = {
     },
   ],
 } as BackgroundTasks;
+
+/**
+ * 详情页「精彩时刻」。预览里给两部片各配两行已完成的结果，这样截图/循环视频
+ * 两种卡片、时间戳和「重新生成」都能渲染出来；媒体路径走预览服务器的
+ * /covers/* 兜底图，不依赖任何真实文件。
+ */
+export const HIGHLIGHTS: Record<number, Highlight[]> = {
+  1: [
+    {
+      id: 9101,
+      videoId: 1,
+      kind: "moment",
+      startMs: 512_000,
+      endMs: 0,
+      mediaPath: "covers/h-muse-101-1.jpg",
+      status: "ready",
+      error: "",
+      interruptions: 0,
+      createdAt: NOW - 3 * HOUR,
+      updatedAt: NOW - 3 * HOUR + 4_000,
+      finishedAt: NOW - 3 * HOUR + 4_000,
+    },
+    {
+      id: 9102,
+      videoId: 1,
+      kind: "moment",
+      startMs: 1_830_000,
+      endMs: 0,
+      mediaPath: "covers/h-muse-101-2.jpg",
+      status: "ready",
+      error: "",
+      interruptions: 0,
+      createdAt: NOW - 2 * HOUR,
+      updatedAt: NOW - 2 * HOUR + 9_000,
+      finishedAt: NOW - 2 * HOUR + 9_000,
+    },
+  ],
+  2: [
+    {
+      id: 9103,
+      videoId: 2,
+      kind: "moment",
+      startMs: 402_000,
+      endMs: 0,
+      mediaPath: "covers/h-aura-208-1.jpg",
+      status: "ready",
+      error: "",
+      interruptions: 0,
+      createdAt: NOW - 5 * HOUR,
+      updatedAt: NOW - 5 * HOUR + 3_000,
+      finishedAt: NOW - 5 * HOUR + 3_000,
+    },
+  ],
+};

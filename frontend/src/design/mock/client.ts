@@ -11,6 +11,7 @@ import {
   ACTORS,
   BACKGROUND,
   CONTENT_DUPLICATES,
+  HIGHLIGHTS,
   CONTENT_SCAN_STATUS,
   JAV_DUPLICATES,
   JAV_TASK_OVERVIEWS,
@@ -56,6 +57,7 @@ export const mockClient: MuseClient = {
     );
   },
   listActors: () => Promise.resolve(ACTORS),
+  listVideoHighlights: (videoId) => Promise.resolve(HIGHLIGHTS[videoId] ?? []),
   videosByActor: (name) =>
     Promise.resolve(videos.filter((video) => video.actors.includes(name))),
   similarVideos: (videoId) =>
