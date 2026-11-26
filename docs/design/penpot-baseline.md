@@ -46,9 +46,15 @@ PLAYWRIGHT_MODULE=/path/to/playwright node frontend/scripts/dump-design-dom.mjs
    直接取 RGB 会让侧栏选中态变成整块实心紫。
 5. **图标导成矢量，不要用字符代替**。`penpot.createShapeFromSvg(svg.outerHTML)`，
    之后把 path 的 `fills` 清空、只保留 stroke（lucide 是描边图标）。
-6. **文本框要比实测宽**。Penpot 没有 `Segoe UI`，替代字体更宽，按实测宽度会换行
-   （「保存」会竖排）。宽度取 `max(实测宽, 按字符估算宽) + 4`，CJK 按 `fs × 1.02`、
-   拉丁按 `fs × 0.54` 估。
+6. **文本框宽度按实测值给，单行文本按字符估算兜底**。若设计工具与运行时的字体不同，
+   按实测宽度会换行（「保存」会竖排）。宽度取 `max(实测宽, 按字符估算宽) + 4`，
+   CJK 按 `fs × 1.02`、拉丁按 `fs × 0.54` 估；或者干脆把字体随包分发，两边同字。
+7. **长文本要在抓取时截断**。CSS 的 `text-overflow: ellipsis` 在设计工具里没有等价能力，
+   直接把完整字符串导进去只会折行或溢出。`dump-design-dom.mjs` 会按浏览器实测的
+   `clientWidth` 二分裁剪并补 `…`，导入后位置和长度都与实现一致。
+8. **封面要按 `object-fit` 语义裁剪**。`CoverImage` 的 `portrait` 只露右半、`landscape`
+   等比填充。导入时用一个固定尺寸的裁剪容器包住海报：竖框按高度缩放并右对齐，横框按
+   `max(宽比, 高比)` 缩放并居中，否则海报里的文字会跑到卡片中间。
 
 ## 在另一台机器接入（同一账号，同一份稿）
 
