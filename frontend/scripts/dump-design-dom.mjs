@@ -118,14 +118,31 @@ function extract() {
         }
 
         const src = tag === "img" ? el.currentSrc || el.src : null;
-        const painted =
+        const hasPaint =
           (background && background.a > 0.02) ||
           borderColor ||
           tag === "svg" ||
           text ||
           src;
 
-        if (painted) {
+        // 透明但承担布局的 flex 包裹层也必须输出：层级和方向信息全在它们身上。
+        // 只导出"画得出像素"的节点，重建出来的就只剩一堆绝对坐标，
+        // 也就是为什么第一版设计稿改不动。
+        // 只保留"有意义"的包裹层：包住多个子元素，或自己带 padding/gap。
+        // 单子节点、零内边距的 pass-through 层折掉，否则一份设计稿会被
+        // Tailwind 的包装 div 灌到上万图层。
+        const numPad = (v) => Math.abs(parseFloat(v) || 0);
+        const inset =
+          numPad(style.paddingTop) + numPad(style.paddingRight) +
+          numPad(style.paddingBottom) + numPad(style.paddingLeft);
+        const spacing = numPad(style.rowGap) + numPad(style.columnGap);
+        const isLayoutWrapper =
+          !hasPaint &&
+          /flex/.test(style.display) &&
+          el.childElementCount > 0 &&
+          (el.childElementCount > 1 || inset > 0 || spacing > 0);
+
+        if (hasPaint || isLayoutWrapper) {
           const node = {
             t: tag,
             x: px(rect.x),
@@ -142,6 +159,7 @@ function extract() {
             color: rgba(style.color) ? rgba(style.color).hex : null,
             txt: text ? text.slice(0, 140) : null,
             op: parseFloat(style.opacity),
+            ...(hasPaint ? {} : { structural: true }),
           };
           // 布局属性：视觉几何说明"现在长什么样"，这些说明"为什么长这样"。
           // 有了它们才能把 DOM 的 flex 容器还原成设计工具里的 auto-layout，
