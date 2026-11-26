@@ -43,6 +43,16 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - 前端：`frontend/` 下跑 `npm test`（Vitest + jsdom，约 3 秒）。测试写在源码旁的 `*.test.ts(x)`，夹具在 `src/test/fixtures.ts`。按行为断言，覆盖那些「错了也不会报错、只是界面悄悄不对」的逻辑：`usePagedList` 的页契约（每页条数、上下页夹取、页深按列表身份记忆、数据未到时不清空页深、键盘选中跨页跟随）、`utils/pagination` 的页码快捷窗口（第 1 页 / 当前页前后各 5 页 / 最后一页，首末不重复，跳空处的 `…` 标记）、`utils/libraryFilter` 的标签/演员/硬盘筛选语义、`utils/hiddenTags` 的快捷标签隐藏与恢复、`utils/diskFilter`、`utils/sortVideos`、`utils/videoName`。修这类共享逻辑的 bug 时，先补一条能复现的测试再改实现。
 - 断言的写法：一条测试只钉一个行为，名称描述用户可见的结果，不测实现细节（不写「调用了 setRows」，写「滚动后窗口跟着移动」）
 
+## UI 变更流程（先交互稿，后编码）
+
+- **任何影响用户可见界面的改动**（布局、层级、组件结构、新增/删除入口、状态与文案），先在 **Penpot 设计文件**上改并评审通过，**再动 `frontend/src/`**。细则见 `docs/design/ui-change-process.md`，基线说明见 `docs/design/penpot-baseline.md`
+- 改版从 **Penpot 基线屏**出发：复制 `Screens / HiFi（DOM 实测）` 里受影响的屏改名 `NN 描述（<slug>）`，在副本上改；**基线屏禁止手改**（手改即与实现失真），要改基线就改代码再重导
+- 交互稿放 `docs/design/changes/<slug>/`：`README.md`（目标、受影响视图、状态清单、待决问题）+ 每个**状态**一张图（默认/空/加载/错误/超长内容/未接入）+ 多步交互的 `flow.md`；两端都有的界面同时给 1440×900 与 390×844
+- 评审看"变更后的样子"而不是描述，逐条过清单（层级、状态完整、两端口径、文案、组件复用、可达性、token 一致性）；结论写回该目录的 `README.md`
+- 实现中发现稿子不可行，**回到交互稿改**，不要在代码里悄悄改布局；PR 必须链接该目录并写明「与交互稿的差异」（无差异写"无"）
+- 落地后回写，保持"稿 = 实现"：重跑 `frontend/scripts/capture-design.mjs` 刷新 `docs/design/screenshots/`，再重跑 `frontend/scripts/dump-design-dom.mjs` 把受影响的屏按新 DOM 重导进 Penpot 基线；变更副本屏保留并标注 `<slug>` 与日期。不留"旧稿 = 真相"
+- 例外：纯文案/颜色/图标替换可免画稿（PR 注明"结构未变"）；缺陷修复用"复现截图 + 修复后截图"代替；内部重构需说明"用户可见差异为零"
+
 ## 提交与 Pull Request 规范
 
 - 历史提交采用短小祈使句并带类型前缀：`Add …`、`Fix …`、`Refactor …`、`Support …`（例如 `Fix saving state stuck after assign`）
