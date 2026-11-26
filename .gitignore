@@ -11,6 +11,9 @@
 # Node dependencies
 /frontend/node_modules/
 
+# DOM snapshots dumped for the Penpot baseline (regenerate, do not commit)
+/.design-dom/
+
 # Local tooling / session caches
 /.zcode/
 /.dsh/
