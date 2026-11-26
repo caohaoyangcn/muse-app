@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:design": "vite --config design.preview.config.ts",
     "build:all": "npm run build && npm run build:mobile",
     "build": "tsc && vite build",
     "build:mobile": "tsc && vite build --config vite.mobile.config.ts && node scripts/finalize-mobile.mjs",

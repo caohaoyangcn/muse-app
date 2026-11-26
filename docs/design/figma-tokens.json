@@ -1,0 +1,133 @@
+{
+  "$description": "Muse Video · 产品 token。源文件是 frontend/src/theme.css，本文件是它的机器可读镜像：改这里不会改代码，改 theme.css 之后请同步。用 Tokens Studio for Figma 的 Import 功能导入，得到一个 Collection「Muse / Dark」。",
+  "color": {
+    "$type": "color",
+    "bg": { "$value": "#17171b", "$description": "--bg · 页面底色" },
+    "panel": { "$value": "#1d1d23", "$description": "--panel · 面板 / 弹层" },
+    "panel-2": { "$value": "#232329", "$description": "--panel-2 · 面板内层、输入框底" },
+    "card": { "$value": "#26262d", "$description": "--card · 卡片" },
+    "border": { "$value": "#32323a", "$description": "--border · 描边；分隔线与卡片边都用它" },
+    "text": { "$value": "#e9e9ec", "$description": "--text · 主文字" },
+    "muted": { "$value": "#9b9ba5", "$description": "--muted · 次要文字、元信息" },
+    "accent": { "$value": "#7c5cff", "$description": "--accent · 强调、选中、主按钮" },
+    "accent-hover": { "$value": "#8f74ff", "$description": "--accent-hover · 强调悬停" },
+    "danger": { "$value": "#e5534b", "$description": "--danger · 危险操作与错误" },
+    "on-accent": { "$value": "#ffffff", "$description": "--color-on-accent · 强调色上的文字" }
+  },
+  "alpha": {
+    "$type": "color",
+    "accent-muted": {
+      "$value": "#7c5cff38",
+      "$description": "--color-accent-muted · accent 22% 透明度（选中底色）"
+    },
+    "danger-muted": {
+      "$value": "#e5534b38",
+      "$description": "--color-error-muted · danger 22% 透明度"
+    }
+  },
+  "semantic": {
+    "$description": "Astryx 桥接层：主题里这些名字指向上面的产品 token，Figma 侧用同一套名字命名 Variables，代码与设计稿才对得上。",
+    "background": {
+      "$type": "color",
+      "body": { "$value": "{color.bg}" },
+      "surface": { "$value": "{color.panel-2}" },
+      "card": { "$value": "{color.card}" },
+      "popover": { "$value": "{color.panel}" },
+      "muted": { "$value": "{color.panel}" }
+    },
+    "text": {
+      "$type": "color",
+      "primary": { "$value": "{color.text}" },
+      "secondary": { "$value": "{color.muted}" },
+      "accent": { "$value": "{color.accent}" }
+    },
+    "border": {
+      "$type": "color",
+      "default": { "$value": "{color.border}" },
+      "emphasized": { "$value": "{color.border}" }
+    }
+  },
+  "radius": {
+    "$type": "dimension",
+    "badge": { "$value": "5px", "$description": "小徽标 / 角标" },
+    "input-inner": { "$value": "6px", "$description": "输入框内元素" },
+    "element": { "$value": "10px", "$description": "--radius · 按钮、卡片、面板" },
+    "container": { "$value": "12px", "$description": "--radius-container · 大容器（radius + 2）" },
+    "pill": { "$value": "999px", "$description": "胶囊：chip、计数、分页按钮" }
+  },
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "body": { "$value": "Segoe UI" },
+      "heading": { "$value": "Segoe UI" }
+    },
+    "size": {
+      "$type": "dimension",
+      "badge": { "$value": "10px", "$description": "角标、紧凑徽标" },
+      "caption": { "$value": "11px", "$description": "计数、元信息" },
+      "body": { "$value": "13px", "$description": "正文与导航（默认）" },
+      "toolbar": { "$value": "15px", "$description": "工具栏标题" },
+      "title": { "$value": "17px", "$description": "页面标题" },
+      "heading": { "$value": "20px", "$description": "详情标题" },
+      "display": { "$value": "22px", "$description": "空状态标题" }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "regular": { "$value": 400 },
+      "medium": { "$value": 500 },
+      "semibold": { "$value": 600 }
+    },
+    "lineHeight": {
+      "$type": "number",
+      "tight": { "$value": 1.35, "$description": "标题" },
+      "body": { "$value": 1.5, "$description": "正文" }
+    }
+  },
+  "space": {
+    "$description": "4px 基准。工具栏内边距 20，卡片内边距 12，区块间距 20–24。",
+    "$type": "dimension",
+    "1": { "$value": "4px" },
+    "2": { "$value": "8px" },
+    "3": { "$value": "12px" },
+    "4": { "$value": "16px" },
+    "5": { "$value": "20px" },
+    "6": { "$value": "24px" },
+    "8": { "$value": "32px" }
+  },
+  "shadow": {
+    "$type": "boxShadow",
+    "card-hover": {
+      "$value": {
+        "x": "0",
+        "y": "4px",
+        "blur": "16px",
+        "spread": "0",
+        "color": "#00000059",
+        "type": "dropShadow"
+      },
+      "$description": "卡片悬停抬升（配合 translateY(-0.5)）"
+    },
+    "selection": {
+      "$value": {
+        "x": "0",
+        "y": "0",
+        "blur": "0",
+        "spread": "1px",
+        "color": "#7c5cff",
+        "type": "dropShadow"
+      },
+      "$description": "选中态外发光：0 0 0 1px accent + 4px 16px 25% accent"
+    },
+    "popover": {
+      "$value": {
+        "x": "0",
+        "y": "6px",
+        "blur": "20px",
+        "spread": "0",
+        "color": "#00000066",
+        "type": "dropShadow"
+      },
+      "$description": "浮层 / 提示条投影"
+    }
+  }
+}

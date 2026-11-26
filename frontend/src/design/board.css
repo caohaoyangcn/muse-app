@@ -1,0 +1,16 @@
+/* The shell locks the document to one viewport (src/style.css: `html, body`
+ * are 100vh with overflow hidden) because the app owns all inner scrolling.
+ * A design sheet is a long page, so this unlocks the document for the board
+ * only — `html[data-design-board]` is set by board-main.tsx and never by the
+ * app entry. */
+html[data-design-board],
+html[data-design-board] body {
+  width: auto;
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+}
+
+html[data-design-board] #root {
+  height: auto;
+}
