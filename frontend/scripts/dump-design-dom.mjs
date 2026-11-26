@@ -88,6 +88,35 @@ function extract() {
           (el.childElementCount === 0 ? (el.textContent || "").trim() : "");
         if (!text && tag === "input" && el.placeholder) text = el.placeholder;
 
+        // CSS 用 `text-overflow: ellipsis` 把长文本截断，Penpot 没有等价能力。
+        // 这里按浏览器实际可容纳的宽度把字符串裁成带省略号的版本，导入后就不必
+        // 依赖设计工具去猜截断位置。
+        if (text && el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0) {
+          const limit = el.clientWidth;
+          const fits = (candidate) => {
+            const probe = el.cloneNode(false);
+            probe.textContent = candidate;
+            probe.style.position = "absolute";
+            probe.style.visibility = "hidden";
+            probe.style.whiteSpace = "nowrap";
+            probe.style.width = "auto";
+            document.body.appendChild(probe);
+            const width = probe.getBoundingClientRect().width;
+            probe.remove();
+            return width <= limit;
+          };
+          if (!fits(text)) {
+            let low = 0;
+            let high = text.length;
+            while (low < high) {
+              const mid = Math.ceil((low + high) / 2);
+              if (fits(text.slice(0, mid) + "…")) low = mid;
+              else high = mid - 1;
+            }
+            text = text.slice(0, low).trimEnd() + "…";
+          }
+        }
+
         const src = tag === "img" ? el.currentSrc || el.src : null;
         const painted =
           (background && background.a > 0.02) ||

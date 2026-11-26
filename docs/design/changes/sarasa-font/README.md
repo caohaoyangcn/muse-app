@@ -63,4 +63,9 @@ README 原文：`a CJK composite font based on Inter, Iosevka and Source Han San
   增加 `document.fonts.ready` 等待，避免抓到回退字形。
 - 效果：01 屏与真实截图的像素差 平均 3.32 → **3.03**，≤24/255 由 96.9% → **97.3%**，
   大偏差（>48）由 2.0% → **1.7%**。
-- 待办：Penpot 基线 21–25 屏（移动端）待重导。
+- Penpot 基线 25 屏全部重导完成，文本层显式 `fontFamily: "Sarasa UI SC"`，无残留默认字体。
+- 导入器这次补了两条规则（详见 `docs/design/penpot-baseline.md`）：封面按 `object-fit` 语义
+  裁剪（竖版露右半，横版等比填充）；长文本按浏览器实测宽度截断成 `…`，因为 Penpot 没有
+  CSS 的 `text-overflow: ellipsis`。
+- 已知残留：移动端像素差（01 桌面 mean 3.03 / ≤24 97.3%；21 移动 mean 9.27 / ≤24 80.3%）
+  偏高的主因是 3× 截图画布压到 1× 对比时的重采样差异，不是布局错位。
