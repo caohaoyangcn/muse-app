@@ -143,6 +143,35 @@ function extract() {
             txt: text ? text.slice(0, 140) : null,
             op: parseFloat(style.opacity),
           };
+          // 布局属性：视觉几何说明"现在长什么样"，这些说明"为什么长这样"。
+          // 有了它们才能把 DOM 的 flex 容器还原成设计工具里的 auto-layout，
+          // 而不是把每个子元素钉死在坐标上（钉死之后改版=重排一遍）。
+          const display = style.display;
+          if (display === "flex" || display === "inline-flex") {
+            const num = (v) => Math.round((parseFloat(v) || 0) * 10) / 10;
+            node.layout = {
+              dir: style.flexDirection === "column" ? "column" : "row",
+              wrap: style.flexWrap === "wrap" || style.flexWrap === "wrap-reverse",
+              row: num(style.rowGap),
+              col: num(style.columnGap),
+              pad: [
+                num(style.paddingTop),
+                num(style.paddingRight),
+                num(style.paddingBottom),
+                num(style.paddingLeft),
+              ],
+              ai: style.alignItems,
+              jc: style.justifyContent,
+            };
+          }
+          // 父容器是 flex 时，子项怎么分宽度：0 = 不抢，1 = 吃掉剩余空间。
+          const parent = el.parentElement;
+          if (parent && /flex/.test(getComputedStyle(parent).display)) {
+            node.flexGrow = parseFloat(style.flexGrow) || 0;
+            node.flexShrink = parseFloat(style.flexShrink) || 0;
+            node.flexBasis = style.flexBasis === "auto" ? null : Math.round(parseFloat(style.flexBasis) || 0);
+          }
+
           if (tag === "svg" && rect.width >= 8) {
             node.svg = el.outerHTML.slice(0, 2600);
           }
