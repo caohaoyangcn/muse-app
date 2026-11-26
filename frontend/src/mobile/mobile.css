@@ -33,7 +33,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: "Sarasa UI SC", system-ui, sans-serif;
   font-size: 15px;
   /* The shell behaves like an app: no rubber-band bounce on the page itself,
      no tap flash. Scroll containers opt back in individually. */

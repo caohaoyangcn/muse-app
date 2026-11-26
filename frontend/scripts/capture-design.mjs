@@ -69,6 +69,7 @@ async function fresh(browser) {
   page.on("pageerror", (error) => console.error(`  pageerror: ${error.message}`));
   await page.goto(BASE, { waitUntil: "networkidle" });
   await page.waitForSelector("[data-video-id]", { timeout: 15000 });
+  await page.evaluate(() => document.fonts.ready);
   await settle(page);
   return page;
 }
@@ -87,6 +88,7 @@ async function captureMobile(browser) {
     });
     page.on("pageerror", (error) => console.error(`  mobile pageerror: ${error.message}`));
     await page.goto(url, { waitUntil: "networkidle" });
+    await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(900);
     return page;
   }

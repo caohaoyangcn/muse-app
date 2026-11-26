@@ -49,7 +49,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: "Sarasa UI SC", system-ui, sans-serif;
   font-size: 14px;
   user-select: none;
 }

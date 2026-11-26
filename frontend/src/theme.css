@@ -1,3 +1,30 @@
+/* Sarasa UI SC（更纱黑体 UI 版）：Inter 的拉丁 + 思源黑体的 CJK，随应用分发，
+   让桌面端、局域网移动壳与设计预览渲染同一套字形。SIL OFL 1.1，见 public/fonts/OFL.txt（随构建复制到 dist/fonts/）。
+   font-display: block —— 宁可短暂不显示，也不要先闪一版回退字体（截图会抓到错的字形）。 */
+@font-face {
+  font-family: "Sarasa UI SC";
+  src: url("./assets/fonts/SarasaUiSC-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Sarasa UI SC";
+  src: url("./assets/fonts/SarasaUiSC-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Sarasa UI SC";
+  src: url("./assets/fonts/SarasaUiSC-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
 /* Product theme tokens — the single source of truth for both clients.
  *
  * The desktop app (src/style.css) and the LAN web client (src/mobile/mobile.css)
@@ -69,6 +96,6 @@
   --radius-element: var(--radius);
   --radius-container: calc(var(--radius) + 2px);
 
-  --font-family-body: "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-family-heading: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-family-body: "Sarasa UI SC", system-ui, sans-serif;
+  --font-family-heading: "Sarasa UI SC", system-ui, sans-serif;
 }

@@ -187,6 +187,7 @@ async function fresh(browser) {
   page.on("pageerror", (error) => console.error(`  pageerror: ${error.message}`));
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("[data-video-id]", { timeout: 25000 });
+  await page.evaluate(() => document.fonts.ready);
   await settle(page);
   return page;
 }
@@ -203,6 +204,7 @@ async function openMobile(browser) {
   await page.goto(BASE.replace("preview.html", "preview-mobile.html"), {
     waitUntil: "domcontentloaded",
   });
+  await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(1400);
   return page;
 }

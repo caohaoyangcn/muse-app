@@ -87,7 +87,7 @@ export default function Board() {
         </div>
       </Section>
 
-      <Section title="Typography" note="Segoe UI · 字号按实际使用频次收敛，无 24px 以上展示体">
+      <Section title="Typography" note="Sarasa UI SC · 字号按实际使用频次收敛，无 24px 以上展示体">
         <div className="space-y-3">
           {TYPE_SCALE.map(([size, usage, source]) => (
             <div key={size} className="flex items-baseline gap-6">
