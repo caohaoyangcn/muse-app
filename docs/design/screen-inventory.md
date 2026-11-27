@@ -5,7 +5,7 @@
 - 抓取方式：`npm run dev:design` + [capture-design.mjs](../../frontend/scripts/capture-design.mjs)
 - 桌面端：1440×900 @2×（应用默认窗口 1100×720，截图取更大视口以便看清信息密度）
 - 移动端：390×844 @3×（iPhone 14 逻辑宽度）
-- 字体：`Segoe UI`。抓取机是 macOS，浏览器回落到 Helvetica/SF，**字宽与 Windows 上略有差异**；Figma 里请把字体显式设为 `Segoe UI`，再用截图做位置参考而非逐像素对齐。
+- 字体：`Sarasa UI SC`（随包分发，见 `frontend/src/assets/fonts/`）。设计工具里显式设同一字体，三端同字；但两侧渲染管线不同，字形边缘仍有差异，用截图做位置参考而非逐像素对齐。
 
 ## 桌面端（Wails 壳）
 

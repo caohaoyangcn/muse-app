@@ -67,7 +67,7 @@
 | 桌面视口 | 1440×900，另加 1100×720 | 1100×720 是 `main.go` 的默认窗口；960×600 是最小尺寸，顶栏会换行 |
 | 移动视口 | 390×844 | 移动壳按此宽度设计 |
 | 缩放 | 100%（`--ui-zoom: 1`） | CSS `zoom` 会改变所有元素的实际尺寸，非 1 时导入会整体放大/缩小 |
-| 字体 | **Segoe UI** | 代码里的字体栈是 `"Segoe UI", system-ui, …`；在 macOS 上抓图会回落，位置需按截图微调 |
+| 字体 | **Sarasa UI SC** | 代码字体栈是 `"Sarasa UI SC", system-ui, sans-serif`，字体随包分发（`frontend/src/assets/fonts/`），Penpot 团队字体库同名；三端同字，不必再为字体回落做位置补偿 |
 | 主题 | Dark | 应用只有暗色主题（`color-scheme: dark`） |
 
 ## 3. 图层与组件命名（Figma ↔ 代码一张表）
@@ -102,7 +102,7 @@
 与 [figma-tokens.json](figma-tokens.json) 一一对应，**不要另起一套名字**：
 
 - **Variables**：Collection `Muse / Dark`，分组 `color/*`、`radius/*`、`space/*`、`font/size/*`。深层语义（`semantic.background.*` 等）建第二组，值引用第一组 —— 这样「换皮」才只需要改一处。
-- **Text styles**：`Badge 10`、`Caption 11`、`Body 13`、`Toolbar 15`、`Title 17`、`Heading 20`、`Display 22`，字体 Segoe UI，行高 1.5（标题 1.35）。
+- **Text styles**：`Badge 10`、`Caption 11`、`Body 13`、`Toolbar 15`、`Title 17`、`Heading 20`、`Display 22`，字体 Sarasa UI SC，行高 1.5（标题 1.35）。
 - **Effect styles**：`Card Hover`、`Selection Glow`、`Popover`，对应 tokens 里的 shadow。
 - **Rule**：画布里出现 `#7c5cff` 这样的裸值就算失败 —— 一律绑变量。这条和代码里「业务组件不写魔法值」是同一条规矩的两面。
 

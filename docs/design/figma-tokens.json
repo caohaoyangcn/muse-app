@@ -58,8 +58,8 @@
   "font": {
     "family": {
       "$type": "fontFamily",
-      "body": { "$value": "Segoe UI" },
-      "heading": { "$value": "Segoe UI" }
+      "body": { "$value": "Sarasa UI SC" },
+      "heading": { "$value": "Sarasa UI SC" }
     },
     "size": {
       "$type": "dimension",
