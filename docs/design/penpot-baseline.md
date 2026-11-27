@@ -6,6 +6,9 @@
 它是**当前实现的镜像**，不是自由创作的文件。UI 变更从这个文件出发改（见
 [`ui-change-process.md`](ui-change-process.md)），改完编码、编码完再回写。
 
+现状（做到了什么、哪些路已证明走不通、下一步怎么走、换机器怎么接上）见
+[`design-workflow-handoff.md`](design-workflow-handoff.md)。
+
 ## 三层结构
 
 | 区块 | 内容 | 能否手改 |
@@ -33,7 +36,7 @@ PLAYWRIGHT_MODULE=/path/to/playwright node frontend/scripts/dump-design-dom.mjs
 
 `.design-dom/` 是中间产物，已在 `.gitignore` 里，不要提交。
 
-## 写进 Penpot 时的六条硬规则
+## 写进 Penpot 时的八条硬规则
 
 这些是踩过坑得出的，改导入逻辑时逐条核对：
 
@@ -82,7 +85,7 @@ Penpot 的 MCP 用**个人 key 走 URL**，不做 OAuth：
 3. 复制给出的 **server URL**，形如：
 
    ```
-   https://design.penpot.app/mcp/stream?userToken=eyJhbGciOiJBMjU2S1ci…
+   https://design.penpot.app/mcp/stream?userToken=<token>
    ```
 
 那个 `userToken` 就是凭证本身。它绑定你的账号，**不会过期**，但会随「重新生成」失效。

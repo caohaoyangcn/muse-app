@@ -52,6 +52,7 @@ Muse Video 是一个面向 Windows 本地视频的轻量收藏管理器，基于
 - 实现中发现稿子不可行，**回到交互稿改**，不要在代码里悄悄改布局；PR 必须链接该目录并写明「与交互稿的差异」（无差异写"无"）
 - 落地后回写，保持"稿 = 实现"：重跑 `frontend/scripts/capture-design.mjs` 刷新 `docs/design/screenshots/`，再重跑 `frontend/scripts/dump-design-dom.mjs` 把受影响的屏按新 DOM 重导进 Penpot 基线；变更副本屏保留并标注 `<slug>` 与日期。不留"旧稿 = 真相"
 - 例外：纯文案/颜色/图标替换可免画稿（PR 注明"结构未变"）；缺陷修复用"复现截图 + 修复后截图"代替；内部重构需说明"用户可见差异为零"
+- 当前进展、已证明走不通的路径（把实现翻译成可编辑设计稿）与下一步，见 `docs/design/design-workflow-handoff.md`
 
 ## 提交与 Pull Request 规范
 

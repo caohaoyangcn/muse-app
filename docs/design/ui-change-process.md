@@ -92,4 +92,5 @@ Penpot 只负责**结构、层级、状态、文案、区域划分**；像素细
 
 - 设计 token 与组件清单：`docs/design/figma-tokens.json`、`docs/design/screen-inventory.md`
 - 设计文件导出/交付：`docs/design/figma-handoff.md`
+- 现状、已踩的坑与下一步（含换机器接续）：[`design-workflow-handoff.md`](design-workflow-handoff.md)
 - 跨平台共享层规则：`docs/spec/cross-platform-ui-plan.md`、`AGENTS.md`
