@@ -136,9 +136,14 @@ function extract() {
           numPad(style.paddingTop) + numPad(style.paddingRight) +
           numPad(style.paddingBottom) + numPad(style.paddingLeft);
         const spacing = numPad(style.rowGap) + numPad(style.columnGap);
+        const isGrid = style.display === "grid" || style.display === "inline-grid";
+        // 普通 block 容器（不是 flex 也不是 grid）同样是布局的一部分：它的
+        // padding 决定子元素的起点，跳过它会让子元素挂到隔壁兄弟节点下面。
+        // 导入时按"纵向流"还原成 column flex。
         const isLayoutWrapper =
           !hasPaint &&
-          /flex/.test(style.display) &&
+          el.childElementCount > 0 &&
+          (el.childElementCount > 1 || true) &&
           el.childElementCount > 0 &&
           (el.childElementCount > 1 || inset > 0 || spacing > 0);
 
@@ -167,6 +172,45 @@ function extract() {
           // 有了它们才能把 DOM 的 flex 容器还原成设计工具里的 auto-layout，
           // 而不是把每个子元素钉死在坐标上（钉死之后改版=重排一遍）。
           const display = style.display;
+          const numOf = (v) => Math.round((parseFloat(v) || 0) * 10) / 10;
+          if (display === "grid" || display === "inline-grid") {
+            // 设计工具普遍没有 grid，导入时按"列容器 + 每个网格行一条 flex row"
+            // 还原；子元素的数量变化仍会驱动重排。
+            node.grid = true;
+            node.layout = {
+              dir: "grid",
+              wrap: false,
+              row: numOf(style.rowGap),
+              col: numOf(style.columnGap),
+              pad: [
+                numOf(style.paddingTop),
+                numOf(style.paddingRight),
+                numOf(style.paddingBottom),
+                numOf(style.paddingLeft),
+              ],
+              ai: style.alignItems,
+              jc: style.justifyContent,
+            };
+          }
+          const isLeafMedia = tag === "svg" || tag === "img";
+          if (!isLeafMedia && (display === "block" || display === "flow-root" || display === "list-item")) {
+            if (el.childElementCount > 0) {
+              node.layout = {
+                dir: "block",
+                wrap: false,
+                row: 0,
+                col: 0,
+                pad: [
+                  numOf(style.paddingTop),
+                  numOf(style.paddingRight),
+                  numOf(style.paddingBottom),
+                  numOf(style.paddingLeft),
+                ],
+                ai: "stretch",
+                jc: "start",
+              };
+            }
+          }
           if (display === "flex" || display === "inline-flex") {
             const num = (v) => Math.round((parseFloat(v) || 0) * 10) / 10;
             node.layout = {
