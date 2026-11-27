@@ -144,6 +144,8 @@ function extract() {
 
         if (hasPaint || isLayoutWrapper) {
           const node = {
+            // 深度用于把预序输出还原成父子树；没有它只能拿到一堆扁平矩形。
+            d: depth,
             t: tag,
             x: px(rect.x),
             y: px(rect.y),
